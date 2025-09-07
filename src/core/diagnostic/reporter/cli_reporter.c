@@ -26,44 +26,20 @@ static bool initialized = false;
 
 static const char *color_of(diagnostic_severity_t severity)
 {
-    switch (severity)
-    {
-        case DIAG_INFO:
-            return INFO_COLOR;
-        case DIAG_WARN:
-            return WARN_COLOR;
-        case DIAG_ERROR:
-            return ERROR_COLOR;
-
-        default:
-            return C_WHITE;
-    }
+    const text_style colors[] = {INFO_COLOR, WARN_COLOR, ERROR_COLOR};
+    return colors[severity];
 }
 
 static const char *severity_to_string(diagnostic_severity_t severity)
 {
-    switch (severity)
-    {
-        case DIAG_INFO:
-            return "info";
-        case DIAG_WARN:
-            return "warning";
-        case DIAG_ERROR:
-            return "error";
-    }
+    const char *sev_str[] = {"info", "warning", "error"};
+    return sev_str[severity];
 }
 
 static const char *severity_prefix(diagnostic_severity_t severity)
 {
-    switch (severity)
-    {
-        case DIAG_INFO:
-            return "I0";
-        case DIAG_WARN:
-            return "W0";
-        case DIAG_ERROR:
-            return "E0";
-    }
+    const char *sev_pref[] = {"I0", "W0", "E0"};
+    return sev_pref[severity];
 }
 
 static string_t point_position_range(diagnostic_severity_t severity,

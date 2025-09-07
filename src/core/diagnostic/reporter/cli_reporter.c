@@ -46,7 +46,8 @@ static string_t point_position_range(diagnostic_severity_t severity,
     program_t *program = start->program;
 
     vector_t *p_lines = &program->lines,
-             lines = sv_vec_with_cap((end->row - start->row) + 1);
+             lines clean(vec_free) =
+                 sv_vec_with_cap((end->row - start->row) + 1);
 
     if (start->row >= p_lines->size || end->row >= p_lines->size)
         terminate("[point_position_range] start and end rows are out of bounds",
@@ -95,19 +96,6 @@ static string_t point_position_range(diagnostic_severity_t severity,
 
         string_push_str(&formatted, &f_line);
     }
-
-    //     // Apply color to the specific range
-    //     auto l_start = i == start.row - 1 ? start.col - 1 : 0,
-    //          l_end = (i == end.row - 1 ? end.col : line.size()) - 1;
-
-    //     line.insert(l_end + 1, utils::Styles::Reset);
-    //     line.insert(l_start, color);
-
-    //     formatted += line + "\n";
-
-    //     formatted += utils::tab(prefix_len + l_start, 1) + color +
-    //                  std::string((l_end - l_start) + 1, '^') + "\n";
-    // }
 
     return formatted;
 }

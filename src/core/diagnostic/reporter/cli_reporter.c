@@ -26,20 +26,17 @@ static bool initialized = false;
 
 static const char *color_of(diagnostic_severity_t severity)
 {
-    const text_style colors[] = {INFO_COLOR, WARN_COLOR, ERROR_COLOR};
-    return colors[severity];
+    return (const text_style[]){INFO_COLOR, WARN_COLOR, ERROR_COLOR}[severity];
 }
 
 static const char *severity_to_string(diagnostic_severity_t severity)
 {
-    const char *sev_str[] = {"info", "warning", "error"};
-    return sev_str[severity];
+    return (const char *[]){"info", "warning", "error"}[severity];
 }
 
 static const char *severity_prefix(diagnostic_severity_t severity)
 {
-    const char *sev_pref[] = {"I0", "W0", "E0"};
-    return sev_pref[severity];
+    return (const char *[]){"I0", "W0", "E0"}[severity];
 }
 
 static string_t point_position_range(diagnostic_severity_t severity,

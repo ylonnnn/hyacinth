@@ -1,0 +1,5 @@
+use "@std/io";
+
+func main() void {
+    std::io::println("Hello, World");
+}

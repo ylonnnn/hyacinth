@@ -52,6 +52,8 @@ bool lexer_cmatch(lexer_t *lexer, char expected);
 
 token_t *lexer_create_token(lexer_t *lexer, size_t start, size_t end,
                             token_type_t type);
+void lexer_constr_token(lexer_t *lexer, size_t start, size_t end,
+                        token_type_t type);
 
 void lexer_ignore_whitespaces(lexer_t *lexer);
 

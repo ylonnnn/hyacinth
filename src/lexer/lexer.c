@@ -98,6 +98,12 @@ token_t *lexer_create_token(lexer_t *lexer, size_t start, size_t end,
     return addr;
 }
 
+void lexer_constr_token(lexer_t *lexer, size_t start, size_t end,
+                        token_type_t type)
+{
+    lexer_create_token(lexer, start, end, type);
+}
+
 void lexer_ignore_whitespaces(lexer_t *lexer)
 {
     for (char c = lexer_cpeek(lexer); !lexer_ceof(lexer) && isspace(c);
@@ -240,12 +246,308 @@ void lexer_tokenize(lexer_t *lexer)
             continue;
         }
 
-        TODO("other token type lexical analysis")
-        // switch (c)
-        // {
-        //     default:
-        //         // printf("%c", c);
-        // }
+        lexer_cnext(lexer);
+
+        switch (c)
+        {
+            case '{':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, LEFT_BRACE);
+                continue;
+            case '}':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, RIGHT_BRACE);
+                continue;
+            case '[':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, LEFT_BRACKET);
+                continue;
+            case ']':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                   RIGHT_BRACKET);
+                continue;
+            case '(':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, LEFT_PAREN);
+                continue;
+            case ')':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, RIGHT_PAREN);
+                continue;
+            case ',':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, COMMA);
+                continue;
+            case ';':
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, SEMICOLON);
+                continue;
+            case ':':
+            {
+                if (lexer_cmatch(lexer, ':'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       DOUBLE_COLON);
+                    continue;
+                }
+
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, COLON);
+                continue;
+            }
+
+            case '.':
+            {
+                if (lexer_cmatch(lexer, '.'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       DOUBLE_DOT);
+                    continue;
+                }
+
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, DOT);
+                continue;
+            }
+
+            case '<':
+            {
+                // <-
+                if (lexer_cmatch(lexer, '-'))
+                {
+                    char p = lexer_cpeek(lexer);
+                    if (p == '\0')
+                        break;
+
+                    if (isdigit(p))
+                    {
+                        lexer_constr_token(lexer, ofs, lexer->offset - 1, LESS);
+                        continue;
+                    }
+
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       LESS_MINUS);
+                    continue;
+                }
+
+                // <=
+                else if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       LESS_EQUAL);
+                    continue;
+                }
+
+                // <
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, LESS_EQUAL);
+                continue;
+            }
+
+            case '>':
+            {
+                // >=
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       GREATER_EQUAL);
+                    continue;
+                }
+
+                // >
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, GREATER);
+                continue;
+            }
+
+            case '=':
+            {
+                // ==
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       EQUAL_EQUAL);
+                    continue;
+                }
+
+                // =
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, EQUAL);
+                continue;
+            }
+
+            case '+':
+            {
+                // +=
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       PLUS_EQUAL);
+                    continue;
+                }
+
+                else if (lexer_cmatch(lexer, '+'))
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       PLUS_PLUS);
+                continue;
+
+                // +
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, PLUS);
+                continue;
+            }
+
+            case '-':
+            {
+                char p = lexer_cpeek(lexer);
+                if (p == '\0')
+                    break;
+
+                if (isdigit(p))
+                {
+                    lexer_read_num(lexer);
+                    continue;
+                }
+
+                // -=
+                else if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       MINUS_EQUAL);
+                    continue;
+                }
+
+                else if (lexer_cmatch(lexer, '-'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       MINUS_MINUS);
+                    continue;
+                }
+                else if (lexer_cmatch(lexer, '>'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       MINUS_GREATER);
+                    continue;
+                }
+
+                // -
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, MINUS);
+                continue;
+            }
+
+            case '*':
+            {
+                // *=
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       STAR_EQUAL);
+                    continue;
+                }
+
+                // *
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, STAR);
+                continue;
+            }
+
+            case '/':
+            {
+                // //
+                if (lexer_cmatch(lexer, '/'))
+                {
+                    while (!lexer_cmatch(lexer, '\n'))
+                        continue;
+
+                    lexer->p_row = lexer->row++;
+                    lexer->p_col = lexer->col;
+                    lexer->col = 1;
+
+                    continue;
+                }
+
+                // /=
+                else if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       SLASH_EQUAL);
+                    continue;
+                }
+
+                // /
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, SLASH_EQUAL);
+                continue;
+            }
+
+            case '%':
+            {
+                // %=
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       PERCENT_EQUAL);
+                    continue;
+                }
+
+                // %
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, PERCENT);
+                continue;
+            }
+
+            case '!':
+            {
+                // !=
+                if (lexer_cmatch(lexer, '='))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       BANG_EQUAL);
+                    continue;
+                }
+
+                // !
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, BANG);
+                continue;
+            }
+
+            case '&':
+            {
+                // &&
+                if (lexer_cmatch(lexer, '&'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       AMPERSAND_AMPERSAND);
+                    continue;
+                }
+
+                // &
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, AMPERSAND);
+                continue;
+            }
+
+            case '|':
+            {
+                // ||
+                if (lexer_cmatch(lexer, '|'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       PIPE_PIPE);
+                    continue;
+                }
+
+                // |
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, PIPE);
+                continue;
+            }
+
+            case '^':
+            {
+                // ^^ (Exponent (?))
+                if (lexer_cmatch(lexer, '^'))
+                {
+                    lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                       CARET_CARET);
+                    continue;
+                }
+
+                // ^
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, CARET);
+                continue;
+            }
+            default:
+            {
+                if (lexer_ceof(lexer))
+                    return lexer_constr_token(lexer, ofs, lexer->offset - 1,
+                                              END_OF_FILE);
+
+                lexer_constr_token(lexer, ofs, lexer->offset - 1, ILLEGAL);
+            }
+        }
     }
 
     // EOF

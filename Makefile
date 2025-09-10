@@ -48,10 +48,10 @@ $(WIN_TARGET): $(WIN_OBJECTS)
 	@mkdir -p $(BUILD_DIR)
 	$(WIN_CC) $(WIN_OBJECTS) $(WIN_LDFLAGS) -o $(WIN_TARGET)
 
-lr: $(LINUX_TARGET)
+lr: linux
 	$(LINUX_TARGET)
 
-wr: $(WIN_TARGET)
+wr: windows
 	$(WIN_TARGET)
 
 vars:

@@ -4,14 +4,14 @@
 #include <stdlib.h>
 
 typedef void (*vec_el_destr)(void *el);
+// typedef void *(*vec_el_cp)(void *el);
 // typedef void (*vec_el_mv)(void *el);
-// typedef void (*vec_el_cp)(void *el);
 
 typedef struct vec_opts
 {
     vec_el_destr destr; // Vector Element Destructor
-    // vec_el_mv mv;       // Vector Element Move Constructor
     // vec_el_cp cp;       // Vector Element Copy Constructor
+    // vec_el_mv mv;       // Vector Element Move Constructor
 } vec_opts_t;
 
 typedef struct vector
@@ -24,6 +24,8 @@ typedef struct vector
 // Constructors
 vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts);
 vector_t vec_with_cap(size_t cap, size_t e_size, vec_opts_t opts);
+
+// void vec_copy(vector_t *dest, vector_t *src);
 
 void vec_move(vector_t *dest, vector_t *src);
 

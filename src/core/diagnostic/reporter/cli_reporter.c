@@ -49,14 +49,12 @@ static string_t point_position_range(diagnostic_severity_t severity,
              lines clean(vec_free) =
                  sv_vec_with_cap((end->row - start->row) + 1);
 
-    if (start->row >= p_lines->size || end->row >= p_lines->size)
+    if (start->row > p_lines->size || end->row > p_lines->size)
         terminate("[point_position_range] start and end rows are out of bounds",
                   EXIT_FAILURE);
 
     vec_insert_vec(&lines, p_lines, 0, start->row - 1,
                    (end->row - start->row) + 1);
-
-    int32_t tab_size = 4;
 
     string_t formatted = string_from("");
 
@@ -70,7 +68,7 @@ static string_t point_position_range(diagnostic_severity_t severity,
         string_init(&f_line, line.len ? 256 : 64);
         string_init(&l_no, 24);
 
-        string_format(&l_no, "%zu", start->row + i);
+        string_format(&l_no, "%u", start->row + i);
 
         size_t l_start = i == 0 ? start->col - 1 : 0,
                l_end = i == lines.size - 1 ? end->col - 1
@@ -80,7 +78,6 @@ static string_t point_position_range(diagnostic_severity_t severity,
 
         if (line.len)
         {
-
             string_insert(&line, S_RESET, l_end + 1);
             string_insert(&line, color, l_start);
         }
@@ -117,7 +114,7 @@ string_t cli_fmt(diagnostic_t *diagnostic)
     diagnostic_severity_t severity = diagnostic->severity;
     position_range_t *range = &diagnostic->range;
 
-    position_t *start = &range->start, *end = &range->end;
+    position_t *start = &range->start;
     program_t *program = start->program;
 
     clean(string_free) string_t p_path = string_from(program->path),
@@ -143,11 +140,11 @@ string_t cli_fmt(diagnostic_t *diagnostic)
         pointed clean(string_free) = point_position_range(severity, range);
     string_init(&formatted, 1024);
 
-    sprintf(formatted.data, "%s%s:%zu:%zu: %s%s<%s%u> %s%s\n%s\n",
-            C_BRIGHT_BLACK, location.data, start->row, start->col,
-            color_of(severity), severity_to_string(severity),
-            severity_prefix(severity), diagnostic->code, S_RESET,
-            diagnostic->message.data, pointed.data);
+    string_format(&formatted, "%s%s:%u:%u: %s%s<%s%u> %s%s\n%s\n",
+                  C_BRIGHT_BLACK, location.data, start->row, start->col,
+                  color_of(severity), severity_to_string(severity),
+                  severity_prefix(severity), diagnostic->code, S_RESET,
+                  diagnostic->message.data, pointed.data);
 
     return formatted;
 }

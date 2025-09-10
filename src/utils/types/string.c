@@ -43,7 +43,7 @@ string_t string_from_prt(const char *lit, size_t n)
             "[string] failed to allocate memory for the buffer of the string.",
             EXIT_FAILURE);
 
-    memcpy(buf, lit, n + 1);
+    memcpy(buf, lit, n);
     buf[n] = '\0';
 
     str.data = buf;
@@ -102,6 +102,19 @@ char *string_reset(string_t *str)
     str->cap = 0;
 
     return buf;
+}
+
+char *string_at(string_t *str, size_t idx)
+{
+    if (idx >= str->len)
+        terminate("[string_at] out of range index provided", EXIT_FAILURE);
+
+    return &str->data[idx];
+}
+
+char *string_silent_at(string_t *str, size_t idx)
+{
+    return idx >= str->len ? NULL : &str->data[idx];
 }
 
 void string_setcap(string_t *str, size_t cap)
@@ -163,7 +176,7 @@ void string_push_str(string_t *str, string_t *s)
     if (n_cap > str->cap)
         string_setcap(str, n_cap);
 
-    memmove(str->data + str->len, s->data, s->len);
+    memmove(str->data + str->len, s->data, s->len + 1);
     str->len += s->len;
 }
 
@@ -224,15 +237,18 @@ void string_insert(string_t *str, const char *lit, size_t pos)
     if (n_cap > str->cap)
         string_setcap(str, n_cap);
 
-    if (pos < str->len - 1)
+    if (pos < str->len)
     {
         char *src = str->data + pos, *dest = src + lit_len;
         size_t bytes = str->len - pos;
 
-        memmove(dest, src, bytes);
+        if (bytes > 0)
+            memmove(dest, src, bytes);
     }
 
     memmove(str->data + pos, lit, lit_len);
+
+    str->data[n_len] = '\0';
     str->len = n_len;
 }
 

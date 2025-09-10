@@ -5,6 +5,8 @@
 #include "core/diagnostic/reporter/cli_reporter.h"
 #include "core/diagnostic/reporter/reporter.h"
 #include "core/program/program.h"
+#include "lexer/lexer.h"
+#include "lexer/token.h"
 #include "utils/control.h"
 #include "utils/macros.h"
 #include "utils/types/string.h"
@@ -73,16 +75,27 @@ static char *canonicalize_path(const char *path)
     return resolved;
 }
 
+void program_initialize_lexer(program_t *program)
+{
+    lexer_t *buf = malloc(sizeof(lexer_t));
+    if (buf == NULL)
+        terminate("[program_from] failed to allocate memory for program lexer",
+                  EXIT_FAILURE);
+
+    *buf = lexer_from(program);
+    program->lexer = buf;
+}
+
 program_t program_from(const char *path)
 {
     program_t program = (program_t){
         .path = canonicalize_path(path),
-        .source = string_from(""),
         .lines = sv_vec_with_cap(16),
+        .lexer = NULL,
     };
 
     if (program.path == NULL)
-        terminate("[program] failed to resolve file", EXIT_FAILURE);
+        terminate("[program_from] failed to resolve file", EXIT_FAILURE);
 
     program_read_source(&program);
 
@@ -95,6 +108,9 @@ void program_free(program_t *program)
 
     string_free(&program->source);
     vec_free(&program->lines);
+
+    lexer_free(program->lexer);
+    free(program->lexer);
 }
 
 void program_read_source(program_t *program)
@@ -103,7 +119,7 @@ void program_read_source(program_t *program)
         terminate("[program_read] invalid file path provided", EXIT_FAILURE);
 
     clean(string_free) string_t path = string_from(program->path);
-    if (!string_ends_with(&path, FILE_EXTENSION))
+    if (!string_ends_with(&path, FILE_EXT))
         terminate("[program_read] file must be a Hyacinth file (.hyc)",
                   EXIT_FAILURE);
 
@@ -115,13 +131,15 @@ void program_read_source(program_t *program)
     size_t fsize = ftell(file);
     fseek(file, 0, 0);
 
-    string_setcap(&program->source, fsize);
+    string_init(&program->source, fsize);
     size_t rsize = fread(program->source.data, sizeof(char), fsize, file);
 
     if (fsize != rsize)
         terminate("[program_read] failed to read the whole file", EXIT_FAILURE);
 
+    program->source.len = rsize - 1;
     size_t cursor = 0, line_start = cursor;
+
     while (cursor < fsize)
     {
         char c = program->source.data[cursor];
@@ -152,14 +170,19 @@ void program_execute(program_t *program)
 
     reporter_t *__reporter = reporter();
 
-    *diag_vec_use(&__reporter->diagnostics) =
-        (diagnostic_t){.severity = DIAG_ERROR,
-                       .message = string_from("diagnostic test"),
-                       .code = 123,
-                       .range = {
-                           (position_t){program, 1, 3, 0},
-                           (position_t){program, 1, 6, 0},
-                       }};
+    // Initialize Lexer
+    program_initialize_lexer(program);
+    lexer_tokenize(program->lexer);
+
+    vector_t *tokens = &program->lexer->tokens;
+    for (size_t i = 0; i < tokens->size; i++)
+    {
+        token_t *token = token_vec_at(tokens, i);
+        token_print(token);
+        puts("");
+    }
+
+    vec_move(&__reporter->diagnostics, &program->lexer->result.diagnostics);
 
     __reporter->report(__reporter);
 }

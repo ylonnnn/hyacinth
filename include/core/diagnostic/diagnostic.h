@@ -27,9 +27,10 @@ void diagnostic_init(diagnostic_t *diagnostic);
 diagnostic_t diagnostic_from(diagnostic_severity_t severity, uint32_t code,
                              string_t message, position_range_t range);
 
-void diagnostic_create_on(diagnostic_t *addr, diagnostic_severity_t severity,
-                          uint32_t code, string_t message,
-                          position_range_t range);
+diagnostic_t *diagnostic_create_on(diagnostic_t *addr,
+                                   diagnostic_severity_t severity,
+                                   uint32_t code, string_t message,
+                                   position_range_t range);
 
 // Destructors
 void diagnostic_free(diagnostic_t *diagnostic);

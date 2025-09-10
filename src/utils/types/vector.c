@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "utils/control.h"
-#include "utils/macros.h"
 #include "utils/types/vector.h"
 
 vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts)
@@ -23,6 +22,8 @@ vector_t vec_with_cap(size_t cap, size_t e_size, vec_opts_t opts)
 
     return vec;
 }
+
+void vec_copy(vector_t *dest, vector_t *src) {}
 
 void vec_move(vector_t *dest, vector_t *src)
 {
@@ -154,8 +155,6 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
         void *dest = (char *)src + (n * vec->e_size);
 
         size_t bytes = (vec->size - in_pos) * vec->e_size;
-
-        printf("%zu\n", bytes);
 
         memmove(dest, src, bytes);
     }

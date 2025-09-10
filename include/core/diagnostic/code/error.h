@@ -1,0 +1,17 @@
+#ifndef __CORE_DIAGNOSTIC_CODE_ERROR_H__
+#define __CORE_DIAGNOSTIC_CODE_ERROR_H__
+
+typedef enum error_code
+{
+    // Syntax
+    UNEXPECTED_TOKEN = 0x190,
+    INVALID_LITERAL,
+    UNTERMINATED_CHAR_SEQ,
+    UNEXPECTED_SEP,
+
+    MALFORMED_LITERAL,
+    INVALID_NUMLIT_PREF,
+    INVALID_NUMLIT_DIGIT,
+} error_code_t;
+
+#endif

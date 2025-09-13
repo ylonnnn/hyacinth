@@ -1,14 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
 
+#include "core/diagnostic/diagnostic.h"
 #include "core/diagnostic/reporter/cli_reporter.h"
 #include "core/diagnostic/reporter/reporter.h"
 #include "core/program/program.h"
+#include "core/result/result.h"
 #include "lexer/lexer.h"
 #include "lexer/token.h"
 #include "utils/control.h"
 #include "utils/macros.h"
+#include "utils/style.h"
+#include "utils/time.h"
 #include "utils/types/string.h"
 #include "utils/types/string_view.h"
 
@@ -168,11 +173,19 @@ void program_execute(program_t *program)
     //
     TODO("program_execute()")
 
+    result_t program_result = result_create(RES_SUCCESS);
     reporter_t *__reporter = reporter();
 
-    // Initialize Lexer
+    bool succeeded = true;
+    double start = get_nanosec();
+
+    // Lexer
     program_initialize_lexer(program);
-    lexer_tokenize(program->lexer);
+    succeeded = lexer_tokenize(program->lexer)->status == RES_SUCCESS;
+
+    // Parser
+
+    double end = get_nanosec();
 
     vector_t *tokens = &program->lexer->tokens;
     for (size_t i = 0; i < tokens->size; i++)
@@ -184,5 +197,15 @@ void program_execute(program_t *program)
 
     vec_move(&__reporter->diagnostics, &program->lexer->result.diagnostics);
 
-    __reporter->report(__reporter);
+    report_result_t res = __reporter->report(__reporter);
+
+    text_style color = succeeded ? C_GREEN : C_RED;
+    printf("\t%s%u%s informations, %s%u%s warnings, %s%u%s "
+           "errors\n\t%s[%s%s%s]%s Program Executed %s(%s%g ms%s)%s\n\n",
+           INFO_COLOR, res.diag_count[DIAG_INFO], S_RESET, WARN_COLOR,
+           res.diag_count[DIAG_WARN], S_RESET, ERROR_COLOR,
+           res.diag_count[DIAG_ERROR], S_RESET, C_BRIGHT_BLACK, color,
+           succeeded ? "/" : "X", C_BRIGHT_BLACK, S_RESET, C_BRIGHT_BLACK,
+           color, (end - start) / NANOSECONDS_PER_MILLISECOND, C_BRIGHT_BLACK,
+           S_RESET);
 }

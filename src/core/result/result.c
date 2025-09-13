@@ -37,3 +37,19 @@ void result_adapt(result_t *result, result_status_t status,
     result->status = status;
     vec_move(&result->diagnostics, diagnostics);
 }
+
+void result_info(result_t *result, diagnostic_t *diagnostic)
+{
+    diagnostic_move(diag_vec_use(&result->diagnostics), diagnostic);
+}
+
+void result_warn(result_t *result, diagnostic_t *diagnostic)
+{
+    diagnostic_move(diag_vec_use(&result->diagnostics), diagnostic);
+}
+
+void result_error(result_t *result, diagnostic_t *diagnostic)
+{
+    result->status = RES_FAIL;
+    diagnostic_move(diag_vec_use(&result->diagnostics), diagnostic);
+}

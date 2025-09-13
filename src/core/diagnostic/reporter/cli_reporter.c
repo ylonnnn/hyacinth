@@ -149,15 +149,21 @@ string_t cli_fmt(diagnostic_t *diagnostic)
     return formatted;
 }
 
-void cli_report(reporter_t *self)
+report_result_t cli_report(reporter_t *self)
 {
+    report_result_t res = {.diag_count = {0, 0, 0}};
+
     for (size_t i = 0; i < self->diagnostics.size; i++)
     {
         diagnostic_t *diagnostic = diag_vec_at(&self->diagnostics, i);
+        res.diag_count[diagnostic->severity]++;
+
         clean(string_free) string_t fmt = self->fmt(diagnostic);
 
         printf("%s", fmt.data);
     }
 
     vec_free(&self->diagnostics);
+
+    return res;
 }

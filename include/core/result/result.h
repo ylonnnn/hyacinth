@@ -1,12 +1,13 @@
 #ifndef __CORE_RESULT_RESULT_H__
 #define __CORE_RESULT_RESULT_H__
 
+#include "core/diagnostic/diagnostic.h"
 #include "utils/types/vector.h"
 
 typedef enum result_status
 {
-    SUCCESS,
-    FAIL,
+    RES_SUCCESS,
+    RES_FAIL,
 } result_status_t;
 
 typedef void (*result_data_destr)(void *self);
@@ -56,5 +57,9 @@ void result_free(result_t *result);
  */
 void result_adapt(result_t *result, result_status_t status,
                   vector_t *diagnostics);
+
+void result_info(result_t *result, diagnostic_t *diagnostic);
+void result_warn(result_t *result, diagnostic_t *diagnostic);
+void result_error(result_t *result, diagnostic_t *diagnostic);
 
 #endif

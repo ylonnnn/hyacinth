@@ -60,6 +60,10 @@ void lexer_ignore_whitespaces(lexer_t *lexer);
 void lexer_read_digseq(lexer_t *lexer, uint32_t base);
 void lexer_read_num(lexer_t *lexer);
 
-void lexer_tokenize(lexer_t *lexer);
+void lexer_read_charseq(lexer_t *lexer, char terminator);
+void lexer_read_char(lexer_t *lexer);
+void lexer_read_str(lexer_t *lexer);
+
+result_t *lexer_tokenize(lexer_t *lexer);
 
 #endif

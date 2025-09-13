@@ -24,7 +24,7 @@ lexer_t lexer_from(program_t *program)
         .col = 1,
         .p_row = 1,
         .p_col = 1,
-        .result = result_create(SUCCESS),
+        .result = result_create(RES_SUCCESS),
     };
 }
 
@@ -137,11 +137,12 @@ void lexer_read_digseq(lexer_t *lexer, uint32_t base)
         {
             if (!is_digit_of(c, base))
             {
-                diagnostic_create_on(
-                    diag_vec_use(&lexer->result.diagnostics), DIAG_ERROR,
-                    INVALID_NUMLIT_DIGIT,
+                diagnostic_t diagnostic = diagnostic_from(
+                    DIAG_ERROR, INVALID_NUMLIT_DIGIT,
                     string_from("invalid numeric literal digit."),
                     (position_range_t){pos(lexer), pos(lexer)});
+
+                result_error(&lexer->result, &diagnostic);
             }
 
             allow_sep = true;
@@ -158,11 +159,12 @@ void lexer_read_digseq(lexer_t *lexer, uint32_t base)
 
             if (!allow_sep)
             {
-                diagnostic_create_on(
-                    diag_vec_use(&lexer->result.diagnostics), DIAG_ERROR,
-                    UNEXPECTED_SEP,
+                diagnostic_t diagnostic = diagnostic_from(
+                    DIAG_ERROR, UNEXPECTED_SEP,
                     string_from("unexpected numeric literal separator."),
                     (position_range_t){pos(lexer), pos(lexer)});
+
+                result_error(&lexer->result, &diagnostic);
             }
 
             allow_sep = false;
@@ -192,10 +194,12 @@ void lexer_read_num(lexer_t *lexer)
         lexer_cconsume(lexer);
         if (lexer_ceof(lexer))
         {
-            diagnostic_create_on(
-                diag_vec_use(&lexer->result.diagnostics), DIAG_ERROR,
-                MALFORMED_LITERAL, string_from("malformed numeric literal."),
+            diagnostic_t diagnostic = diagnostic_from(
+                DIAG_ERROR, MALFORMED_LITERAL,
+                string_from("malformed numeric literal."),
                 POSRNG_SWTOCURR((*lexer), s_offset, s_row, s_col));
+
+            result_error(&lexer->result, &diagnostic);
 
             return;
         }
@@ -203,10 +207,12 @@ void lexer_read_num(lexer_t *lexer)
 
     if (base == UINT32_MAX)
     {
-        diagnostic_create_on(diag_vec_use(&lexer->result.diagnostics),
-                             DIAG_ERROR, INVALID_NUMLIT_PREF,
-                             string_from("invalid numeric literal prefix"),
-                             POSRNG_SWTOCURR((*lexer), s_offset, s_row, s_col));
+        diagnostic_t diagnostic =
+            diagnostic_from(DIAG_ERROR, INVALID_NUMLIT_PREF,
+                            string_from("invalid numeric literal prefix"),
+                            POSRNG_SWTOCURR((*lexer), s_offset, s_row, s_col));
+
+        result_error(&lexer->result, &diagnostic);
 
         return;
     }
@@ -224,7 +230,21 @@ void lexer_read_num(lexer_t *lexer)
     lexer_create_token(lexer, s_offset, lexer->offset - 1, INT_T);
 }
 
-void lexer_tokenize(lexer_t *lexer)
+void lexer_read_charseq(lexer_t *lexer, char terminator)
+{
+    //
+    TODO("lexer_read_charseq()")
+}
+
+void lexer_read_char(lexer_t *lexer)
+{
+    printf("%c | %c\n", lexer_cpeek(lexer), lexer_ccurr(lexer));
+}
+
+void lexer_read_str(lexer_t *lexer){//
+                                    TODO("lexer_read_str()")}
+
+result_t *lexer_tokenize(lexer_t *lexer)
 {
     program_t *program = lexer->program;
     string_t *source = &program->source;
@@ -243,6 +263,12 @@ void lexer_tokenize(lexer_t *lexer)
         if (isdigit(c))
         {
             lexer_read_num(lexer);
+            continue;
+        }
+
+        if (c == '\'' || c == '"')
+        {
+            c == '\'' ? lexer_read_char(lexer) : lexer_read_str(lexer);
             continue;
         }
 
@@ -542,14 +568,16 @@ void lexer_tokenize(lexer_t *lexer)
             default:
             {
                 if (lexer_ceof(lexer))
-                    return lexer_constr_token(lexer, ofs, lexer->offset - 1,
-                                              END_OF_FILE);
+                    break;
 
                 lexer_constr_token(lexer, ofs, lexer->offset - 1, ILLEGAL);
             }
         }
+        break;
     }
 
     // EOF
     lexer_create_token(lexer, source->len, source->len, END_OF_FILE);
+
+    return &lexer->result;
 }

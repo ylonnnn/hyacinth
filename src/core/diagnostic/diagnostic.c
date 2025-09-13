@@ -1,6 +1,8 @@
 #include <assert.h>
 
 #include "core/diagnostic/diagnostic.h"
+#include "utils/types/string.h"
+#include "utils/types/vector.h"
 
 void diagnostic_init(diagnostic_t *diagnostic)
 {
@@ -37,4 +39,13 @@ void diagnostic_free(diagnostic_t *diagnostic)
     vec_free(&diagnostic->details);
 
     string_free(&diagnostic->message);
+}
+
+void diagnostic_move(diagnostic_t *dest, diagnostic_t *src)
+{
+    dest->severity = src->severity;
+    dest->code = src->code;
+    string_move(&dest->message, &src->message);
+    dest->range = src->range;
+    vec_move(&dest->details, &src->details);
 }

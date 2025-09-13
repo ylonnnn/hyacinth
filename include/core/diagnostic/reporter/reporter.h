@@ -5,8 +5,12 @@
 #include "utils/types/string.h"
 
 typedef struct reporter reporter_t;
+typedef struct report_result
+{
+    uint32_t diag_count[3];
+} report_result_t;
 
-typedef void (*reporter_fn)(reporter_t *self);
+typedef report_result_t (*reporter_fn)(reporter_t *self);
 typedef string_t (*diag_fmt)(diagnostic_t *diagnostic);
 
 typedef struct reporter

@@ -11,6 +11,6 @@ static const text_style INFO_COLOR = C_BLUE, WARN_COLOR = C_YELLOW,
                         ERROR_COLOR = C_RED;
 
 string_t cli_fmt(diagnostic_t *diagnostic);
-void cli_report(reporter_t *reporter);
+report_result_t cli_report(reporter_t *reporter);
 
 #endif

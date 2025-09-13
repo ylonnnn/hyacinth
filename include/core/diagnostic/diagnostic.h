@@ -1,10 +1,11 @@
 #ifndef __CORE_DIAGNOSTIC_DIAGNOSTIC_H__
 #define __CORE_DIAGNOSTIC_DIAGNOSTIC_H__
 
+#include <stdint.h>
+
 #include "core/position/position.h"
 #include "utils/types/string.h"
 #include "utils/types/vector.h"
-#include <stdint.h>
 
 typedef enum diagnostic_severity
 {
@@ -34,6 +35,10 @@ diagnostic_t *diagnostic_create_on(diagnostic_t *addr,
 
 // Destructors
 void diagnostic_free(diagnostic_t *diagnostic);
+
+// Helper
+
+void diagnostic_move(diagnostic_t *dest, diagnostic_t *src);
 
 T_VEC_CONSTR(diagnostic_t, diag_vec,
              (vec_opts_t){(vec_el_destr)diagnostic_free})

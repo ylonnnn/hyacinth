@@ -56,7 +56,8 @@ char lexer_cnext(lexer_t *lexer)
     if ((lexer->offset + 1) <= lexer->program->source.len - 1)
         lexer->p_col = lexer->col++;
 
-    return *string_at(&lexer->program->source, lexer->offset++);
+    char c = *string_at(&lexer->program->source, lexer->offset++);
+    return c;
 }
 
 char lexer_cpeek(lexer_t *lexer) { return lexer_cpeekn(lexer, 0); }
@@ -222,27 +223,76 @@ void lexer_read_num(lexer_t *lexer)
     if (lexer_cmatch(lexer, '.'))
     {
         lexer_read_digseq(lexer, base);
-
         lexer_create_token(lexer, s_offset, lexer->offset - 1, FLOAT_T);
+
         return;
     }
 
     lexer_create_token(lexer, s_offset, lexer->offset - 1, INT_T);
 }
 
-void lexer_read_charseq(lexer_t *lexer, char terminator)
+size_t lexer_read_charseq(lexer_t *lexer, char terminator)
 {
-    //
-    TODO("lexer_read_charseq()")
+    size_t len = 0, s_offset = lexer->offset - 1, s_row = lexer->p_row,
+           s_col = lexer->p_col;
+
+    for (char c = lexer_cpeek(lexer); !lexer_cmatch(lexer, terminator);
+         c = lexer_cpeek(lexer))
+    {
+        // Unterminated Literal
+        if (lexer_ceof(lexer))
+        {
+            diagnostic_t diagnostic = diagnostic_from(
+                DIAG_ERROR, UNTERMINATED_CHAR_SEQ,
+                string_from("unterminated character sequence."),
+                POSRNG_SWTOCURR((*lexer), s_offset, s_row, s_col));
+
+            result_error(&lexer->result, &diagnostic);
+
+            return SIZE_MAX;
+        }
+
+        if (c == '\\')
+            lexer_cconsume(lexer);
+
+        lexer_cconsume(lexer);
+        len++;
+    }
+
+    return len;
 }
 
 void lexer_read_char(lexer_t *lexer)
 {
-    printf("%c | %c\n", lexer_cpeek(lexer), lexer_ccurr(lexer));
+    char quot_mark = lexer_cpeek(lexer);
+    size_t s_offset = lexer->offset, s_row = lexer->row, s_col = lexer->col;
+
+    lexer_cconsume(lexer);
+
+    size_t seq_len = lexer_read_charseq(lexer, quot_mark);
+    if (seq_len == 1)
+    {
+        lexer_create_token(lexer, s_offset, lexer->offset - 1, CHAR_T);
+        return;
+    }
+
+    diagnostic_t diagnostic = diagnostic_from(
+        DIAG_ERROR, INVALID_LITERAL, string_from("invalid character literal."),
+        POSRNG_SWTOCURR((*lexer), s_offset, s_row, s_col));
+
+    result_error(&lexer->result, &diagnostic);
 }
 
-void lexer_read_str(lexer_t *lexer){//
-                                    TODO("lexer_read_str()")}
+void lexer_read_str(lexer_t *lexer)
+{
+    char quot_mark = lexer_cpeek(lexer);
+    size_t s_offset = lexer->offset, s_row = lexer->row, s_col = lexer->col;
+
+    lexer_cconsume(lexer);
+
+    if (lexer_read_charseq(lexer, quot_mark) != SIZE_MAX)
+        lexer_create_token(lexer, s_offset, lexer->offset - 1, STR_T);
+}
 
 result_t *lexer_tokenize(lexer_t *lexer)
 {

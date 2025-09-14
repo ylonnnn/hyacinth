@@ -16,6 +16,7 @@
 #include "utils/time.h"
 #include "utils/types/string.h"
 #include "utils/types/string_view.h"
+#include "utils/types/vector.h"
 
 #ifdef _WIN32
 
@@ -136,6 +137,10 @@ void program_read_source(program_t *program)
     size_t fsize = ftell(file);
     fseek(file, 0, 0);
 
+    if (fsize == 0)
+        terminate("[program_read] cannot read from an empty file",
+                  EXIT_FAILURE);
+
     string_init(&program->source, fsize);
     size_t rsize = fread(program->source.data, sizeof(char), fsize, file);
 
@@ -168,20 +173,33 @@ void program_read_source(program_t *program)
     fclose(file);
 }
 
+result_t program_lex(program_t *program)
+{
+    program_initialize_lexer(program);
+    return *lexer_tokenize(program->lexer);
+}
+
+void program_lex_wres(program_t *program, result_t *p_res)
+{
+    program_lex(program);
+
+    result_t *l_res = &program->lexer->result;
+    result_adapt(p_res, l_res->status, &l_res->diagnostics);
+}
+
 void program_execute(program_t *program)
 {
     //
     TODO("program_execute()")
 
-    result_t program_result = result_create(RES_SUCCESS);
-    reporter_t *__reporter = reporter();
+    clean(result_free) result_t program_result = result_create(RES_SUCCESS);
 
     bool succeeded = true;
     double start = get_nanosec();
 
     // Lexer
-    program_initialize_lexer(program);
-    succeeded = lexer_tokenize(program->lexer)->status == RES_SUCCESS;
+    program_lex_wres(program, &program_result);
+    succeeded = program_result.status == RES_SUCCESS;
 
     // Parser
 
@@ -195,16 +213,20 @@ void program_execute(program_t *program)
         puts("");
     }
 
-    vec_move(&__reporter->diagnostics, &program->lexer->result.diagnostics);
+    reporter_t *__reporter = reporter();
+    vec_insert_full_vec(&__reporter->diagnostics, &program_result.diagnostics,
+                        __reporter->diagnostics.size, true);
 
     report_result_t res = __reporter->report(__reporter);
 
     text_style color = succeeded ? C_GREEN : C_RED;
-    printf("\t%s%u%s informations, %s%u%s warnings, %s%u%s "
-           "errors\n\t%s[%s%s%s]%s Program Executed %s(%s%g ms%s)%s\n\n",
-           INFO_COLOR, res.diag_count[DIAG_INFO], S_RESET, WARN_COLOR,
-           res.diag_count[DIAG_WARN], S_RESET, ERROR_COLOR,
-           res.diag_count[DIAG_ERROR], S_RESET, C_BRIGHT_BLACK, color,
+    printf("\t%s%u %s[%si%s]%s, %s%u %s[%s~%s]%s, %s%u "
+           "%s[%s*%s]%s\n\t%s[%s%s%s]%s Program Executed %s(%s%g ms%s)%s\n\n",
+           INFO_COLOR, res.diag_count[DIAG_INFO], C_BRIGHT_BLACK, INFO_COLOR,
+           C_BRIGHT_BLACK, S_RESET, WARN_COLOR, res.diag_count[DIAG_WARN],
+           C_BRIGHT_BLACK, WARN_COLOR, C_BRIGHT_BLACK, S_RESET, ERROR_COLOR,
+           res.diag_count[DIAG_ERROR], C_BRIGHT_BLACK, ERROR_COLOR,
+           C_BRIGHT_BLACK, S_RESET, C_BRIGHT_BLACK, color,
            succeeded ? "/" : "X", C_BRIGHT_BLACK, S_RESET, C_BRIGHT_BLACK,
            color, (end - start) / NANOSECONDS_PER_MILLISECOND, C_BRIGHT_BLACK,
            S_RESET);

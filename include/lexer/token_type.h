@@ -34,7 +34,7 @@ typedef enum token_type
     CHAR_T,
     BOOL_T,
     STR_T,
-    NIL_T,
+    NULL_T,
 
     // ==== OPERATORS ====
 
@@ -136,7 +136,7 @@ static const char *TOKEN_TYPE_STRING_REPR[TOKEN_TYPE_COUNT] = {
     [CHAR_T] = "char",
     [BOOL_T] = "bool",
     [STR_T] = "string",
-    [NIL_T] = "nil",
+    [NULL_T] = "null",
 
     // ==== OPERATORS ====
 
@@ -235,7 +235,7 @@ static const char *TOKEN_TYPE_NAMES[TOKEN_TYPE_COUNT] = {
     [CHAR_T] = "Char",
     [BOOL_T] = "Bool",
     [STR_T] = "String",
-    [NIL_T] = "Nil",
+    [NULL_T] = "Null",
 
     // ==== OPERATORS ====
 

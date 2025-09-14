@@ -46,10 +46,10 @@ vector_t files_from(const char *dirpath)
 
         if (S_ISDIR(buf.st_mode))
         {
-            vector_t files = files_from(cpath);
+            clean(vec_free) vector_t files = files_from(cpath);
             vec_insert_full_vec(&path_vec, &files, path_vec.size);
 
-            return path_vec;
+            continue;
         }
 
         *str_vec_use(&path_vec) = string_from(cpath);
@@ -79,10 +79,11 @@ vector_t files_from(const char *dirpath)
 
         if (S_ISDIR(buf.st_mode))
         {
+            // Does not require automatic clean-up as the full vector is moved
             vector_t files = files_from(cpath);
-            vec_insert_full_vec(&path_vec, &files, path_vec.size);
+            vec_insert_full_vec(&path_vec, &files, path_vec.size, true);
 
-            return path_vec;
+            continue;
         }
 
         *str_vec_use(&path_vec) = string_from(cpath);
@@ -97,7 +98,7 @@ vector_t files_from(const char *dirpath)
 
 void begin_tests(const char *testpath)
 {
-    vector_t files = files_from(testpath);
+    clean(vec_free) vector_t files = files_from(testpath);
 
     for (size_t i = 0; i < files.size; i++)
     {
@@ -109,7 +110,7 @@ void begin_tests(const char *testpath)
         clean(program_free) program_t program = program_from(filepath->data);
         program_execute(&program);
 
-        printf("%s[%sTEST%s] %sRan test on: %s%s\n", C_BRIGHT_BLACK, C_GREEN,
-               C_BRIGHT_BLACK, C_WHITE, C_GREEN, filepath->data);
+        printf("%s[%sTEST%s] %sRan test on: %s%s%s\n", C_BRIGHT_BLACK, C_GREEN,
+               C_BRIGHT_BLACK, C_WHITE, C_GREEN, filepath->data, S_RESET);
     }
 }

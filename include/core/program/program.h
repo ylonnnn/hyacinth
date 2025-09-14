@@ -5,6 +5,8 @@
 
 #define FILE_EXT ".hyc"
 
+typedef struct result result_t;
+
 typedef struct lexer lexer_t;
 
 typedef struct program
@@ -28,6 +30,9 @@ void program_free(program_t *program);
 void program_initialize_lexer(program_t *program);
 
 void program_read_source(program_t *program);
+
+result_t program_lex(program_t *program);
+void program_lex_wres(program_t *program, result_t *p_res);
 
 void program_execute(program_t *program);
 

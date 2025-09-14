@@ -54,7 +54,7 @@ static string_t point_position_range(diagnostic_severity_t severity,
                   EXIT_FAILURE);
 
     vec_insert_vec(&lines, p_lines, 0, start->row - 1,
-                   (end->row - start->row) + 1);
+                   (end->row - start->row) + 1, false);
 
     string_t formatted = string_from("");
 
@@ -62,12 +62,10 @@ static string_t point_position_range(diagnostic_severity_t severity,
     {
         string_view_t *sv = sv_vec_at(&lines, i);
 
-        clean(string_free) string_t f_line,
-            line = string_from_prt(sv->data, sv->len), l_no;
+        clean(string_free) string_t line = string_from_prt(sv->data, sv->len),
+                                    l_no;
 
-        string_init(&f_line, line.len ? 256 : 64);
         string_init(&l_no, 24);
-
         string_format(&l_no, "%u", start->row + i);
 
         size_t l_start = i == 0 ? start->col - 1 : 0,
@@ -82,9 +80,10 @@ static string_t point_position_range(diagnostic_severity_t severity,
             string_insert(&line, color, l_start);
         }
 
-        clean(string_free) string_t emphasis =
-            string_with_char('^', (l_end - l_start) + 1);
+        clean(string_free) string_t f_line,
+            emphasis = string_with_char('^', (l_end - l_start) + 1);
 
+        string_init(&f_line, line.len * 3);
         string_format(&f_line,
                       "  %s%s  %s|%s   %s%s\n  %*s  %s|%s   %*s%s%s%s\n",
                       C_CYAN, l_no.data, C_BRIGHT_BLACK, S_RESET, line.data,

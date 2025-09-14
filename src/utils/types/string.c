@@ -75,9 +75,23 @@ string_t string_with_char(char c, size_t n)
     return str;
 }
 
+string_t string_copy(string_t *str)
+{
+    assert(str != NULL);
+    return string_from(str->data);
+}
+
+void string_copy_to(string_t *str, string_t *dest)
+{
+    assert(str != NULL && dest != NULL);
+
+    *dest = string_copy(str);
+}
+
 void string_move(string_t *dest, string_t *src)
 {
-    assert(dest != NULL && src != NULL);
+    assert(dest != NULL);
+    assert(src != NULL);
 
     dest->len = src->len;
     dest->cap = src->cap;
@@ -87,6 +101,9 @@ void string_move(string_t *dest, string_t *src)
 void string_free(string_t *str)
 {
     assert(str != NULL);
+
+    if (str->data == NULL)
+        return;
 
     free(string_reset(str));
 }

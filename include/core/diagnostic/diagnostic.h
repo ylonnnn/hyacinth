@@ -33,16 +33,20 @@ diagnostic_t *diagnostic_create_on(diagnostic_t *addr,
                                    uint32_t code, string_t message,
                                    position_range_t range);
 
+diagnostic_t diagnostic_copy(diagnostic_t *diag);
+void diagnostic_copy_to(diagnostic_t *diag, diagnostic_t *dest);
+void diagnostic_move(diagnostic_t *dest, diagnostic_t *src);
+
 // Destructors
 void diagnostic_free(diagnostic_t *diagnostic);
 
 // Helper
 
-void diagnostic_move(diagnostic_t *dest, diagnostic_t *src);
-
 T_VEC_CONSTR(diagnostic_t, diag_vec,
-             (vec_opts_t){(vec_el_destr)diagnostic_free})
-T_VEC_AT(diagnostic_t, diag_vec_at)
+             ((vec_opts_t){(vec_el_destr)diagnostic_free,
+                           (vec_el_cp)diagnostic_copy_to,
+                           (vec_el_mv)diagnostic_move}))
+T_VEC_AT(diagnostic_t, diag_vec)
 T_VEC_PUSH(diagnostic_t, diag_vec_push)
 T_VEC_RESET(diagnostic_t, diag_vec_reset)
 T_VEC_USE(diagnostic_t, diag_vec_use)

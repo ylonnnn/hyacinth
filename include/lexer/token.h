@@ -25,9 +25,9 @@ string_t token_to_str(token_t *token);
 void token_print(token_t *token);
 
 T_VEC_CONSTR(token_t, token_vec, (vec_opts_t){NULL})
-T_VEC_AT(token_t, token_vec_at)
+T_VEC_AT(token_t, token_vec)
 T_VEC_INSERT(token_t, token_vec)
-T_VEC_PUSH(token_t, token_vec_push)
+T_VEC_PUSH(token_t, token_vec)
 T_VEC_RESET(token_t, token_vec_reset)
 T_VEC_USE(token_t, token_vec_use)
 

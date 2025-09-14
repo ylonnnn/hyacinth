@@ -23,7 +23,35 @@ vector_t vec_with_cap(size_t cap, size_t e_size, vec_opts_t opts)
     return vec;
 }
 
-void vec_copy(vector_t *dest, vector_t *src) {}
+vector_t vec_copy(vector_t *vec)
+{
+    assert(vec != NULL);
+
+    if (vec->size == 0)
+        return vec_with_cap(8, vec->e_size, vec->opts);
+
+    vector_t copy = vec_with_size(vec->size, vec->e_size, vec->opts);
+    if (vec->opts.cp)
+    {
+        for (size_t i = 0; i < vec->size; i++)
+        {
+            if (vec->opts.cp)
+                vec->opts.cp((char *)vec->data + (i * vec->e_size),
+                             (char *)copy.data + (i * vec->e_size));
+        }
+    }
+    else
+        memmove(copy.data, vec->data, vec->size * vec->e_size);
+
+    return copy;
+}
+
+void vec_copy_to(vector_t *vec, vector_t *dest)
+{
+    assert(vec != NULL && dest != NULL);
+
+    *dest = vec_copy(vec);
+}
 
 void vec_move(vector_t *dest, vector_t *src)
 {
@@ -39,6 +67,9 @@ void vec_move(vector_t *dest, vector_t *src)
 void vec_free(vector_t *vec)
 {
     assert(vec != NULL);
+
+    if (vec->data == NULL)
+        return;
 
     if (vec->opts.destr)
         for (size_t i = 0; i < vec->size; i++)
@@ -64,6 +95,9 @@ void *vec_reset(vector_t *vec)
 void vec_setcap(vector_t *vec, size_t cap)
 {
     assert(vec != NULL && cap > 0);
+
+    while (vec->size > cap)
+        vec_pop(vec);
 
     void *buf = realloc(vec->data, cap * vec->e_size);
     if (buf == NULL)
@@ -98,31 +132,56 @@ void *vec_silent_at(vector_t *vec, size_t idx)
     return (char *)vec->data + (idx * vec->e_size);
 }
 
-void vec_insert_el(vector_t *vec, void *el, size_t pos)
+void vec_insert_el(vector_t *vec, void *el, size_t pos, bool move)
 {
-    assert(vec != NULL && pos >= vec->size);
+    assert(vec != NULL);
+    assert(pos <= vec->size);
 
     if (vec->size >= vec->cap)
         vec_setcap(vec, vec->cap * 2);
 
     if (pos < vec->size)
     {
-        void *src = (char *)vec->data + (pos * vec->e_size);
-        void *dest = (char *)src + (vec->e_size); // Shift by a single element
+        size_t n = vec->size - pos;
 
-        size_t bytes = (vec->size - pos) * vec->e_size;
+        for (size_t i = pos; i < vec->size; i++)
+        {
+            void *src = (char *)vec->data + (i * vec->e_size);
+            void *dest = (char *)src + ((n + i) * vec->e_size);
 
-        memmove(dest, src, bytes);
+            if (vec->opts.mv)
+                vec->opts.mv(dest, src);
+
+            if (vec->opts.destr)
+                vec->opts.destr(dest);
+        }
     }
 
-    memmove((char *)vec->data + (pos * vec->e_size), el, vec->e_size);
+    void *dest = (char *)vec->data + (pos * vec->e_size);
+
+    if (move)
+    {
+        if (vec->opts.mv)
+            vec->opts.mv(dest, el);
+    }
+
+    else if (vec->opts.cp)
+        vec->opts.cp(el, dest);
+
+    else
+        memmove(dest, el, vec->e_size);
+
     vec->size++;
 }
 
 void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
-                    size_t n)
+                    size_t n, bool move)
 {
     assert(vec != NULL && other != NULL);
+
+    // Skip empty vectors
+    if (other->size == 0)
+        return;
 
     if (vec->e_size != other->e_size)
         terminate("[vec_insert] cannot insert vector of different element size",
@@ -151,31 +210,66 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
     // shifted
     if (in_pos < vec->size)
     {
-        void *src = (char *)vec->data + (in_pos * vec->e_size);
-        void *dest = (char *)src + (n * vec->e_size);
+        for (size_t i = in_pos; i < vec->size; i++)
+        {
+            void *src = (char *)vec->data + (i * vec->e_size);
+            void *dest = (char *)src + ((n + i) * vec->e_size);
 
-        size_t bytes = (vec->size - in_pos) * vec->e_size;
+            if (vec->opts.destr)
+                vec->opts.destr(src);
 
-        memmove(dest, src, bytes);
+            if (vec->opts.mv)
+                vec->opts.mv(dest, src);
+        }
     }
 
-    void *target = (char *)vec->data + (in_pos * vec->e_size);
-    memmove(target, (char *)other->data + (f_pos * vec->e_size),
-            n * other->e_size);
+    if (move ? vec->opts.mv : vec->opts.cp)
+    {
+        for (size_t i = 0; i < n; i++)
+        {
+            void *el = (char *)other->data + ((f_pos + i) * vec->e_size);
+            void *dest = (char *)vec->data + ((in_pos + i) * vec->e_size);
+
+            if (move)
+            {
+                if (vec->opts.mv)
+                {
+                    vec->opts.mv(dest, el);
+                    other->size--;
+                }
+            }
+            else if (vec->opts.cp)
+                vec->opts.cp(el, dest);
+        }
+    }
+
+    else
+        memmove((char *)vec->data + (in_pos * vec->e_size),
+                (char *)other->data + (f_pos * vec->e_size), n * vec->e_size);
 
     vec->size = n_size;
 }
 
-void vec_insert_full_vec(vector_t *vec, vector_t *other, size_t pos)
+void vec_insert_full_vec(vector_t *vec, vector_t *other, size_t pos, bool move)
 {
-    vec_insert_vec(vec, other, pos, 0, other->size);
+    vec_insert_vec(vec, other, pos, 0, other->size, move);
+    if (move)
+        vec_free(other);
 }
 
 size_t vec_push(vector_t *vec, void *element)
 {
     assert(vec != NULL);
 
-    vec_insert_el(vec, element, vec->size);
+    vec_insert_el(vec, element, vec->size, false);
+    return vec->size;
+}
+
+size_t vec_mpush(vector_t *vec, void *element)
+{
+    assert(vec != NULL);
+
+    vec_insert_el(vec, element, vec->size, true);
     return vec->size;
 }
 

@@ -19,6 +19,8 @@ string_t string_from_prt(const char *lit, size_t n);
 string_t string_with(char *lit);
 string_t string_with_char(char c, size_t n);
 
+string_t string_copy(string_t *str);
+void string_copy_to(string_t *str, string_t *dest);
 void string_move(string_t *dest, string_t *src);
 
 // Destructor
@@ -52,11 +54,13 @@ void string_insert(string_t *str, const char *lit, size_t pos);
 
 void string_format(string_t *str, const char *format, ...);
 
-T_VEC_CONSTR(string_t, str_vec, (vec_opts_t){(vec_el_destr)string_free});
+T_VEC_CONSTR(string_t, str_vec,
+             ((vec_opts_t){(vec_el_destr)string_free, (vec_el_cp)string_copy_to,
+                           (vec_el_mv)string_move}))
 T_VEC_RESET(string_t, str_vec_reset)
-T_VEC_AT(string_t, str_vec_at)
+T_VEC_AT(string_t, str_vec)
 T_VEC_INSERT(string_t, str_vec)
-T_VEC_PUSH(string_t, str_vec_push)
+T_VEC_PUSH(string_t, str_vec)
 T_VEC_USE(string_t, str_vec_use)
 
 #endif

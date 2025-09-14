@@ -11,10 +11,13 @@ typedef enum result_status
 } result_status_t;
 
 typedef void (*result_data_destr)(void *self);
+typedef void (*result_data_mv)(void *self, void *other);
 
 typedef struct result_data_opts
 {
     result_data_destr destr;
+    result_data_mv mv;
+
 } result_data_opts_t;
 
 typedef struct result_data
@@ -25,6 +28,7 @@ typedef struct result_data
 
 // Constructors
 result_data_t result_data_from(void *data, result_data_opts_t opts);
+void result_data_move(result_data_t *dest, result_data_t *src);
 
 // Destructors
 void result_data_free(result_data_t *data);
@@ -40,6 +44,7 @@ typedef struct result
 
 // Constructors
 result_t result_create(result_status_t status);
+void result_move(result_t *dest, result_t *src);
 
 // Destructors
 void result_free(result_t *result);

@@ -46,8 +46,8 @@ vector_t files_from(const char *dirpath)
 
         if (S_ISDIR(buf.st_mode))
         {
-            clean(vec_free) vector_t files = files_from(cpath);
-            vec_insert_full_vec(&path_vec, &files, path_vec.size);
+            vector_t files = files_from(cpath);
+            vec_insert_full_vec(&path_vec, &files, path_vec.size, true);
 
             continue;
         }

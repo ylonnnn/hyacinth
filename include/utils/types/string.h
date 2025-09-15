@@ -38,6 +38,8 @@ void string_setcap(string_t *str, size_t cap);
 char *string_at(string_t *str, size_t idx);
 char *string_silent_at(string_t *str, size_t idx);
 
+bool string_equal(string_t *a, string_t *b);
+
 void string_assign(string_t *str, const char *s_lit);
 void string_assign_str(string_t *str, string_t *s, bool reset);
 

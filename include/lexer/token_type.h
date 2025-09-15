@@ -29,6 +29,7 @@ typedef enum token_type
 
     // ==== PRIMARY ====
     IDENTIFIER,
+
     INT_T,
     FLOAT_T,
     CHAR_T,

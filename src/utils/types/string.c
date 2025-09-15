@@ -134,6 +134,14 @@ char *string_silent_at(string_t *str, size_t idx)
     return idx >= str->len ? NULL : &str->data[idx];
 }
 
+bool string_equal(string_t *a, string_t *b)
+{
+    if (a->len != b->len)
+        return false;
+
+    return strncmp(a->data, b->data, a->len) == 0;
+}
+
 void string_setcap(string_t *str, size_t cap)
 {
     assert(str != NULL && cap > 0);

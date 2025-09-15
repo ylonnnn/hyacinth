@@ -41,6 +41,8 @@ void vec_free(vector_t *vec);
 void *vec_reset(vector_t *vec);
 void vec_setcap(vector_t *vec, size_t cap);
 
+void vec_resize(vector_t *vec, size_t n_size);
+
 void *vec_at(vector_t *vec, size_t idx);
 
 /**

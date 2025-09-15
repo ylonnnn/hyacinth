@@ -1,42 +1,65 @@
-#include "core/diagnostic/diagnostic.h"
 #include "core/program/program.h"
 #include "testing/testing.h"
 #include "utils/macros.h"
+#include "utils/types/hashmap.h"
 #include "utils/types/string.h"
-#include "utils/types/vector.h"
 #include <stdio.h>
+
+size_t str_hash(void *key)
+{
+    string_t *str = key;
+    size_t hash = 0;
+
+    for (size_t i = 0; i < str->len; i++)
+    {
+        char c = *string_at(str, i);
+        hash += c;
+    }
+
+    return hash;
+}
+
+bool str_eq(void *a, void *b)
+{
+    return string_equal((string_t *)a, (string_t *)b);
+}
+
+typedef enum type
+{
+    keyword_let = 69,
+    keyword_fn,
+} type_t;
+
+T_HM_CONSTR(string_t, type_t, se_hm,
+            ((hashmap_opts_t){
+                str_hash, str_eq,
+                (hashmap_data_opts_t){
+                    sizeof(string_t), (hm_data_destr)string_free,
+                    (hm_data_cp)string_copy_to, (hm_data_mv)string_move},
+                (hashmap_data_opts_t){sizeof(type_t), NULL, NULL, NULL}}))
+T_HM_INSERT(string_t, type_t, se_hm)
+T_HM_FIND(string_t, type_t, se_hm)
 
 void handle(const char *path)
 {
 #ifdef __testing
-    begin_tests("hyc/tests");
+    // begin_tests("hyc/tests");
 
-    // clean(vec_free) vector_t strs = str_vec_with_cap(8),
-    //                          strs_b = str_vec_with_cap(strs.cap);
+    clean(hashmap_free) hashmap_t hashmap = se_hm_with_cap(8);
 
-    // // *str_vec_use(&strs) = string_from("hello world");
-    // // *str_vec_use(&strs) = string_from("another string");
-    // // *str_vec_use(&strs) = string_from("test blabla");
+    se_hm_insert(&hashmap, string_from("let"), keyword_let, true);
+    se_hm_insert(&hashmap, string_from("fn"), keyword_fn, true);
 
-    // str_vec_mpush(&strs, string_from("hello world"));
-    // str_vec_mpush(&strs, string_from("another string"));
-    // str_vec_mpush(&strs, string_from("test blabla"));
+    type_t *tl;
+    HM_FIND(type_t, tl, hashmap, string_from("let"), true);
 
-    // // VEC_PUSH(strs, string_from("hello world"));
-    // // VEC_PUSH(strs, string_from("another string"));
-    // // VEC_PUSH(strs, string_from("test blabla"));
+    // // type_t *tl = se_hm_find(&hashmap, string_from("let"), true);
+    // // type_t *tf = se_hm_find(&hashmap, string_from("fn"), true);
+    // // type_t *ne = se_hm_find(&hashmap, string_from("struct"), true);
 
-    // vec_insert_full_vec(&strs_b, &strs, strs_b.size, true);
-
-    // printf("strs: %zu\nstrs_b: %zu\n", strs.size, strs_b.size);
-    // for (size_t i = 0; i < (MAX(strs.size, strs_b.size)); i++)
-    // {
-    //     string_t *s = str_vec_silent_at(&strs, i),
-    //              *s_b = str_vec_silent_at(&strs_b, i);
-
-    //     printf("s: %s\ns_b: %s\n", (s == NULL ? NULL : s->data),
-    //            (s_b == NULL ? NULL : s_b->data));
-    // }
+    printf("tl: %d\n", (tl == NULL ? 0 : *tl));
+    // printf("tf: %d\n", (tf == NULL ? 0 : *tf));
+    // printf("ne: %p\n", ne);
 
 #else
 #include "utils/macros.h"

@@ -3,11 +3,14 @@
 #include <string.h>
 
 #include "utils/control.h"
+#include "utils/macros.h"
 #include "utils/types/vector.h"
 
 vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts)
 {
-    vector_t vec = {.e_size = e_size, .opts = opts};
+    assert(e_size > 0);
+
+    vector_t vec = {.size = size, .cap = size, .e_size = e_size, .opts = opts};
     vec_setcap(&vec, size);
 
     memset(vec.data, 0, size);
@@ -17,6 +20,9 @@ vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts)
 
 vector_t vec_with_cap(size_t cap, size_t e_size, vec_opts_t opts)
 {
+    assert(cap > 0);
+    assert(e_size > 0);
+
     vector_t vec = {.e_size = e_size, .opts = opts};
     vec_setcap(&vec, cap);
 
@@ -55,7 +61,8 @@ void vec_copy_to(vector_t *vec, vector_t *dest)
 
 void vec_move(vector_t *dest, vector_t *src)
 {
-    assert(dest != NULL && src != NULL);
+    assert(dest != NULL);
+    assert(src != NULL);
 
     dest->size = src->size;
     dest->cap = src->cap;
@@ -94,7 +101,8 @@ void *vec_reset(vector_t *vec)
 
 void vec_setcap(vector_t *vec, size_t cap)
 {
-    assert(vec != NULL && cap > 0);
+    assert(vec != NULL);
+    assert(cap > 0);
 
     while (vec->size > cap)
         vec_pop(vec);
@@ -110,6 +118,17 @@ void vec_setcap(vector_t *vec, size_t cap)
 
     if (vec->size > cap)
         vec->size = cap;
+}
+
+void vec_resize(vector_t *vec, size_t n_size)
+{
+    assert(vec != NULL);
+
+    if (vec->cap < n_size)
+        vec_setcap(vec, (n_size == 0 ? 1 : vec->cap * 2));
+
+    memset(vec->data + vec->size, 0, n_size - vec->size);
+    vec->size = n_size;
 }
 
 void *vec_at(vector_t *vec, size_t idx)
@@ -303,7 +322,7 @@ void *vec_use(vector_t *vec)
     assert(vec != NULL);
 
     if (vec->size >= vec->cap)
-        vec_setcap(vec, vec->cap * 2);
+        vec_setcap(vec, vec->cap == 0 ? 1 : (vec->cap * 2));
 
     void *target = (char *)vec->data + (vec->size * vec->e_size);
     vec->size++;

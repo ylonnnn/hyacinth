@@ -3,7 +3,9 @@
 #include <string.h>
 
 #include "utils/control.h"
+#include "utils/macros.h"
 #include "utils/types/hashmap.h"
+#include "utils/types/string.h"
 
 hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                                 bool move)
@@ -124,8 +126,11 @@ void hashmap_rehash(hashmap_t *hashmap)
 {
     assert(hashmap != NULL);
 
+    printf("load_factor: %g\n", hashmap_load_factor(hashmap));
     if (hashmap_load_factor(hashmap) < HASHMAP_REHASH_THRESHOLD)
         return;
+
+    printf("rehashing...\n");
 
     hashmap_entry_t **buf = calloc(hashmap->cap * 2, sizeof(hashmap_entry_t *));
     if (buf == NULL)
@@ -133,40 +138,44 @@ void hashmap_rehash(hashmap_t *hashmap)
                   "hashmap entry buffer",
                   EXIT_FAILURE);
 
-    for (size_t i = 0; i < hashmap->size; i++)
+    for (size_t i = 0; i < hashmap->cap; i++)
     {
         hashmap_entry_t *entry = hashmap->entries[i];
-        printf("entry: %p\n", entry);
         if (entry == NULL)
             continue;
 
         size_t idx = hashmap->opts.hash(entry->key) % hashmap->cap;
         hashmap_entry_t *__entry = buf[idx],
                         //
-            rehashed = {
-                .key = entry->key,
-                .value = entry->value,
-                .next = NULL,
-            };
+            *rehashed = hm_entry_alloc(hashmap, entry->key, entry->value, true);
+
+        TODO(
+            "check `entry` if it has a chain of entries that require rehashing")
 
         // If entry does not exist
         if (__entry == NULL)
         {
-            *buf[idx] = rehashed;
+            buf[idx] = rehashed;
             continue;
         }
 
-        rehashed.next = __entry;
-        *__entry = rehashed;
+        rehashed->next = __entry;
+        *(hashmap->entries + i) = rehashed;
     }
 
     free(hashmap->entries);
+
     hashmap->entries = buf;
+    hashmap->cap *= 2;
+
+    printf("rehash complete\n");
 }
 
 void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move)
 {
     assert(hashmap != NULL);
+
+    hashmap_rehash(hashmap);
 
     size_t idx = hashmap->opts.hash(key) % hashmap->cap;
     hashmap_entry_t *entry = hashmap->entries[idx],

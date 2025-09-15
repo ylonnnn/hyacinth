@@ -126,13 +126,12 @@ void hashmap_rehash(hashmap_t *hashmap)
 {
     assert(hashmap != NULL);
 
-    printf("load_factor: %g\n", hashmap_load_factor(hashmap));
     if (hashmap_load_factor(hashmap) < HASHMAP_REHASH_THRESHOLD)
         return;
 
-    printf("rehashing...\n");
+    size_t n_cap = hashmap->cap * 2;
+    hashmap_entry_t **buf = calloc(n_cap, sizeof(hashmap_entry_t *));
 
-    hashmap_entry_t **buf = calloc(hashmap->cap * 2, sizeof(hashmap_entry_t *));
     if (buf == NULL)
         terminate("[hashmap_rehash] failed to allocate memory for the new "
                   "hashmap entry buffer",
@@ -140,35 +139,28 @@ void hashmap_rehash(hashmap_t *hashmap)
 
     for (size_t i = 0; i < hashmap->cap; i++)
     {
-        hashmap_entry_t *entry = hashmap->entries[i];
-        if (entry == NULL)
+        hashmap_entry_t *curr = hashmap->entries[i];
+        if (curr == NULL)
             continue;
 
-        size_t idx = hashmap->opts.hash(entry->key) % hashmap->cap;
-        hashmap_entry_t *__entry = buf[idx],
-                        //
-            *rehashed = hm_entry_alloc(hashmap, entry->key, entry->value, true);
-
-        TODO(
-            "check `entry` if it has a chain of entries that require rehashing")
-
-        // If entry does not exist
-        if (__entry == NULL)
+        while (curr != NULL)
         {
-            buf[idx] = rehashed;
-            continue;
-        }
+            size_t idx = hashmap->opts.hash(curr->key) % n_cap;
+            hashmap_entry_t *entry = buf[idx],
+                            *rehashed = hm_entry_alloc(hashmap, curr->key,
+                                                       curr->value, true);
 
-        rehashed->next = __entry;
-        *(hashmap->entries + i) = rehashed;
+            rehashed->next = entry;
+            buf[idx] = rehashed;
+
+            curr = curr->next;
+        }
     }
 
     free(hashmap->entries);
 
     hashmap->entries = buf;
-    hashmap->cap *= 2;
-
-    printf("rehash complete\n");
+    hashmap->cap = n_cap;
 }
 
 void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move)

@@ -35,6 +35,9 @@ typedef struct hashmap hashmap_t;
 hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                                 bool move);
 
+// Destructors
+void hm_entry_free(hashmap_t *hashmap, hashmap_entry_t *hm_entry);
+
 typedef struct hashmap_opts
 {
     hm_hash_fn hash;

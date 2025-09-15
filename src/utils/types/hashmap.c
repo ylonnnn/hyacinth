@@ -56,6 +56,32 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
     return entry;
 }
 
+void hm_entry_free(hashmap_t *hashmap, hashmap_entry_t *hm_entry)
+{
+    assert(hashmap != NULL);
+    assert(hm_entry != NULL);
+
+    hashmap_data_opts_t *k_opts = &hashmap->opts.key,
+                        *v_opts = &hashmap->opts.val;
+
+    // Destroy the key
+    if (k_opts->destr)
+        k_opts->destr(hm_entry->key);
+
+    // Free the key buffer
+    free(hm_entry->key);
+
+    // Destroy the value
+    if (v_opts->destr)
+        v_opts->destr(hm_entry->value);
+
+    // Free the value buffer
+    free(hm_entry->value);
+
+    // Free the entry buffer
+    free(hm_entry);
+}
+
 hashmap_t hashmap_with_cap(size_t cap, hashmap_opts_t opts)
 {
     assert(opts.hash != NULL);
@@ -95,22 +121,11 @@ void hashmap_free(hashmap_t *hashmap)
 
         while (entry != NULL)
         {
-            // Destroy the key
-            if (k_opts->destr)
-                k_opts->destr(entry->key);
-
-            free(entry->key);
-
-            // Destroy the value
-            if (v_opts->destr)
-                v_opts->destr(entry->value);
-            free(entry->value);
-
             hashmap_entry_t *prev = entry;
             entry = entry->next;
 
-            // Destroy the current entry
-            free(prev);
+            // Free the entry
+            hm_entry_free(hashmap, prev);
         }
     }
 
@@ -153,7 +168,11 @@ void hashmap_rehash(hashmap_t *hashmap)
             rehashed->next = entry;
             buf[idx] = rehashed;
 
+            hashmap_entry_t *prev = curr;
             curr = curr->next;
+
+            // Free the entry
+            hm_entry_free(hashmap, prev);
         }
     }
 

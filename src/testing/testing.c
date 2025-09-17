@@ -46,7 +46,7 @@ vector_t files_from(const char *dirpath)
 
         if (S_ISDIR(buf.st_mode))
         {
-            vector_t files = files_from(cpath);
+            clean(vec_free) vector_t files = files_from(cpath);
             vec_insert_full_vec(&path_vec, &files, path_vec.size, true);
 
             continue;
@@ -80,7 +80,7 @@ vector_t files_from(const char *dirpath)
         if (S_ISDIR(buf.st_mode))
         {
             // Does not require automatic clean-up as the full vector is moved
-            vector_t files = files_from(cpath);
+            clean(vec_free) vector_t files = files_from(cpath);
             vec_insert_full_vec(&path_vec, &files, path_vec.size, true);
 
             continue;

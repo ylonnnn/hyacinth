@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define NANOSECONDS_PER_MILLISECOND 1000000
+#define NANOSECONDS_PER_MILLISECOND 1e6
 
 #ifdef _WIN32
 #include <stdbool.h>
@@ -35,7 +35,8 @@ static inline double get_nanosec()
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
 
-    return (double)ts.tv_nsec;
+    return (double)ts.tv_sec * (NANOSECONDS_PER_MILLISECOND * 1e3) +
+           (double)ts.tv_nsec;
 }
 
 #endif

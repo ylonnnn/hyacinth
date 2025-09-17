@@ -148,6 +148,8 @@ void program_read_source(program_t *program)
         terminate("[program_read] failed to read the whole file", EXIT_FAILURE);
 
     program->source.len = rsize - 1;
+    program->source.data[program->source.len] = '\0';
+
     size_t cursor = 0, line_start = cursor;
 
     while (cursor < fsize)
@@ -155,8 +157,9 @@ void program_read_source(program_t *program)
         char c = program->source.data[cursor];
         if (c == '\n')
         {
-            sv_vec_push(&program->lines, sv_from(&program->source, line_start,
-                                                 cursor - line_start));
+            string_view_t sv =
+                sv_from(&program->source, line_start, cursor - line_start);
+            VEC_PUSH(program->lines, sv);
 
             line_start = cursor + 1;
         }
@@ -166,8 +169,8 @@ void program_read_source(program_t *program)
 
     if (line_start != cursor)
     {
-        sv_vec_push(&program->lines,
-                    sv_from(&program->source, line_start, cursor - line_start));
+        VEC_PUSH(program->lines,
+                 sv_from(&program->source, line_start, cursor - line_start));
     }
 
     fclose(file);
@@ -214,8 +217,10 @@ void program_execute(program_t *program)
     }
 
     reporter_t *__reporter = reporter();
-    vec_insert_full_vec(&__reporter->diagnostics, &program_result.diagnostics,
-                        __reporter->diagnostics.size, true);
+    vec_move(&__reporter->diagnostics, &program_result.diagnostics);
+    // vec_insert_full_vec(&__reporter->diagnostics,
+    // &program_result.diagnostics,
+    //                     __reporter->diagnostics.size, true);
 
     report_result_t res = __reporter->report(__reporter);
 

@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "core/diagnostic/code/error.h"
 #include "core/diagnostic/diagnostic.h"
@@ -7,15 +8,12 @@
 #include "lexer/lexer.h"
 #include "lexer/token.h"
 #include "lexer/token_type.h"
-#include "utils/macros.h"
 #include "utils/numerics.h"
 #include "utils/types/string_view.h"
 
-#define SEP(c) c == '_'
-
 lexer_t lexer_from(program_t *program)
 {
-    return (lexer_t){
+    lexer_t lexer = {
         .program = program,
         .tokens = token_vec_with_cap(64),
         .position = 0,
@@ -25,13 +23,20 @@ lexer_t lexer_from(program_t *program)
         .p_row = 1,
         .p_col = 1,
         .result = result_create(RES_SUCCESS),
+        .reserved = reserved_with_cap(8),
     };
+
+    lexer_reserve_keywords(&lexer);
+
+    return lexer;
 }
 
 void lexer_free(lexer_t *lexer)
 {
     vec_free(&lexer->tokens);
     result_free(&lexer->result);
+
+    hashmap_free(&lexer->reserved);
 }
 
 bool lexer_cbsof(lexer_t *lexer) { return lexer->offset == 0; }
@@ -150,7 +155,7 @@ void lexer_read_digseq(lexer_t *lexer, uint32_t base)
             proceed(lexer);
         }
 
-        else if (SEP(c))
+        else if (c == '_')
         {
             // If the next character is not a digit, a separator is not allowed
             // as it is the end of the digit sequence
@@ -294,6 +299,35 @@ void lexer_read_str(lexer_t *lexer)
         lexer_create_token(lexer, s_offset, lexer->offset - 1, STR_T);
 }
 
+void lexer_read_ident(lexer_t *lexer)
+{
+#define IDENT_CHAR(c) (isalpha(c) || c == '_')
+
+    size_t s_offset = lexer->offset;
+
+    for (char c = lexer_cpeek(lexer); !lexer_ceof(lexer) && IDENT_CHAR(c);
+         c = lexer_cpeek(lexer))
+    {
+        lexer_cconsume(lexer);
+    }
+
+    string_view_t ident =
+        sv_from(&lexer->program->source, s_offset, (lexer->offset - s_offset));
+
+    char *literal = strndup(ident.data, ident.len + 1);
+    literal[ident.len] = '\0';
+
+    token_type_t *type =
+        reserved_find(&lexer->reserved, (const char **)&literal, true);
+
+    lexer_create_token(lexer, s_offset, lexer->offset - 1,
+                       type == NULL ? IDENTIFIER : *type);
+
+    free((char **)literal);
+
+#undef IDENt_CHAR
+}
+
 result_t *lexer_tokenize(lexer_t *lexer)
 {
     program_t *program = lexer->program;
@@ -313,6 +347,12 @@ result_t *lexer_tokenize(lexer_t *lexer)
         if (isdigit(c))
         {
             lexer_read_num(lexer);
+            continue;
+        }
+
+        if (isalpha(c) || c == '_')
+        {
+            lexer_read_ident(lexer);
             continue;
         }
 
@@ -630,4 +670,11 @@ result_t *lexer_tokenize(lexer_t *lexer)
     lexer_create_token(lexer, source->len, source->len, END_OF_FILE);
 
     return &lexer->result;
+}
+
+void lexer_reserve_keywords(lexer_t *lexer)
+{
+    hashmap_t *reserved = &lexer->reserved;
+
+    HM_INSERT(*reserved, "use", USE, false);
 }

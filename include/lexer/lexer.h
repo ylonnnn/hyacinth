@@ -2,10 +2,12 @@
 #define __LEXER_LEXER_H__
 
 #include <stdint.h>
+#include <string.h>
 
 #include "core/program/program.h"
 #include "core/result/result.h"
 #include "lexer/token.h"
+#include "utils/types/hashmap.h"
 #include "utils/types/vector.h"
 
 #define POSRNG_SWTOCURR(lexer, s_offset, s_row, s_col)                         \
@@ -26,7 +28,46 @@ typedef struct lexer
 
     vector_t tokens;
     result_t result;
+
+    hashmap_t reserved;
 } lexer_t;
+
+static inline size_t cstr_hash(void *key)
+{
+    const char *str = *(char **)key;
+    size_t hash = 0, len = strlen(str);
+
+    for (size_t i = 0; i < len; i++)
+        hash += str[i];
+
+    return hash;
+}
+
+static inline bool cstr_eq(void *a, void *b)
+{
+    char *str = *(char **)a;
+    return strncmp(str, *(char **)b, strlen(str)) == 0;
+}
+
+static inline void cstr_cp(void *self, void *dest)
+{
+    char *str = *(char **)self;
+    memcpy(*(char **)dest, str, strlen(str) + 1);
+}
+
+static inline void *cstr_alloc(void *src, size_t size)
+{
+    return malloc((strlen(*(char **)src) + 1) * sizeof(char));
+}
+
+T_HASHMAP(const char *, token_type_t, reserved,
+          ((hashmap_opts_t){.hash = cstr_hash,
+                            .eq = cstr_eq,
+                            .key = (hashmap_data_opts_t){sizeof(const char *),
+                                                         NULL, cstr_cp, NULL,
+                                                         cstr_alloc},
+                            .val = (hashmap_data_opts_t){sizeof(token_type_t),
+                                                         NULL, NULL, NULL}}))
 
 // Constructors
 lexer_t lexer_from(program_t *program);
@@ -64,6 +105,10 @@ size_t lexer_read_charseq(lexer_t *lexer, char terminator);
 void lexer_read_char(lexer_t *lexer);
 void lexer_read_str(lexer_t *lexer);
 
+void lexer_read_ident(lexer_t *lexer);
+
 result_t *lexer_tokenize(lexer_t *lexer);
+
+void lexer_reserve_keywords(lexer_t *lexer);
 
 #endif

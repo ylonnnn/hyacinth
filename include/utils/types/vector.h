@@ -51,6 +51,8 @@ void *vec_at(vector_t *vec, size_t idx);
  */
 void *vec_silent_at(vector_t *vec, size_t idx);
 
+void *vec_back(vector_t *vec);
+
 void vec_insert_el(vector_t *vec, void *el, size_t pos, bool move);
 void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
                     size_t n, bool move);
@@ -64,42 +66,48 @@ void vec_silent_pop(vector_t *vec);
 void *vec_use(vector_t *vec);
 
 // Macros
-#define T_VEC_CONSTR(T, fn, opts)                                              \
-    static inline vector_t fn##_with_size(size_t size)                         \
+#define T_VEC(T, n, opts)                                                      \
+    static inline vector_t n##_with_size(size_t size)                          \
     {                                                                          \
         return vec_with_size(size, sizeof(T), opts);                           \
     }                                                                          \
-    static inline vector_t fn##_with_cap(size_t cap)                           \
+    static inline vector_t n##_with_cap(size_t cap)                            \
     {                                                                          \
         return vec_with_cap(cap, sizeof(T), opts);                             \
-    }
-
-#define VEC_RESET(T, vec) (T *)vec_reset(&vec)
-#define T_VEC_RESET(T, fn)                                                     \
-    static inline T *fn(vector_t *vec) { return (T *)vec_reset(vec); }
-
-#define VEC_AT(T, vec, idx) (T *)vec_at(&vec, idx)
-#define T_VEC_AT(T, fn)                                                        \
-    static inline T *fn##_at(vector_t *vec, size_t idx)                        \
+    }                                                                          \
+    static inline T *n##_reset(vector_t *vec) { return (T *)vec_reset(vec); }  \
+    static inline T *n##_at(vector_t *vec, size_t idx)                         \
     {                                                                          \
         return (T *)vec_at(vec, idx);                                          \
     }                                                                          \
-    static inline T *fn##_silent_at(vector_t *vec, size_t idx)                 \
+    static inline T *n##_silent_at(vector_t *vec, size_t idx)                  \
     {                                                                          \
         return (T *)vec_silent_at(vec, idx);                                   \
-    }
+    }                                                                          \
+    static inline T *n##_back(vector_t *vec) { return (T *)vec_back(vec); }    \
+    static inline void n##_insert_el(vector_t *vec, T el, size_t pos,          \
+                                     bool move)                                \
+    {                                                                          \
+        return vec_insert_el(vec, &el, pos, move);                             \
+    }                                                                          \
+    static inline size_t n##_push(vector_t *vec, T el)                         \
+    {                                                                          \
+        return vec_push(vec, &el);                                             \
+    }                                                                          \
+    static inline size_t n##_mpush(vector_t *vec, T el)                        \
+    {                                                                          \
+        return vec_mpush(vec, &el);                                            \
+    }                                                                          \
+    static inline T *n##_use(vector_t *vec) { return (T *)vec_use(vec); }
+
+#define VEC_RESET(T, vec) (T *)vec_reset(&vec)
+
+#define VEC_AT(T, vec, idx) (T *)vec_at(&vec, idx)
 
 #define VEC_INSERT_EL(vec, el, pos, move)                                      \
     {                                                                          \
         typeof(el) lv = el;                                                    \
         vec_insert_el(&vec, &lv, pos, move);                                   \
-    }
-
-#define T_VEC_INSERT(T, fn)                                                    \
-    static inline void fn##_insert_el(vector_t *vec, T el, size_t pos,         \
-                                      bool move)                               \
-    {                                                                          \
-        return vec_insert_el(vec, &el, pos, move);                             \
     }
 
 #define VEC_PUSH(vec, el)                                                      \
@@ -111,21 +119,9 @@ void *vec_use(vector_t *vec);
 #define VEC_MPUSH(vec, el)                                                     \
     {                                                                          \
         typeof(el) lv = el;                                                    \
-        vec_mpush(&vecl, &lv);                                                 \
-    }
-
-#define T_VEC_PUSH(T, fn)                                                      \
-    static inline size_t fn##_push(vector_t *vec, T el)                        \
-    {                                                                          \
-        return vec_push(vec, &el);                                             \
-    }                                                                          \
-    static inline size_t fn##_mpush(vector_t *vec, T el)                       \
-    {                                                                          \
-        return vec_mpush(vec, &el);                                            \
+        vec_mpush(&vec, &lv);                                                  \
     }
 
 #define VEC_USE(vec, value) *(typeof(value) *)vec_use(&vec) = value;
-#define T_VEC_USE(T, fn)                                                       \
-    static inline T *fn(vector_t *vec) { return (T *)vec_use(vec); }
 
 #endif

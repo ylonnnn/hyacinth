@@ -137,8 +137,8 @@ string_t cli_fmt(diagnostic_t *diagnostic)
 
     string_t formatted,
         pointed clean(string_free) = point_position_range(severity, range);
-    string_init(&formatted, 1024);
 
+    string_init(&formatted, 1024);
     string_format(&formatted, "%s%s:%u:%u: %s%s<%s%u> %s%s\n%s\n",
                   C_BRIGHT_BLACK, location.data, start->row, start->col,
                   color_of(severity), severity_to_string(severity),

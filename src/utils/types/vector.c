@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "utils/control.h"
-#include "utils/macros.h"
 #include "utils/types/vector.h"
 
 vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts)
@@ -11,9 +10,15 @@ vector_t vec_with_size(size_t size, size_t e_size, vec_opts_t opts)
     assert(e_size > 0);
 
     vector_t vec = {.size = size, .cap = size, .e_size = e_size, .opts = opts};
-    vec_setcap(&vec, size);
+    if (size > 0)
+        vec.data = calloc(vec.size, vec.e_size);
+    else
+        vec.data = malloc(4 * vec.e_size);
 
-    memset(vec.data, 0, size);
+    if (vec.data == NULL)
+        terminate("[vec_with_size] failed to allocate memory for the buffer of "
+                  "the vector",
+                  EXIT_FAILURE);
 
     return vec;
 }
@@ -24,7 +29,12 @@ vector_t vec_with_cap(size_t cap, size_t e_size, vec_opts_t opts)
     assert(e_size > 0);
 
     vector_t vec = {.e_size = e_size, .opts = opts};
-    vec_setcap(&vec, cap);
+    vec.data = malloc(vec.cap * vec.e_size);
+
+    if (vec.data == NULL)
+        terminate("[vec_with_cap] failed to allocate memory for the buffer of "
+                  "the vector",
+                  EXIT_FAILURE);
 
     return vec;
 }
@@ -63,6 +73,9 @@ void vec_move(vector_t *dest, vector_t *src)
 {
     assert(dest != NULL);
     assert(src != NULL);
+
+    if (dest->data != NULL)
+        vec_free(dest);
 
     dest->size = src->size;
     dest->cap = src->cap;
@@ -107,11 +120,16 @@ void vec_setcap(vector_t *vec, size_t cap)
     while (vec->size > cap)
         vec_pop(vec);
 
+    size_t prev_cap = vec->cap;
     void *buf = realloc(vec->data, cap * vec->e_size);
+
     if (buf == NULL)
         terminate("[vector] failed to reallocate memory for the buffer of the "
                   "vector.",
                   EXIT_FAILURE);
+
+    memset((char *)buf + (prev_cap * vec->e_size), 0,
+           (cap - prev_cap) * vec->e_size);
 
     vec->data = buf;
     vec->cap = cap;
@@ -151,28 +169,27 @@ void *vec_silent_at(vector_t *vec, size_t idx)
     return (char *)vec->data + (idx * vec->e_size);
 }
 
+void *vec_back(vector_t *vec) { return vec_silent_at(vec, vec->size - 1); }
+
 void vec_insert_el(vector_t *vec, void *el, size_t pos, bool move)
 {
     assert(vec != NULL);
     assert(pos <= vec->size);
 
     if (vec->size >= vec->cap)
-        vec_setcap(vec, vec->cap * 2);
+        vec_setcap(vec, vec->cap ? vec->cap * 2 : 4);
 
     if (pos < vec->size)
     {
         size_t n = vec->size - pos;
 
-        for (size_t i = pos; i < vec->size; i++)
+        for (size_t i = vec->size; i > pos; i--)
         {
-            void *src = (char *)vec->data + (i * vec->e_size);
-            void *dest = (char *)src + ((n + i) * vec->e_size);
+            void *src = (char *)vec->data + ((i - 1) * vec->e_size);
+            void *dest = src + vec->e_size;
 
             if (vec->opts.mv)
                 vec->opts.mv(dest, src);
-
-            if (vec->opts.destr)
-                vec->opts.destr(dest);
         }
     }
 
@@ -229,16 +246,15 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
     // shifted
     if (in_pos < vec->size)
     {
-        for (size_t i = in_pos; i < vec->size; i++)
+        for (size_t i = vec->size; i-- > in_pos;)
         {
             void *src = (char *)vec->data + (i * vec->e_size);
-            void *dest = (char *)src + ((n + i) * vec->e_size);
-
-            if (vec->opts.destr)
-                vec->opts.destr(src);
+            void *dest = (char *)vec->data + ((i + n) * vec->e_size);
 
             if (vec->opts.mv)
                 vec->opts.mv(dest, src);
+            else
+                memmove(dest, src, vec->e_size);
         }
     }
 
@@ -252,10 +268,9 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
             if (move)
             {
                 if (vec->opts.mv)
-                {
                     vec->opts.mv(dest, el);
-                    other->size--;
-                }
+
+                memset(el, NULL, vec->e_size);
             }
             else if (vec->opts.cp)
                 vec->opts.cp(el, dest);
@@ -266,14 +281,15 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
         memmove((char *)vec->data + (in_pos * vec->e_size),
                 (char *)other->data + (f_pos * vec->e_size), n * vec->e_size);
 
+    if (move)
+        other->size -= n;
+
     vec->size = n_size;
 }
 
 void vec_insert_full_vec(vector_t *vec, vector_t *other, size_t pos, bool move)
 {
     vec_insert_vec(vec, other, pos, 0, other->size, move);
-    if (move)
-        vec_free(other);
 }
 
 size_t vec_push(vector_t *vec, void *element)

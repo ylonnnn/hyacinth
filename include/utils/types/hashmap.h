@@ -9,6 +9,7 @@
 typedef void (*hm_data_destr)(void *self);
 typedef void (*hm_data_cp)(void *self, void *dest);
 typedef void (*hm_data_mv)(void *dest, void *self);
+typedef void *(*hm_data_alloc)(void *src, size_t size);
 
 typedef struct hashmap_data_opts
 {
@@ -16,6 +17,7 @@ typedef struct hashmap_data_opts
     hm_data_destr destr;
     hm_data_cp cp;
     hm_data_mv mv;
+    hm_data_alloc alloc;
 } hashmap_data_opts_t;
 
 typedef size_t (*hm_hash_fn)(void *key);
@@ -68,35 +70,32 @@ void hashmap_rehash(hashmap_t *hashmap);
 void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move);
 void *hashmap_find(hashmap_t *hashmap, void *key, bool destr_key);
 
-#define T_HM_CONSTR(K, V, fn, opts)                                            \
-    static inline hashmap_t fn##_with_cap(size_t cap)                          \
+#define T_HASHMAP(K, V, n, opts)                                               \
+    static inline hashmap_t n##_with_cap(size_t cap)                           \
     {                                                                          \
         return hashmap_with_cap(cap, opts);                                    \
+    }                                                                          \
+    static inline void n##_insert(hashmap_t *hashmap, K *key, V *value,        \
+                                  bool move)                                   \
+    {                                                                          \
+        hashmap_insert(hashmap, key, value, move);                             \
+    }                                                                          \
+    static inline V *n##_find(hashmap_t *hashmap, K *key, bool destr_key)      \
+    {                                                                          \
+        return hashmap_find(hashmap, key, destr_key);                          \
     }
 
 #define HM_INSERT(hashmap, key, value, move)                                   \
     {                                                                          \
-        typeof(key) lv = key;                                                  \
-        hashmap_insert(&hashmap, &lv, &value, move)                            \
-    }
-
-#define T_HM_INSERT(K, V, fn)                                                  \
-    static inline void fn##_insert(hashmap_t *hashmap, K key, V value,         \
-                                   bool move)                                  \
-    {                                                                          \
-        hashmap_insert(hashmap, &key, &value, move);                           \
+        __auto_type lvk = key;                                                 \
+        __auto_type lvv = value;                                               \
+        hashmap_insert(&hashmap, &lvk, &lvv, move);                            \
     }
 
 #define HM_FIND(V, res, hashmap, key, destr_key)                               \
     {                                                                          \
         typeof(key) lv = key;                                                  \
         res = (V *)hashmap_find(&hashmap, &lv, destr_key);                     \
-    }
-
-#define T_HM_FIND(K, V, fn)                                                    \
-    static inline V *fn##_find(hashmap_t *hashmap, K key, bool destr_key)      \
-    {                                                                          \
-        return (V *)hashmap_find(hashmap, &key, destr_key);                    \
     }
 
 #endif

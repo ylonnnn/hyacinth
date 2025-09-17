@@ -2,6 +2,7 @@ LINUX_CC := gcc
 WIN_CC := x86_64-w64-mingw32-gcc
 
 CCFLAGS := -ggdb -O2 -Wall -Wextra -std=gnu11 -Iinclude -MMD -MP
+LDFLAGS := -fsanitize=address
 
 WIN_LDFLAGS = -static -lshlwapi
 
@@ -47,6 +48,7 @@ $(LINUX_TARGET): $(LINUX_OBJECTS)
 $(WIN_TARGET): $(WIN_OBJECTS)
 	@mkdir -p $(BUILD_DIR)
 	$(WIN_CC) $(WIN_OBJECTS) $(WIN_LDFLAGS) -o $(WIN_TARGET)
+	# $(WIN_CC) $(WIN_OBJECTS) $(LDFLAGS) $(WIN_LDFLAGS) -o $(WIN_TARGET)
 
 lr: linux
 	$(LINUX_TARGET)

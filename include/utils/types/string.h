@@ -56,13 +56,8 @@ void string_insert(string_t *str, const char *lit, size_t pos);
 
 void string_format(string_t *str, const char *format, ...);
 
-T_VEC_CONSTR(string_t, str_vec,
-             ((vec_opts_t){(vec_el_destr)string_free, (vec_el_cp)string_copy_to,
-                           (vec_el_mv)string_move}))
-T_VEC_RESET(string_t, str_vec_reset)
-T_VEC_AT(string_t, str_vec)
-T_VEC_INSERT(string_t, str_vec)
-T_VEC_PUSH(string_t, str_vec)
-T_VEC_USE(string_t, str_vec_use)
+T_VEC(string_t, str_vec,
+      ((vec_opts_t){(vec_el_destr)string_free, (vec_el_cp)string_copy_to,
+                    (vec_el_mv)string_move}))
 
 #endif

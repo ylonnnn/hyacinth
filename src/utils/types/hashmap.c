@@ -3,9 +3,12 @@
 #include <string.h>
 
 #include "utils/control.h"
-#include "utils/macros.h"
 #include "utils/types/hashmap.h"
-#include "utils/types/string.h"
+
+static void *hm_default_allocator([[maybe_unused]] void *src, size_t size)
+{
+    return malloc(size);
+}
 
 hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                                 bool move)
@@ -21,7 +24,7 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
     hashmap_data_opts_t *k_opts = &hashmap->opts.key,
                         *v_opts = &hashmap->opts.val;
 
-    entry->key = malloc(hashmap->opts.key.size);
+    entry->key = k_opts->alloc(key, k_opts->size);
     if (entry->key == NULL)
     {
         free(entry);
@@ -30,7 +33,7 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                   EXIT_FAILURE);
     }
 
-    entry->value = malloc(hashmap->opts.val.size);
+    entry->value = v_opts->alloc(value, v_opts->size);
     if (entry->value == NULL)
     {
         free(entry);
@@ -40,16 +43,16 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
     }
 
     if (move && k_opts->mv)
-        k_opts->mv(entry->key, key);
+        k_opts->mv(&entry->key, key);
     else if (k_opts->cp)
-        k_opts->cp(key, entry->key);
+        k_opts->cp(key, &entry->key);
     else
         memcpy(entry->key, key, k_opts->size);
 
     if (move && v_opts->mv)
-        v_opts->mv(entry->value, value);
+        v_opts->mv(&entry->value, value);
     else if (v_opts->cp)
-        v_opts->cp(value, entry->value);
+        v_opts->cp(value, &entry->value);
     else
         memcpy(entry->value, value, v_opts->size);
 
@@ -93,6 +96,15 @@ hashmap_t hashmap_with_cap(size_t cap, hashmap_opts_t opts)
         .cap = cap,
         .opts = opts,
     };
+
+    hm_data_alloc k_alloc = hashmap.opts.key.alloc,
+                  v_alloc = hashmap.opts.val.alloc;
+
+    if (!k_alloc)
+        hashmap.opts.key.alloc = hm_default_allocator;
+
+    if (!v_alloc)
+        hashmap.opts.val.alloc = hm_default_allocator;
 
     hashmap_entry_t **buf = calloc(cap, sizeof(hashmap_entry_t *));
     if (buf == NULL)
@@ -224,7 +236,7 @@ void *hashmap_find(hashmap_t *hashmap, void *key, bool destr_key)
     for (hashmap_entry_t *entry = hashmap->entries[idx]; entry != NULL;
          entry = entry->next)
     {
-        if (hashmap->opts.eq(key, entry->key))
+        if (hashmap->opts.eq(key, &entry->key))
         {
             if (destr_key && hashmap->opts.key.destr)
                 hashmap->opts.key.destr(key);

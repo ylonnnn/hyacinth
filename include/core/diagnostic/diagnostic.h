@@ -42,13 +42,8 @@ void diagnostic_free(diagnostic_t *diagnostic);
 
 // Helper
 
-T_VEC_CONSTR(diagnostic_t, diag_vec,
-             ((vec_opts_t){(vec_el_destr)diagnostic_free,
-                           (vec_el_cp)diagnostic_copy_to,
-                           (vec_el_mv)diagnostic_move}))
-T_VEC_AT(diagnostic_t, diag_vec)
-T_VEC_PUSH(diagnostic_t, diag_vec_push)
-T_VEC_RESET(diagnostic_t, diag_vec_reset)
-T_VEC_USE(diagnostic_t, diag_vec_use)
+T_VEC(diagnostic_t, diag_vec,
+      ((vec_opts_t){(vec_el_destr)diagnostic_free,
+                    (vec_el_cp)diagnostic_copy_to, (vec_el_mv)diagnostic_move}))
 
 #endif

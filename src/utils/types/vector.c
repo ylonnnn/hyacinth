@@ -249,7 +249,7 @@ void vec_insert_vec(vector_t *vec, vector_t *other, size_t in_pos, size_t f_pos,
         for (size_t i = vec->size; i-- > in_pos;)
         {
             void *src = (char *)vec->data + (i * vec->e_size);
-            void *dest = (char *)vec->data + ((i + n) * vec->e_size);
+            void *dest = (char *)src + (n * vec->e_size);
 
             if (vec->opts.mv)
                 vec->opts.mv(dest, src);

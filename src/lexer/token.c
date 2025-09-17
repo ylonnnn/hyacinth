@@ -34,7 +34,7 @@ string_t token_to_str(token_t *token)
 
     string_t str;
 
-    string_init(&str, 64);
+    string_init(&str, 256);
     string_format(&str, "<%s:%u:%u> ", token_type_to_name(token->type),
                   pos->row, pos->col);
 

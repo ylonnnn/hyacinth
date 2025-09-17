@@ -301,12 +301,10 @@ void lexer_read_str(lexer_t *lexer)
 
 void lexer_read_ident(lexer_t *lexer)
 {
-#define IDENT_CHAR(c) (isalpha(c) || c == '_')
-
     size_t s_offset = lexer->offset;
 
-    for (char c = lexer_cpeek(lexer); !lexer_ceof(lexer) && IDENT_CHAR(c);
-         c = lexer_cpeek(lexer))
+    for (char c = lexer_cpeek(lexer);
+         !lexer_ceof(lexer) && (isalpha(c) || c == '_'); c = lexer_cpeek(lexer))
     {
         lexer_cconsume(lexer);
     }
@@ -322,10 +320,6 @@ void lexer_read_ident(lexer_t *lexer)
 
     lexer_create_token(lexer, s_offset, lexer->offset - 1,
                        type == NULL ? IDENTIFIER : *type);
-
-    free((char **)literal);
-
-#undef IDENt_CHAR
 }
 
 result_t *lexer_tokenize(lexer_t *lexer)
@@ -676,5 +670,22 @@ void lexer_reserve_keywords(lexer_t *lexer)
 {
     hashmap_t *reserved = &lexer->reserved;
 
+    // Reserved
+    HM_INSERT(*reserved, "struct", STRUCT, false);
+    HM_INSERT(*reserved, "func", FUNC, false);
+    HM_INSERT(*reserved, "let", LET, false);
+
+    HM_INSERT(*reserved, "var", VAR, false);
+    HM_INSERT(*reserved, "return", RETURN, false);
+
+    HM_INSERT(*reserved, "pub", PUB, false);
+    HM_INSERT(*reserved, "priv", PRIV, false);
+    HM_INSERT(*reserved, "prot", PROT, false);
+
     HM_INSERT(*reserved, "use", USE, false);
+
+    // Primary
+    HM_INSERT(*reserved, "true", BOOL_T, false);
+    HM_INSERT(*reserved, "false", BOOL_T, false);
+    HM_INSERT(*reserved, "null", NULL_T, false);
 }

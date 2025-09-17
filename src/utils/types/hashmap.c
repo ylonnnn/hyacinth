@@ -33,6 +33,13 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                   EXIT_FAILURE);
     }
 
+    if (move && k_opts->mv)
+        k_opts->mv(entry->key, key);
+    else if (k_opts->cp)
+        k_opts->cp(key, entry->key);
+    else
+        memcpy(entry->key, key, k_opts->size);
+
     entry->value = v_opts->alloc(value, v_opts->size);
     if (entry->value == NULL)
     {
@@ -42,17 +49,10 @@ hashmap_entry_t *hm_entry_alloc(hashmap_t *hashmap, void *key, void *value,
                   EXIT_FAILURE);
     }
 
-    if (move && k_opts->mv)
-        k_opts->mv(&entry->key, key);
-    else if (k_opts->cp)
-        k_opts->cp(key, &entry->key);
-    else
-        memcpy(entry->key, key, k_opts->size);
-
     if (move && v_opts->mv)
-        v_opts->mv(&entry->value, value);
+        v_opts->mv(entry->value, value);
     else if (v_opts->cp)
-        v_opts->cp(value, &entry->value);
+        v_opts->cp(value, entry->value);
     else
         memcpy(entry->value, value, v_opts->size);
 
@@ -156,6 +156,8 @@ void hashmap_rehash(hashmap_t *hashmap)
     if (hashmap_load_factor(hashmap) < HASHMAP_REHASH_THRESHOLD)
         return;
 
+    printf("rehashing...\n");
+
     size_t n_cap = hashmap->cap * 2;
     hashmap_entry_t **buf = calloc(n_cap, sizeof(hashmap_entry_t *));
 
@@ -173,18 +175,12 @@ void hashmap_rehash(hashmap_t *hashmap)
         while (curr != NULL)
         {
             size_t idx = hashmap->opts.hash(curr->key) % n_cap;
-            hashmap_entry_t *entry = buf[idx],
-                            *rehashed = hm_entry_alloc(hashmap, curr->key,
-                                                       curr->value, true);
+            hashmap_entry_t *entry = buf[idx], *p_next = curr->next;
 
-            rehashed->next = entry;
-            buf[idx] = rehashed;
+            curr->next = entry;
+            buf[idx] = curr;
 
-            hashmap_entry_t *prev = curr;
-            curr = curr->next;
-
-            // Free the entry
-            hm_entry_free(hashmap, prev);
+            curr = p_next;
         }
     }
 
@@ -192,6 +188,8 @@ void hashmap_rehash(hashmap_t *hashmap)
 
     hashmap->entries = buf;
     hashmap->cap = n_cap;
+
+    printf("rehash complete\n");
 }
 
 void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move)
@@ -208,7 +206,7 @@ void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move)
     while (curr != NULL)
     {
         // If an existing key is found, replace the entry
-        if (hashmap->opts.eq(key, curr->key))
+        if (hashmap->opts.eq(key, &curr->key))
         {
             n_entry->next = entry;
 
@@ -233,16 +231,19 @@ void *hashmap_find(hashmap_t *hashmap, void *key, bool destr_key)
     assert(hashmap != NULL);
 
     size_t idx = hashmap->opts.hash(key) % hashmap->cap;
-    for (hashmap_entry_t *entry = hashmap->entries[idx]; entry != NULL;
-         entry = entry->next)
+    hashmap_entry_t *entry = hashmap->entries[idx];
+
+    while (entry != NULL)
     {
-        if (hashmap->opts.eq(key, &entry->key))
+        if (hashmap->opts.eq(key, entry->key))
         {
             if (destr_key && hashmap->opts.key.destr)
                 hashmap->opts.key.destr(key);
 
             return entry->value;
         }
+
+        entry = entry->next;
     }
 
     if (destr_key && hashmap->opts.key.destr)

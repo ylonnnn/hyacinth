@@ -10,7 +10,7 @@ typedef enum token_type
 
     // ==== RESERVED::DECLARATION ====
     STRUCT,
-    FNC,
+    FUNC,
     LET,
 
     // ==== RESERVED::QUALIFIER ====
@@ -113,7 +113,7 @@ static const char *TOKEN_TYPE_STRING_REPR[TOKEN_TYPE_COUNT] = {
 
     // ==== RESERVED::DECLARATION ====
     [STRUCT] = "struct",
-    [FNC] = "fn",
+    [FUNC] = "func",
     [LET] = "let",
 
     // ==== RESERVED::QUALIFIER ====
@@ -212,7 +212,7 @@ static const char *TOKEN_TYPE_NAMES[TOKEN_TYPE_COUNT] = {
 
     // ==== RESERVED::DECLARATION ====
     [STRUCT] = "Struct",
-    [FNC] = "Fn",
+    [FUNC] = "Func",
     [LET] = "Let",
 
     // ==== RESERVED::QUALIFIER ====

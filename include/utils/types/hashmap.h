@@ -71,6 +71,8 @@ void hashmap_insert(hashmap_t *hashmap, void *key, void *value, bool move);
 void *hashmap_find(hashmap_t *hashmap, void *key, bool destr_key);
 
 #define T_HASHMAP(K, V, n, opts)                                               \
+    typedef K n##_key_t;                                                       \
+    typedef V n##_value_t;                                                     \
     static inline hashmap_t n##_with_cap(size_t cap)                           \
     {                                                                          \
         return hashmap_with_cap(cap, opts);                                    \

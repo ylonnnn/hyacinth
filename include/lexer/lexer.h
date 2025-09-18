@@ -32,6 +32,21 @@ typedef struct lexer
     hashmap_t reserved;
 } lexer_t;
 
+static inline size_t cstr_hash(void *key);
+static inline bool cstr_eq(void *a, void *b);
+static inline void cstr_destr(void *self);
+static inline void cstr_cp(void *self, void *dest);
+static inline void *cstr_alloc(void *src, size_t size);
+
+T_HASHMAP(const char *, token_type_t, reserved,
+          ((hashmap_opts_t){.hash = cstr_hash,
+                            .eq = cstr_eq,
+                            .key = (hashmap_data_opts_t){sizeof(const char *),
+                                                         cstr_destr, cstr_cp,
+                                                         NULL, cstr_alloc},
+                            .val = (hashmap_data_opts_t){sizeof(token_type_t),
+                                                         NULL, NULL, NULL}}))
+
 static inline size_t cstr_hash(void *key)
 {
     const char *str = *(char **)key;
@@ -54,7 +69,7 @@ static inline void cstr_destr(void *self) { free(*(char **)self); }
 static inline void cstr_cp(void *self, void *dest)
 {
     char *str = *(char **)self;
-    strncpy(*(char **)dest, str, strlen(str) + 1);
+    strcpy(*(char **)dest, str);
 }
 
 static inline void *cstr_alloc(void *src, [[maybe_unused]] size_t size)
@@ -64,15 +79,6 @@ static inline void *cstr_alloc(void *src, [[maybe_unused]] size_t size)
 
     return container;
 }
-
-T_HASHMAP(const char *, token_type_t, reserved,
-          ((hashmap_opts_t){.hash = cstr_hash,
-                            .eq = cstr_eq,
-                            .key = (hashmap_data_opts_t){sizeof(const char *),
-                                                         cstr_destr, cstr_cp,
-                                                         NULL, cstr_alloc},
-                            .val = (hashmap_data_opts_t){sizeof(token_type_t),
-                                                         NULL, NULL, NULL}}))
 
 // Constructors
 lexer_t lexer_from(program_t *program);

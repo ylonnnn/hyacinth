@@ -1,22 +1,20 @@
 use std::{collections::HashMap, u32};
 
 use crate::{
-    core::{self, Span},
-    syntax::{Token, TokenKind},
+    core::{Span, diagnostic::code::DiagnosticErrorKind},
+    syntax::{Lexer, Token, TokenKind},
 };
 
 pub struct Tokenizer<'a> {
-    source: &'a str,
+    lexer: &'a mut Lexer,
     offset: usize,
     reserved: HashMap<&'static str, TokenKind>,
 }
 
-pub type TokenizerResult = core::Result<Vec<Token>>;
-
 impl<'a> Tokenizer<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(lexer: &'a mut Lexer) -> Self {
         let mut inst = Self {
-            source,
+            lexer,
             offset: 0,
             reserved: HashMap::new(),
         };
@@ -31,7 +29,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn eof(&self) -> bool {
-        self.offset >= self.source.len()
+        self.offset >= self.lexer.source.len()
     }
 
     pub fn peek(&self) -> Option<char> {
@@ -39,7 +37,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn peekn(&self, offset: usize) -> Option<char> {
-        self.source.chars().nth(self.offset + offset)
+        self.lexer.source.chars().nth(self.offset + offset)
     }
 
     pub fn next(&mut self) -> Option<char> {
@@ -50,8 +48,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn current(&self) -> Option<char> {
-        let mut chars = self.source.chars();
-        chars.nth(self.offset.clamp(1, self.source.len()) - 1)
+        let mut chars = self.lexer.source.chars();
+        chars.nth(self.offset.clamp(1, self.lexer.source.len()) - 1)
     }
 
     pub fn consume(&mut self, count: usize) {
@@ -68,21 +66,24 @@ impl<'a> Tokenizer<'a> {
 
     fn skip_until<F>(&mut self, mut predicate: F)
     where
-        F: FnMut(char, usize) -> bool,
+        F: FnMut(&mut Self, char) -> bool,
     {
-        while let Some(c) = self.peek()
-            && !predicate(c, self.offset)
-        {
+        while let Some(c) = self.peek() {
+            if predicate(self, c) {
+                break;
+            }
+
             self.consume(1);
         }
     }
 
-    fn ignore_whitespace(&mut self, result: &mut TokenizerResult) {
-        self.skip_until(|c, offset| {
+    fn ignore_whitespace(&mut self, tokens: &mut Vec<Token>) {
+        self.skip_until(|s, c| {
             if c == '\n' {
-                result.data.as_mut().map(|data| {
-                    data.push(Token::new(TokenKind::LnFeed, (offset, offset + 1).into()))
-                });
+                tokens.push(Token::new(
+                    TokenKind::LnFeed,
+                    (s.offset, s.offset + 1).into(),
+                ))
             }
 
             !c.is_whitespace()
@@ -90,27 +91,27 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn read_digits(&mut self, base: u32) {
-        self.skip_until(|c, _| {
-            // Validate each character
-            // Failure will not stop lexing the characters
-
-            if c.is_whitespace() {
+        self.skip_until(|s, c| {
+            if c.is_whitespace() || !c.is_alphanumeric() {
                 return true;
             }
 
             if !c.is_digit(base) {
-                todo!(
-                    "throw error: invalid numeric digit {} for numeric literals with base {}",
-                    c,
-                    base
+                s.lexer.diagnostics.error(
+                    DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
+                    &format!(
+                        "invalid numeric digit {} for numeric literals with base {}",
+                        c, base
+                    ),
+                    (s.offset, s.offset + 1).into(),
                 );
             }
 
-            !c.is_alphanumeric()
-        })
+            false
+        });
     }
 
-    fn read_num(&mut self, _result: &mut TokenizerResult) -> Option<Token> {
+    fn read_num(&mut self) -> Option<Token> {
         let start = self.offset;
 
         // Identify base according to prefix
@@ -134,7 +135,11 @@ impl<'a> Tokenizer<'a> {
         }
 
         if base == u32::MAX {
-            todo!("throw error: invalid numeric literal prefix")
+            self.lexer.diagnostics.error(
+                DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+                "invalid numeric literal prefix",
+                (start, self.offset + 1).into(),
+            );
         }
 
         self.read_digits(base); // Integral Part
@@ -143,12 +148,12 @@ impl<'a> Tokenizer<'a> {
             self.read_digits(base); // Fractional Part
 
             Some(Token::new(
-                TokenKind::Float(self.source[start..self.offset].to_string()),
+                TokenKind::Float(self.lexer.source[start..self.offset].to_string()),
                 (start, self.offset).into(),
             ))
         } else {
             Some(Token::new(
-                TokenKind::Int(self.source[start..self.offset].to_string()),
+                TokenKind::Int(self.lexer.source[start..self.offset].to_string()),
                 (start, self.offset).into(),
             ))
         }
@@ -157,10 +162,10 @@ impl<'a> Tokenizer<'a> {
     fn read_ident(&mut self) -> Token {
         let start = self.offset;
 
-        self.skip_until(|c, _| c != '_' && !c.is_alphanumeric());
+        self.skip_until(|_, c| c != '_' && !c.is_alphanumeric());
 
         let (ident, span) = (
-            &self.source[start..self.offset],
+            &self.lexer.source[start..self.offset],
             (start, self.offset).into(),
         );
 
@@ -170,23 +175,23 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) -> TokenizerResult {
-        let mut result: TokenizerResult = TokenizerResult::default();
+    pub fn tokenize(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::<Token>::with_capacity(16);
 
         while !self.eof() {
             if let Some(c) = self.peek() {
                 let start = self.offset;
 
                 if c.is_whitespace() {
-                    self.ignore_whitespace(&mut result);
+                    self.ignore_whitespace(&mut tokens);
                     continue;
                 }
 
                 let span: Span = (start, self.offset + 1).into();
 
                 if let Some(token) = match c {
-                    '_' | 'a'..'z' | 'A'..'Z' => Some(self.read_ident()),
-                    '0'..'9' => self.read_num(&mut result),
+                    '_' | 'a'..='z' | 'A'..='Z' => Some(self.read_ident()),
+                    '0'..='9' => self.read_num(),
 
                     _ => {
                         let (token, consume) = match c {
@@ -200,7 +205,7 @@ impl<'a> Tokenizer<'a> {
                             '*' => (Some(Token::new(TokenKind::Star, span)), 1),
                             '/' => match self.peekn(1) {
                                 Some('/') => {
-                                    self.skip_until(|c, _| c == '\n');
+                                    self.skip_until(|_, c| c == '\n');
                                     (None, 0)
                                 }
                                 _ => (Some(Token::new(TokenKind::Slash, span)), 1),
@@ -260,13 +265,16 @@ impl<'a> Tokenizer<'a> {
                         token
                     }
                 } {
-                    if let Some(data) = result.data.as_mut() {
-                        data.push(token);
-                    }
+                    tokens.push(token);
                 }
             }
         }
 
-        result
+        tokens.push(Token::new(
+            TokenKind::Eof,
+            (self.offset, self.offset + 1).into(),
+        ));
+
+        tokens
     }
 }

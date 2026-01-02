@@ -1,41 +1,54 @@
-use crate::core::diagnostic::{
-    Diagnostic, DiagnosticList,
-    reporter::reporter::{DiagnosticReportStatus, DiagnosticReporter},
+use crate::core::{
+    Program,
+    diagnostic::{
+        Diagnostic,
+        reporter::reporter::{DiagnosticReportStatus, DiagnosticReporter},
+    },
 };
 
 #[derive(Debug)]
-pub struct CLIReporter {
-    pub diagnostics: DiagnosticList,
+pub struct CLIReporter<'a> {
+    pub program: &'a Program,
 }
 
-impl CLIReporter {
-    pub fn new(diagnostics: DiagnosticList) -> Self {
-        Self { diagnostics }
+impl<'a> CLIReporter<'a> {
+    pub fn new(program: &'a Program) -> Self {
+        Self { program }
     }
 }
 
-impl DiagnosticReporter for CLIReporter {
-    fn format_diagnostic(diagnostic: &Diagnostic) -> String {
+impl<'a> DiagnosticReporter for CLIReporter<'a> {
+    fn format_diagnostic(&self, diagnostic: &Diagnostic) -> String {
         // TODO: Improve formatting
+
         let Diagnostic {
-            span: _,
+            span,
             severity,
             code,
             message,
             details: _,
         } = diagnostic;
-        format!("{}<{}>: {}", severity, code, message)
+        let rc = span.to_rc(self.program);
+
+        format!(
+            "{}<{}>: {}\n{}:{}",
+            severity, code, message, self.program.path, rc.0
+        )
     }
 
     fn report(&self) -> DiagnosticReportStatus {
         let mut status: DiagnosticReportStatus = [0; 3];
 
-        self.diagnostics.iter().for_each(|diagnostic| {
-            let formatted = CLIReporter::format_diagnostic(diagnostic);
-            status[diagnostic.severity as usize] += 1_usize;
+        self.program
+            .diagnostic_list()
+            .data()
+            .iter()
+            .for_each(|diagnostic| {
+                let formatted = self.format_diagnostic(diagnostic);
+                status[diagnostic.severity as usize] += 1_usize;
 
-            println!("{formatted}");
-        });
+                println!("{formatted}");
+            });
 
         status
     }

@@ -1,0 +1,3 @@
+[alias]
+rs = "run -q"
+testing = "test -- --nocapture --test-threads=1"

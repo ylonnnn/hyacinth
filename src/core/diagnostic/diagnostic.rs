@@ -63,4 +63,57 @@ impl Display for DiagnosticSeverity {
     }
 }
 
-pub type DiagnosticList = Vec<Diagnostic>;
+#[derive(Debug)]
+pub struct DiagnosticList(Vec<Diagnostic>);
+
+impl DiagnosticList {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn data(&self) -> &Vec<Diagnostic> {
+        &self.0
+    }
+
+    pub fn data_mut(&mut self) -> &mut Vec<Diagnostic> {
+        &mut self.0
+    }
+
+    pub fn add(&mut self, diagnostic: Diagnostic) -> &mut Diagnostic {
+        self.0.push(diagnostic);
+        self.0.iter_mut().last().unwrap()
+    }
+
+    pub fn info(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
+        self.add(Diagnostic::new(
+            span,
+            DiagnosticSeverity::Info,
+            code,
+            message.into(),
+        ))
+    }
+
+    pub fn warn(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
+        self.add(Diagnostic::new(
+            span,
+            DiagnosticSeverity::Warning,
+            code,
+            message.into(),
+        ))
+    }
+
+    pub fn error(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
+        self.add(Diagnostic::new(
+            span,
+            DiagnosticSeverity::Error,
+            code,
+            message.into(),
+        ))
+    }
+}
+
+impl Default for DiagnosticList {
+    fn default() -> Self {
+        Self(Vec::with_capacity(32))
+    }
+}

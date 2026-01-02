@@ -1,8 +1,9 @@
 use hyacinth::core::{Program, ProgramRegistry};
 
 fn main() {
-    let entry = Program::new();
-
     #[allow(unused)]
-    let registry = ProgramRegistry::new(entry);
+    let mut registry = ProgramRegistry::new(Program::new("hyc/lexer/first.hyc"));
+    let entry = registry.entry();
+
+    entry.compile();
 }

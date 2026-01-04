@@ -33,6 +33,8 @@ pub enum TokenKind {
     Int(String),
     Float(String),
     Bool(String),
+    Char(String),
+    String(String),
     Ident(String),
 
     Let,

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, u32};
+use std::collections::HashMap;
 
 use crate::{
     core::{Span, diagnostic::code::DiagnosticErrorKind},
@@ -64,17 +64,19 @@ impl<'a> Tokenizer<'a> {
         })
     }
 
-    fn skip_until<F>(&mut self, mut predicate: F)
+    fn skip_until<F>(&mut self, mut predicate: F) -> bool
     where
         F: FnMut(&mut Self, char) -> bool,
     {
         while let Some(c) = self.peek() {
             if predicate(self, c) {
-                break;
+                return true;
             }
 
             self.consume(1);
         }
+
+        false
     }
 
     fn ignore_whitespace(&mut self, tokens: &mut Vec<Token>) {
@@ -90,6 +92,22 @@ impl<'a> Tokenizer<'a> {
         });
     }
 
+    fn read_ident(&mut self) -> Token {
+        let start = self.offset;
+
+        self.skip_until(|_, c| c != '_' && !c.is_alphanumeric());
+
+        let (ident, span) = (
+            &self.lexer.source[start..self.offset],
+            (start, self.offset).into(),
+        );
+
+        match self.reserved.get(&ident) {
+            Some(kind) => Token::new(kind.clone(), span),
+            _ => Token::new(TokenKind::Ident(ident.to_string()), span),
+        }
+    }
+
     fn read_digits(&mut self, base: u32) {
         self.skip_until(|s, c| {
             if c.is_whitespace() || !c.is_alphanumeric() {
@@ -100,7 +118,7 @@ impl<'a> Tokenizer<'a> {
                 s.lexer.diagnostics.error(
                     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
                     &format!(
-                        "invalid numeric digit {} for numeric literals with base {}",
+                        "invalid numeric digit `{}` for numeric literals with base `{}`",
                         c, base
                     ),
                     (s.offset, s.offset + 1).into(),
@@ -159,19 +177,61 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn read_ident(&mut self) -> Token {
-        let start = self.offset;
+    pub fn read_char_seq(&mut self) -> Option<Token> {
+        let (start, quote) = (self.offset, self.next()?);
+        let multi = quote == '"';
 
-        self.skip_until(|_, c| c != '_' && !c.is_alphanumeric());
+        let terminated = self.skip_until(|s, c| {
+            if c == '\\' {
+                s.consume(1);
+                return false;
+            }
 
-        let (ident, span) = (
-            &self.lexer.source[start..self.offset],
-            (start, self.offset).into(),
-        );
+            let cmp = c == quote;
+            if cmp {
+                s.consume(1);
+            }
 
-        match self.reserved.get(&ident) {
-            Some(kind) => Token::new(kind.clone(), span),
-            _ => Token::new(TokenKind::Ident(ident.to_string()), span),
+            cmp
+        });
+
+        let diagnostics = &mut self.lexer.diagnostics;
+        let span: Span = (start, self.offset).into();
+
+        if !terminated {
+            diagnostics.error(
+                DiagnosticErrorKind::UnterminatedCharacterSequence.into(),
+                "unterminated character sequence.",
+                span,
+            );
+
+            return None;
+        }
+
+        let sequence: String = self.lexer.source.chars().collect::<Vec<char>>()[start..self.offset]
+            .into_iter()
+            .collect();
+
+        let seq_len = sequence.len() - 2; // 2 for quotation marks
+
+        // String
+        if multi {
+            Some(Token::new(TokenKind::String(sequence), span))
+        }
+        // Char
+        else {
+            if seq_len > 1 {
+                diagnostics.error(
+                    DiagnosticErrorKind::InvalidCharacterSequence.into(),
+                    &format!(
+                        "character sequence within `'` cannot contain more than `{}` character.",
+                        1
+                    ),
+                    span,
+                );
+            }
+
+            Some(Token::new(TokenKind::Char(sequence), span))
         }
     }
 
@@ -192,6 +252,7 @@ impl<'a> Tokenizer<'a> {
                 if let Some(token) = match c {
                     '_' | 'a'..='z' | 'A'..='Z' => Some(self.read_ident()),
                     '0'..='9' => self.read_num(),
+                    '\'' | '\"' => self.read_char_seq(),
 
                     _ => {
                         let (token, consume) = match c {

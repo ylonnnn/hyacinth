@@ -5,6 +5,8 @@ use crate::core::diagnostic::code::code::DiagnosticCode;
 pub enum DiagnosticErrorKind {
     InvalidNumericLiteralPrefix = 400,
     InvalidNumericLiteralDigit,
+    UnterminatedCharacterSequence,
+    InvalidCharacterSequence,
 }
 
 impl DiagnosticCode {

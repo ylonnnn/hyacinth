@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn lexer_valid_chars() {
-        let sources = vec!["'2'", "'\t'", "'\\''", "'v'"];
+        let sources = vec!["'2'", "'\\t'", "'\\''", "'v'"];
 
         sources.iter().for_each(|source| {
             let mut lexer = Lexer::new(Arbitrary((*source).into()));
@@ -92,6 +92,34 @@ mod tests {
     #[test]
     fn lexer_invaid_chars() {
         let sources = vec!["'220'", "'unterminated char seq"];
+
+        sources.iter().for_each(|source| {
+            let mut lexer = Lexer::new(Arbitrary((*source).into()));
+            lexer.tokenize();
+
+            assert_ne!(lexer.diagnostics.data().len(), 0);
+        });
+    }
+
+    #[test]
+    fn lexer_valid_str() {
+        let sources = vec!["\"hello world\"", "\"hello \\\"valid\\\" world\""];
+
+        sources.iter().for_each(|source| {
+            let mut lexer = Lexer::new(Arbitrary((*source).into()));
+            lexer.tokenize();
+
+            lexer.diagnostics.data().iter().for_each(|d| {
+                dbg!(&d.message);
+            });
+
+            assert_eq!(lexer.diagnostics.data().len(), 0);
+        });
+    }
+
+    #[test]
+    fn lexer_invaid_str() {
+        let sources = vec!["\"unterminated char seq string", "\"hello \"world\\\""];
 
         sources.iter().for_each(|source| {
             let mut lexer = Lexer::new(Arbitrary((*source).into()));

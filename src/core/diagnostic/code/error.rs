@@ -3,6 +3,7 @@ use crate::core::diagnostic::code::code::DiagnosticCode;
 #[repr(u32)]
 #[derive(Debug)]
 pub enum DiagnosticErrorKind {
+    UnknownCharacter,
     InvalidNumericLiteralPrefix = 400,
     InvalidNumericLiteralDigit,
     UnterminatedCharacterSequence,

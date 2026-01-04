@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::{
     core::{Span, diagnostic::code::DiagnosticErrorKind},
     syntax::{Lexer, Token, TokenKind},
-    ternary,
 };
 
 pub struct Tokenizer<'a> {
@@ -231,7 +230,7 @@ impl<'a> Tokenizer<'a> {
                         1,
                         seq_len,
                     ),
-                    span,
+                    span.clone(),
                 );
             }
 
@@ -323,7 +322,15 @@ impl<'a> Tokenizer<'a> {
                             '}' => (Some(Token::new(TokenKind::RightBrace, span)), 1),
                             '[' => (Some(Token::new(TokenKind::LeftBracket, span)), 1),
                             ']' => (Some(Token::new(TokenKind::RightBracket, span)), 1),
-                            _ => (Some(Token::Invalid(span)), 1),
+                            inv => {
+                                self.lexer.diagnostics.error(
+                                    DiagnosticErrorKind::UnknownCharacter.into(),
+                                    &format!("unknown character `{}`.", inv),
+                                    span.clone(),
+                                );
+
+                                (Some(Token::Invalid(span)), 1)
+                            }
                         };
 
                         self.consume(consume);

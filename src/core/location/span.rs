@@ -1,6 +1,6 @@
 use crate::core::{Position, Program};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Span {
     pub start: usize,
     pub end: usize,

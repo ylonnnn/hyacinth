@@ -196,7 +196,7 @@ impl<'a> Tokenizer<'a> {
         });
 
         let diagnostics = &mut self.lexer.diagnostics;
-        let span: Span = (start, self.offset).into();
+        let span: Span = (start, self.offset - 1).into();
 
         if !terminated {
             diagnostics.error(
@@ -211,6 +211,8 @@ impl<'a> Tokenizer<'a> {
         let sequence: String = self.lexer.source.chars().collect::<Vec<char>>()[start..self.offset]
             .into_iter()
             .collect();
+
+        println!("{sequence} | len: {}", sequence.len());
 
         let seq_len = sequence.len() - 2; // 2 for quotation marks
 

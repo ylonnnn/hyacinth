@@ -67,7 +67,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
                 let p_len = prefix.len() - (bb.len() + b.len() + r.len());
                 let (ln_start, ln_end) = (
                     ternary!(num == start.line, start.column - 1, 0),
-                    ternary!(num == end.line, end.column - 1, len - (len != 0) as usize),
+                    ternary!(num == end.line, end.column - 1, len),
                 );
 
                 format!("{prefix}{line}")

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::{
     core::{Span, diagnostic::code::DiagnosticErrorKind},
     syntax::{Lexer, Token, TokenKind},
+    ternary,
 };
 
 pub struct Tokenizer<'a> {
@@ -181,14 +182,16 @@ impl<'a> Tokenizer<'a> {
         let (start, quote) = (self.offset, self.next()?);
         let multi = quote == '"';
 
+        let mut seq_len = 0;
         let terminated = self.skip_until(|s, c| {
-            if c == '\\' {
-                s.consume(1);
-                return false;
-            }
-
             let cmp = c == quote;
             if cmp {
+                s.consume(1);
+                return cmp;
+            }
+
+            seq_len += 1;
+            if c == '\\' {
                 s.consume(1);
             }
 
@@ -212,22 +215,21 @@ impl<'a> Tokenizer<'a> {
             .into_iter()
             .collect();
 
-        println!("{sequence} | len: {}", sequence.len());
-
-        let seq_len = sequence.len() - 2; // 2 for quotation marks
-
         // String
         if multi {
             Some(Token::new(TokenKind::String(sequence), span))
         }
         // Char
         else {
-            if seq_len > 1 {
+            dbg!(&seq_len);
+
+            if seq_len != 1 {
                 diagnostics.error(
                     DiagnosticErrorKind::InvalidCharacterSequence.into(),
                     &format!(
-                        "character sequence within `'` cannot contain more than `{}` character.",
-                        1
+                        "character sequence within `'` must contain exactly `{}` character, contains `{}`.",
+                        1,
+                        seq_len,
                     ),
                     span,
                 );

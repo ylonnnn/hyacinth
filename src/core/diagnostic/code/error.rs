@@ -8,6 +8,8 @@ pub enum DiagnosticErrorKind {
     InvalidNumericLiteralDigit,
     UnterminatedCharacterSequence,
     InvalidCharacterSequence,
+
+    UnexpectedToken,
 }
 
 impl DiagnosticCode {

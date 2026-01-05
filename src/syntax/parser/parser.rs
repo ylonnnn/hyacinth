@@ -1,8 +1,8 @@
-use std::{any::Any, collections::HashSet};
+use std::collections::HashSet;
 
 use crate::{
     core::{Program, diagnostic::code::DiagnosticErrorKind},
-    syntax::{Token, TokenKind},
+    syntax::{Token, TokenConsumptionType, TokenKind},
 };
 
 #[derive(Debug)]
@@ -15,13 +15,6 @@ pub struct Parser<'a> {
 pub enum ParserState {
     Panic,
     Synchronized,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParserConsumptionType {
-    Absolute,
-    Preserve,
-    UponSucess,
 }
 
 impl<'a> Parser<'a> {
@@ -49,38 +42,17 @@ impl<'a> Parser<'a> {
         let mut set: HashSet<TokenKind> = tokens.into_iter().collect();
     }
 
-    pub fn expect(
-        &mut self,
-        kind: TokenKind,
-        consumption: ParserConsumptionType,
-    ) -> Option<&Token> {
-        // let token = match consumption {
-        //     ParserConsumptionType::Absolute => self.program.lexer.next(),
-        //     ParserConsumptionType::Preserve => self.program.lexer.peek(),
-        //     ParserConsumptionType::UponSucess => self.program.lexer.expect(kind),
-        // }?;
-
-        // Some(token)
-        todo!()
+    pub fn expect(&mut self, kind: TokenKind, consumption: TokenConsumptionType) -> Option<Token> {
+        self.program.lexer.expect(kind, consumption)
     }
 
-    pub fn expect_or_error(&mut self, kind: TokenKind, consumption: ParserConsumptionType) {
-        // let (token, span) = {
-        //     let Some(token) = self.program.lexer.peek() else {
-        //         return;
-        //     };
-
-        //     (token.to_string(), token.span.clone())
-        // };
-
-        // if !self.expect(kind, consumption) {
-        //     self.program.diagnostic_list().error(
-        //         DiagnosticErrorKind::UnexpectedToken.into(),
-        //         &format!("unexpected token `{}`", token),
-        //         span,
-        //     );
-        // }
-
-        todo!()
+    pub fn expect_or_error(&mut self, kind: TokenKind, consumption: TokenConsumptionType) {
+        if let Some(token) = self.expect(kind, consumption) {
+            self.program.diagnostic_list_mut().error(
+                DiagnosticErrorKind::UnexpectedToken.into(),
+                &format!("unexpected token `{}`", token),
+                token.span.clone(),
+            );
+        }
     }
 }

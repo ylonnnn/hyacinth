@@ -12,11 +12,11 @@ use crate::{
 
 #[derive(Debug)]
 pub struct CLIReporter<'a> {
-    pub program: &'a Program,
+    pub program: &'a mut Program,
 }
 
 impl<'a> CLIReporter<'a> {
-    pub fn new(program: &'a Program) -> Self {
+    pub fn new(program: &'a mut Program) -> Self {
         Self { program }
     }
 

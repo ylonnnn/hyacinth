@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::core::Span;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
@@ -28,14 +28,14 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TokenKind {
-    Int(String),
-    Float(String),
-    Bool(String),
-    Char(String),
-    String(String),
-    Ident(String),
+    Int,
+    Float,
+    Bool,
+    Char,
+    String,
+    Ident,
 
     Let,
 
@@ -84,7 +84,12 @@ impl fmt::Display for TokenKind {
             f,
             "{}",
             match self {
-                Self::Int(x) | Self::Float(x) | Self::Bool(x) | Self::Ident(x) => x.as_str(),
+                Self::Int => "int",
+                Self::Float => "float",
+                Self::Bool => "bool",
+                Self::Char => "char",
+                Self::String => "string",
+                Self::Ident => "ident",
 
                 Self::Let => "let",
 
@@ -130,4 +135,11 @@ impl fmt::Display for TokenKind {
             }
         )
     }
+}
+
+#[macro_export]
+macro_rules! token {
+    ($k:expr, $sp:expr) => {
+        Token::new($k, $sp)
+    };
 }

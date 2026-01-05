@@ -3,7 +3,7 @@ use crate::{
         DiagnosticList,
         reporter::{cli_reporter::CLIReporter, reporter::DiagnosticReporter},
     },
-    syntax::{Lexer, LexerSourceOrigin},
+    syntax::{Lexer, LexerSourceOrigin, parser::parser::Parser},
 };
 
 #[derive(Debug)]
@@ -44,15 +44,21 @@ impl Program {
         &self.diagnostics
     }
 
+    pub fn diagnostic_list_mut(&mut self) -> &mut DiagnosticList {
+        &mut self.diagnostics
+    }
+
     pub fn analyze(&mut self) {
         self.lexer.tokenize();
         std::mem::swap(&mut self.diagnostics, &mut self.lexer.diagnostics);
+
+        let mut parser = Parser::new(self);
     }
 
     pub fn compile(&mut self) {
         self.analyze();
 
-        let reporter = CLIReporter::new(&self);
+        let reporter = CLIReporter::new(self);
         reporter.report();
     }
 }

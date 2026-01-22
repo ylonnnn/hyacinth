@@ -6,10 +6,7 @@ use crate::{
     syntax::{
         Node, Parser, ParserState, TokenKind,
         grammar::rule::GrammarRule,
-        rule::{
-            GrammarContext,
-            common::{CommonRules, PrattRule},
-        },
+        rule::{GrammarContext, common::PrattRule},
     },
 };
 

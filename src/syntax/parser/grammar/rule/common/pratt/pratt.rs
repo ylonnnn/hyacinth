@@ -75,17 +75,19 @@ impl PrattRule {
     pub fn initialize(&mut self) {
         if let Some(handlers) = self.handlers.get_mut(&PrattHandlerKind::Expr) {
             let primary_bp: f32 = ExprBindingPower::Primary.into();
-            vec![TokenKind::Int].into_iter().for_each(|kind| {
-                handlers.insert(
-                    kind.clone(),
-                    PrattHandler {
-                        kind,
-                        binding_power: (primary_bp, primary_bp),
-                        nud: Some(Box::new(parse_literal)),
-                        led: None,
-                    },
-                );
-            });
+            vec![TokenKind::Int, TokenKind::Float, TokenKind::Bool]
+                .into_iter()
+                .for_each(|kind| {
+                    handlers.insert(
+                        kind.clone(),
+                        PrattHandler {
+                            kind,
+                            binding_power: (primary_bp, primary_bp),
+                            nud: Some(Box::new(parse_literal)),
+                            led: None,
+                        },
+                    );
+                });
         }
     }
 
@@ -103,6 +105,8 @@ impl PrattRule {
         right_bp: f32,
         kind: PrattHandlerKind,
     ) -> Option<Node> {
+        parser.program.lexer.skip_lf();
+
         let lexer = &parser.program.lexer;
         let token = lexer.peek()?;
 

@@ -1,5 +1,5 @@
 use crate::syntax::{
-    GenNode, Item, Node, Parser, Stmt, TERMINATOR, TokenKind, VariableDeclStmt,
+    Item, Node, Parser, TERMINATOR, TokenKind, VariableDeclStmt,
     rule::{GrammarContext, GrammarRule, common::PrattHandlerKind},
 };
 
@@ -47,7 +47,7 @@ impl GrammarRule for VariableRule {
         Some(Node::from_item(
             Item::Variable(VariableDeclStmt {
                 ident,
-                value: value.map(|mut val| val.expr_node()).unwrap(),
+                value: value.map(|mut val| val.expr_node().unwrap()),
             }),
             (start, end).into(),
         ))

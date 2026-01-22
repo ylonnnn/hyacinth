@@ -89,21 +89,16 @@ impl Lexer {
         Some(self.tokens.get(self.offset - 1)?.clone())
     }
 
-    pub fn next_while(&mut self, mut predicate: impl FnMut(&Token) -> bool) -> Option<Token> {
-        while let Some(token) = self.peek() {
-            if predicate(&token) {
-                self.consume(1);
-                continue;
-            }
-
-            return self.next();
+    pub fn skip_while(&mut self, mut predicate: impl FnMut(&Token) -> bool) {
+        while let Some(token) = self.peek()
+            && predicate(token)
+        {
+            self.consume(1);
         }
-
-        None
     }
 
-    pub fn next_lf(&mut self) -> Option<Token> {
-        self.next_while(|token| token.kind == TokenKind::LnFeed)
+    pub fn skip_lf(&mut self) {
+        self.skip_while(|token| token.kind == TokenKind::LnFeed);
     }
 
     pub fn current(&self) -> &Token {

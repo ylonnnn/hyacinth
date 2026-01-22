@@ -1,7 +1,7 @@
 pub mod expr;
 pub mod item;
 pub mod node;
-pub mod program;
+mod program;
 pub mod stmt;
 
 pub use expr::*;

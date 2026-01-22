@@ -6,7 +6,7 @@ use crate::{
         diagnostic::{self},
     },
     syntax::{
-        GenNode, Grammar, Item, Node, ProgramNode, Token, TokenConsumptionType, TokenKind,
+        GenNode, Grammar, Item, ProgramNode, Token, TokenConsumptionType, TokenKind,
         rule::{GrammarContext, common::CommonRules, items::hyacinth},
     },
 };

@@ -132,7 +132,7 @@ impl<'a> Tokenizer<'a> {
                 'b' => 2,
                 'o' => 8,
                 'x' => 16,
-                _ if c.is_digit(10) => 10,
+                _ if c.is_digit(10) || c.is_whitespace() || c == '.' => 10,
                 _ => u32::MAX,
             };
 
@@ -148,6 +148,8 @@ impl<'a> Tokenizer<'a> {
                 "invalid numeric literal prefix",
                 (start, self.offset + 1).into(),
             );
+
+            return None;
         }
 
         self.read_digits(base); // Integral Part

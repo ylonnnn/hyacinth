@@ -52,7 +52,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
             .lines()
             .zip(1_usize..)
             .skip(start.line - 1)
-            .take((end.line - start.line) + 1)
+            .take(end.line.saturating_sub(start.line) + 1)
             .map(|(line, num)| {
                 let len = line.len();
 

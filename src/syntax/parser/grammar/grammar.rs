@@ -34,6 +34,8 @@ impl Grammar {
             return None;
         }
 
+        lexer.skip_lf();
+
         let token = lexer.peek()?.clone();
         let rule = coalesce!(self.rules.get_mut(&token.kind), &mut self.fallback);
 

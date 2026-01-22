@@ -20,6 +20,7 @@ impl<'a> Tokenizer<'a> {
             offset: 0,
             reserved: hashmap! {
                 "let" => TokenKind::Let,
+                "true", "false" => TokenKind::Bool,
             },
         }
     }

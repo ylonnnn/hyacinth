@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     core::{Span, diagnostic::code::DiagnosticErrorKind},
+    hashmap,
     syntax::{Lexer, Token, TokenKind},
     token,
 };
@@ -14,19 +15,13 @@ pub struct Tokenizer<'a> {
 
 impl<'a> Tokenizer<'a> {
     pub fn new(lexer: &'a mut Lexer) -> Self {
-        let mut inst = Self {
+        Self {
             lexer,
             offset: 0,
-            reserved: HashMap::new(),
-        };
-
-        inst.initialize();
-
-        inst
-    }
-
-    pub fn initialize(&mut self) {
-        self.reserved.insert("let", TokenKind::Let);
+            reserved: hashmap! {
+                "let" => TokenKind::Let,
+            },
+        }
     }
 
     pub fn eof(&self) -> bool {

@@ -1,6 +1,6 @@
 use crate::syntax::{Expr, Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub op: Token,
     pub left: Box<Expr>,

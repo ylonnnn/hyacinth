@@ -1,4 +1,4 @@
-use std::fs;
+use std::{collections::HashSet, fs};
 
 use crate::{
     core::diagnostic::DiagnosticList,
@@ -67,8 +67,12 @@ impl Lexer {
         self.offset == 0
     }
 
-    pub fn eof(&self) -> bool {
-        self.offset >= self.size() - 1
+    pub fn abs_eof(&self) -> bool {
+        self.eof(true)
+    }
+
+    pub fn eof(&self, absolute: bool) -> bool {
+        self.offset >= (self.size() - (1 + (!absolute as usize)))
     }
 
     pub fn peek(&self) -> Option<&Token> {
@@ -85,6 +89,23 @@ impl Lexer {
         Some(self.tokens.get(self.offset - 1)?.clone())
     }
 
+    pub fn next_while(&mut self, mut predicate: impl FnMut(&Token) -> bool) -> Option<Token> {
+        while let Some(token) = self.peek() {
+            if predicate(&token) {
+                self.consume(1);
+                continue;
+            }
+
+            return self.next();
+        }
+
+        None
+    }
+
+    pub fn next_lf(&mut self) -> Option<Token> {
+        self.next_while(|token| token.kind == TokenKind::LnFeed)
+    }
+
     pub fn current(&self) -> &Token {
         &self.tokens[(self.offset - 1).clamp(0, self.size() - 1)]
     }
@@ -93,14 +114,34 @@ impl Lexer {
         self.offset += offset
     }
 
-    pub fn expect(&mut self, kind: TokenKind, consumption: TokenConsumptionType) -> Option<Token> {
-        let token = self.peek()?.clone();
+    pub fn expect(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionType,
+        exclude: Vec<TokenKind>,
+    ) -> Option<Token> {
+        let set: HashSet<TokenKind> = exclude.into_iter().collect();
+
+        let mut offset = 0;
+        while let Some(token) = self.peekn(offset) {
+            if !set.contains(&token.kind) {
+                break;
+            }
+
+            offset += 1;
+        }
+
+        let Some(token) = self.peekn(offset) else {
+            return None;
+        };
+
+        let token = token.clone();
         if token.kind != kind {
             return None;
         }
 
         if consumption == TokenConsumptionType::UponSuccess {
-            self.consume(1);
+            self.consume(offset + 1);
         }
 
         Some(token)

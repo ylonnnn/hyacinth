@@ -1,6 +1,6 @@
 use crate::syntax::{BinaryExpr, LiteralExpr, UnaryExpr};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Literal(LiteralExpr),
     Identifier(String),

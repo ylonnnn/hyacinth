@@ -53,6 +53,9 @@ impl Program {
         std::mem::swap(&mut self.diagnostics, &mut self.lexer.diagnostics);
 
         let mut parser = Parser::new(self);
+        if let Some(node) = parser.parse() {
+            dbg!(&node);
+        }
     }
 
     pub fn compile(&mut self) {

@@ -1,6 +1,6 @@
-use crate::syntax::{Expr, VariableDeclStmt};
+use crate::syntax::Expr;
 
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expr(Expr),
-    Let(VariableDeclStmt),
 }

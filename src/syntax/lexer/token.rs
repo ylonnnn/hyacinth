@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::Display;
 
 use crate::core::Span;
 
@@ -20,10 +20,14 @@ impl Token {
             span,
         }
     }
+
+    pub fn view<'a>(&self, source: &'a String) -> &'a str {
+        &source[self.span.start..self.span.end]
+    }
 }
 
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{:?}:{}:{}>", self.kind, self.span.start, self.span.end)
     }
 }
@@ -78,8 +82,8 @@ pub enum TokenKind {
     Eof,
 }
 
-impl fmt::Display for TokenKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",

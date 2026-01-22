@@ -1,5 +1,4 @@
 pub mod grammar;
-pub mod parser;
+pub mod rule;
 
 pub use grammar::*;
-pub use parser::*;

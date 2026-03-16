@@ -126,7 +126,7 @@ impl<'l> Tokenizer<'l> {
                     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
                     &format!(
                         "invalid numeric digit `{}` for numeric literals with base `{}`",
-                        c, base
+                        c as char, base
                     ),
                     (s.offset, s.offset + 1).into(),
                 );
@@ -144,7 +144,8 @@ impl<'l> Tokenizer<'l> {
 
         if let Some(b'0') = self.peek() {
             let c = self.peekn(1)?;
-            let mut n = 1;
+            #[allow(unused)]
+            let mut n = 1; // Used but is not detected
 
             base = match c {
                 b'b' => 2,
@@ -168,7 +169,10 @@ impl<'l> Tokenizer<'l> {
         if base == u32::MAX {
             self.lexer.diagnostics.error(
                 DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
-                "invalid numeric literal prefix",
+                &format!(
+                    "invalid numeric literal prefix `{}`.",
+                    &self.lexer.source.data[(start as usize)..=(self.offset as usize)]
+                ),
                 (start, self.offset + 1).into(),
             );
 
@@ -267,87 +271,81 @@ impl<'l> Tokenizer<'l> {
 
             let span: Span = (start, self.offset + 1).into();
 
-            if let Some(token) = match c {
+            // Delimeters
+            let token = match c {
                 b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(self.read_ident()),
                 b'0'..=b'9' => self.read_num(),
                 b'\'' | b'\"' => self.read_char_seq(),
-                _ => None,
-            } {
-                tokens.push(token);
-            }
-            // Delimeters
-            else {
-                let token = match c {
-                    b'+' => Some(match self.peekn(1) {
-                        Some(b'+') => token!(TokenKind::PlusPlus, span.extend_end(1)),
-                        _ => token!(TokenKind::Plus, span),
-                    }),
-                    b'-' => Some(token!(TokenKind::Minus, span)),
-                    b'*' => Some(token!(TokenKind::Star, span)),
-                    b'/' => match self.peekn(1) {
-                        Some(b'/') => {
-                            self.skip_until(|_, c| c == b'\n');
-                            // Some(token!(TokenKind::DocComment))
-                            None
-                        }
-                        _ => Some(token!(TokenKind::Slash, span)),
-                    },
-                    b'%' => Some(token!(TokenKind::Percent, span)),
-                    b'=' => Some(match self.peekn(1) {
-                        Some(b'=') => token!(TokenKind::EqEq, span.extend_end(1)),
-                        _ => token!(TokenKind::Eq, span),
-                    }),
-                    b'!' => Some(match self.peekn(1) {
-                        Some(b'=') => token!(TokenKind::NotEq, span.extend_end(1)),
-                        _ => token!(TokenKind::Not, span),
-                    }),
-                    b'<' => Some(match self.peekn(1) {
-                        Some(b'<') => token!(TokenKind::LessLess, span.extend_end(1)),
-                        Some(b'=') => token!(TokenKind::LessEq, span.extend_end(1)),
-                        _ => token!(TokenKind::Less, span),
-                    }),
-                    b'>' => Some(match self.peekn(1) {
-                        Some(b'>') => token!(TokenKind::GreaterGreater, span.extend_end(1)),
-                        Some(b'=') => token!(TokenKind::GreaterEq, span.extend_end(1)),
-                        _ => token!(TokenKind::Greater, span),
-                    }),
-                    b'&' => Some(match self.peekn(1) {
-                        Some(b'&') => token!(TokenKind::AmpersandAmpersand, span.extend_end(1)),
-                        _ => token!(TokenKind::Ampersand, span),
-                    }),
-                    b'|' => Some(match self.peekn(1) {
-                        Some(b'|') => token!(TokenKind::PipePipe, span.extend_end(1)),
-                        _ => token!(TokenKind::Pipe, span),
-                    }),
-                    b'.' => Some(token!(TokenKind::Dot, span)),
-                    b',' => Some(token!(TokenKind::Comma, span)),
-                    b';' => Some(token!(TokenKind::SemiColon, span)),
-                    b':' => Some(match self.peekn(1) {
-                        Some(b':') => token!(TokenKind::ColonColon, span.extend_end(1)),
-                        _ => token!(TokenKind::Colon, span),
-                    }),
-                    b'(' => Some(token!(TokenKind::LeftParen, span)),
-                    b')' => Some(token!(TokenKind::RightParen, span)),
-                    b'{' => Some(token!(TokenKind::LeftBrace, span)),
-                    b'}' => Some(token!(TokenKind::RightBrace, span)),
-                    b'[' => Some(token!(TokenKind::LeftBracket, span)),
-                    b']' => Some(token!(TokenKind::RightBracket, span)),
 
-                    inv => {
-                        self.lexer.diagnostics.error(
-                            DiagnosticErrorKind::UnknownCharacter.into(),
-                            &format!("unknown character `{}`.", inv),
-                            span.clone(),
-                        );
-
-                        Some(Token::Invalid(span))
+                b'+' => Some(match self.peekn(1) {
+                    Some(b'+') => token!(TokenKind::PlusPlus, span.extend_end(1)),
+                    _ => token!(TokenKind::Plus, span),
+                }),
+                b'-' => Some(token!(TokenKind::Minus, span)),
+                b'*' => Some(token!(TokenKind::Star, span)),
+                b'/' => match self.peekn(1) {
+                    Some(b'/') => {
+                        self.skip_until(|_, c| c == b'\n');
+                        // Some(token!(TokenKind::DocComment))
+                        None
                     }
-                };
+                    _ => Some(token!(TokenKind::Slash, span)),
+                },
+                b'%' => Some(token!(TokenKind::Percent, span)),
+                b'=' => Some(match self.peekn(1) {
+                    Some(b'=') => token!(TokenKind::EqEq, span.extend_end(1)),
+                    _ => token!(TokenKind::Eq, span),
+                }),
+                b'!' => Some(match self.peekn(1) {
+                    Some(b'=') => token!(TokenKind::NotEq, span.extend_end(1)),
+                    _ => token!(TokenKind::Not, span),
+                }),
+                b'<' => Some(match self.peekn(1) {
+                    Some(b'<') => token!(TokenKind::LessLess, span.extend_end(1)),
+                    Some(b'=') => token!(TokenKind::LessEq, span.extend_end(1)),
+                    _ => token!(TokenKind::Less, span),
+                }),
+                b'>' => Some(match self.peekn(1) {
+                    Some(b'>') => token!(TokenKind::GreaterGreater, span.extend_end(1)),
+                    Some(b'=') => token!(TokenKind::GreaterEq, span.extend_end(1)),
+                    _ => token!(TokenKind::Greater, span),
+                }),
+                b'&' => Some(match self.peekn(1) {
+                    Some(b'&') => token!(TokenKind::AmpersandAmpersand, span.extend_end(1)),
+                    _ => token!(TokenKind::Ampersand, span),
+                }),
+                b'|' => Some(match self.peekn(1) {
+                    Some(b'|') => token!(TokenKind::PipePipe, span.extend_end(1)),
+                    _ => token!(TokenKind::Pipe, span),
+                }),
+                b'.' => Some(token!(TokenKind::Dot, span)),
+                b',' => Some(token!(TokenKind::Comma, span)),
+                b';' => Some(token!(TokenKind::SemiColon, span)),
+                b':' => Some(match self.peekn(1) {
+                    Some(b':') => token!(TokenKind::ColonColon, span.extend_end(1)),
+                    _ => token!(TokenKind::Colon, span),
+                }),
+                b'(' => Some(token!(TokenKind::LeftParen, span)),
+                b')' => Some(token!(TokenKind::RightParen, span)),
+                b'{' => Some(token!(TokenKind::LeftBrace, span)),
+                b'}' => Some(token!(TokenKind::RightBrace, span)),
+                b'[' => Some(token!(TokenKind::LeftBracket, span)),
+                b']' => Some(token!(TokenKind::RightBracket, span)),
 
-                if let Some(token) = token {
-                    self.adjustn(token.len());
-                    tokens.push(token);
+                inv => {
+                    self.lexer.diagnostics.error(
+                        DiagnosticErrorKind::UnknownCharacter.into(),
+                        &format!("unknown character `{}`.", inv as char),
+                        span.clone(),
+                    );
+
+                    Some(Token::Invalid(span))
                 }
+            };
+
+            if let Some(token) = token {
+                self.adjustn(token.len());
+                tokens.push(token);
             }
 
             tokens.push(token!(

@@ -1,6 +1,12 @@
-use crate::syntax::Path;
+use crate::{core::Span, syntax::Path};
 
 #[derive(Debug, Clone)]
-pub enum Type {
+pub enum TyKind {
     Path(Path),
+}
+
+#[derive(Debug, Clone)]
+pub struct Ty {
+    pub kind: TyKind,
+    pub span: Span,
 }

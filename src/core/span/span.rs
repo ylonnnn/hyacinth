@@ -49,6 +49,12 @@ impl Span {
     }
 }
 
+impl Default for Span {
+    fn default() -> Self {
+        Self { start: 0, end: 0 }
+    }
+}
+
 impl From<(u32, u32)> for Span {
     fn from(value: (u32, u32)) -> Self {
         let (start, end) = value;

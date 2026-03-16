@@ -10,6 +10,8 @@ pub enum DiagnosticErrorKind {
     InvalidCharacterSequence,
 
     UnexpectedToken,
+    MissingExplicitTypeAnnotation,
+    InvalidVariableDeclaration,
 }
 
 impl DiagnosticCode {

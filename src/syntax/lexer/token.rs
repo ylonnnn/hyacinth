@@ -13,6 +13,11 @@ impl Token {
         Self { kind, span }
     }
 
+    #[inline]
+    pub fn len(&self) -> u32 {
+        (self.span.end - self.span.start) + 1
+    }
+
     #[allow(non_snake_case)]
     pub fn Invalid(span: Span) -> Self {
         Self {
@@ -22,7 +27,7 @@ impl Token {
     }
 
     pub fn view<'a>(&self, source: &'a String) -> &'a str {
-        &source[self.span.start..self.span.end]
+        &source[(self.span.start as usize)..(self.span.end as usize)]
     }
 }
 
@@ -34,11 +39,11 @@ impl Display for Token {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TokenKind {
-    Int,
-    Float,
+    Int { base: u32 },
+    Float { base: u32 },
     Bool,
-    Char,
-    String,
+    Char { terminated: bool },
+    String { terminated: bool },
     Ident,
 
     Let,
@@ -54,7 +59,9 @@ pub enum TokenKind {
     EqEq,
     NotEq,
     Less,
+    LessLess,
     Greater,
+    GreaterGreater,
     LessEq,
     GreaterEq,
     Ampersand,
@@ -67,6 +74,7 @@ pub enum TokenKind {
     Comma,
     SemiColon,
     Colon,
+    ColonColon,
     Dot,
     LeftParen,
     RightParen,
@@ -77,9 +85,16 @@ pub enum TokenKind {
 
     // Miscellaneous
     LnFeed,
+    DocComment,
 
     Invalid,
     Eof,
+}
+
+impl Default for TokenKind {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 impl Display for TokenKind {
@@ -88,11 +103,11 @@ impl Display for TokenKind {
             f,
             "{}",
             match self {
-                Self::Int => "int",
-                Self::Float => "float",
+                Self::Int { base: _ } => "int",
+                Self::Float { base: _ } => "float",
                 Self::Bool => "bool",
-                Self::Char => "char",
-                Self::String => "string",
+                Self::Char { terminated: _ } => "char",
+                Self::String { terminated: _ } => "string",
                 Self::Ident => "ident",
 
                 Self::Let => "let",
@@ -120,6 +135,7 @@ impl Display for TokenKind {
                 Self::Comma => ",",
                 Self::SemiColon => ";",
                 Self::Colon => ":",
+                Self::ColonColon => "::",
                 Self::Dot => ".",
                 Self::LeftParen => "(",
                 Self::RightParen => ")",
@@ -130,6 +146,7 @@ impl Display for TokenKind {
 
                 // Miscellaneous
                 Self::LnFeed => "\\n",
+                Self::DocComment => "// doc-comment",
 
                 Self::Invalid => "Invalid",
                 Self::Eof => "EOF",

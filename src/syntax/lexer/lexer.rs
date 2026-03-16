@@ -1,26 +1,18 @@
-use std::{collections::HashSet, fs};
+use std::collections::HashSet;
 
 use crate::{
-    core::diagnostic::DiagnosticList,
+    core::{diagnostic::DiagnosticList, program::source::ProgramSource},
     syntax::{Token, TokenKind, Tokenizer},
     ternary,
-    utils::control::terminate,
 };
 
 #[derive(Debug)]
 pub struct Lexer {
-    pub path: String,
-    pub source: String,
+    pub source: ProgramSource,
     pub diagnostics: DiagnosticList,
 
-    tokens: Vec<Token>,
+    pub(super) tokens: Vec<Token>,
     offset: usize,
-}
-
-#[derive(Debug)]
-pub enum LexerSourceOrigin {
-    File(String),
-    Arbitrary(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,35 +23,16 @@ pub enum TokenConsumptionType {
 }
 
 impl Lexer {
-    pub fn new(origin: LexerSourceOrigin) -> Self {
-        let mut inst = Self {
-            path: String::new(),
-            source: String::new(),
-            diagnostics: DiagnosticList::new(),
+    pub fn new(source: ProgramSource) -> Self {
+        Self {
+            source,
+            diagnostics: DiagnosticList::default(),
             tokens: Vec::new(),
             offset: 0,
-        };
-
-        match origin {
-            LexerSourceOrigin::File(path) => {
-                inst.source = match fs::read_to_string(&path) {
-                    Ok(content) => content,
-                    Err(err) => terminate(&err.to_string()),
-                };
-
-                inst.path = path;
-            }
-
-            LexerSourceOrigin::Arbitrary(source) => {
-                inst.path = String::from("arbitrary.hyc");
-                inst.source = source;
-            }
-        };
-
-        inst
+        }
     }
 
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.tokens.len()
     }
 
@@ -72,7 +45,7 @@ impl Lexer {
     }
 
     pub fn eof(&self, absolute: bool) -> bool {
-        self.offset >= (self.size() - (1 + (!absolute as usize)))
+        self.offset >= (self.len() - (1 + (!absolute as usize)))
     }
 
     pub fn peek(&self) -> Option<&Token> {
@@ -81,7 +54,7 @@ impl Lexer {
 
     pub fn peekn(&self, offset: usize) -> Option<&Token> {
         let pos = self.offset + offset;
-        ternary!(pos >= self.size() - 1, None, self.tokens.get(pos))
+        ternary!(pos >= self.len() - 1, None, self.tokens.get(pos))
     }
 
     pub fn next(&mut self) -> Option<Token> {
@@ -102,7 +75,7 @@ impl Lexer {
     }
 
     pub fn current(&self) -> &Token {
-        &self.tokens[(self.offset - 1).clamp(0, self.size() - 1)]
+        &self.tokens[(self.offset - 1).clamp(0, self.len() - 1)]
     }
 
     pub fn consume(&mut self, offset: usize) {

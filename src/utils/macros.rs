@@ -18,9 +18,19 @@ macro_rules! coalesce {
 #[macro_export]
 macro_rules! hashmap {
     [$($($key:expr $(,)?)* => $value:expr $(,)?)*] => {{
+        #[allow(unused_mut)]
         let mut map = HashMap::new();
         $($(map.insert($key, $value);)*)*
 
         map
     }}
+}
+
+#[macro_export]
+macro_rules! terminate {
+    ($($arg:tt)*) => {
+        print!("[termination] ");
+        println!($($arg)*);
+        std::process::exit(1);
+    };
 }

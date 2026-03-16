@@ -1,10 +1,10 @@
 use crate::{
     core::{
-        Program,
         diagnostic::{
             Diagnostic, DiagnosticSeverity,
             reporter::reporter::{DiagnosticReportStatus, DiagnosticReporter},
         },
+        program::Program,
     },
     ternary,
     utils::{Style, color, style},
@@ -41,7 +41,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
             details: _,
         } = diagnostic;
 
-        let (start, end) = span.to_rc(self.program);
+        let (start, end) = span.to_position_range(&self.program.source);
         let sev_color = CLIReporter::color_from_severity(severity);
 
         // Slices Lines
@@ -49,13 +49,12 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
             .program
             .lexer
             .source
-            .lines()
-            .zip(1_usize..)
-            .skip(start.line - 1)
-            .take(end.line.saturating_sub(start.line) + 1)
+            .lines
+            .iter()
+            .zip(1_u32..)
+            .skip((start.line - 1) as usize)
+            .take((end.line.saturating_sub(start.line) + 1) as usize)
             .map(|(line, num)| {
-                let len = line.len();
-
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                 let prefix = format!(
                     "  {line_num}  {pipe}  {reset}",
@@ -67,14 +66,17 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
                 let p_len = prefix.len() - (bb.len() + b.len() + r.len());
                 let (ln_start, ln_end) = (
                     ternary!(num == start.line, start.column - 1, 0),
-                    ternary!(num == end.line, end.column - 1, len),
+                    ternary!(num == end.line, end.column - 1, line.len() as u32),
                 );
 
                 format!("{prefix}{line}")
                     + &format!(
                         "\n{padding}{pointer}",
-                        padding = " ".repeat(p_len + ln_start),
-                        pointer = "^".repeat(ln_end - ln_start).style(sev_color).bold()
+                        padding = " ".repeat(p_len + ln_start as usize),
+                        pointer = "^"
+                            .repeat((ln_end - ln_start) as usize)
+                            .style(sev_color)
+                            .bold()
                     )
             })
             .collect::<Vec<String>>();
@@ -99,7 +101,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
             code.to_string().style(&sev_color),
             message.bright_white(),
             "found at:".blue(),
-            self.program.path.reset(),
+            self.program.source.identifier.as_ref().unwrap().reset(),
             start,
             lines.join("\n")
         )

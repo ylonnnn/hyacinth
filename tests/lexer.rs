@@ -1,16 +1,19 @@
 #[cfg(test)]
 mod tests {
-    use LexerSourceOrigin::*;
     use hyacinth::prelude::*;
+    use program::ProgramSource;
 
     #[test]
     fn lexer_from_arbitrary_string() {
         let source = r"1 + 2";
-        let mut lexer = Lexer::new(Arbitrary(source.into()));
+        let mut lexer = Lexer::new(ProgramSource::new(
+            "lexer_from_arbitrary_string".into(),
+            source.into(),
+        ));
 
         lexer.tokenize();
 
-        assert_eq!(lexer.size(), 4);
+        assert_eq!(lexer.len(), 4);
     }
 
     #[test]

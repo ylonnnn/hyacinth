@@ -4,17 +4,18 @@ use crate::{
     core::{Span, diagnostic::code::DiagnosticErrorKind},
     hashmap,
     syntax::{Lexer, Token, TokenKind},
-    token,
+    ternary, token,
+    utils::is_ascii_digit,
 };
 
-pub struct Tokenizer<'a> {
-    lexer: &'a mut Lexer,
-    offset: usize,
+pub struct Tokenizer<'l> {
+    lexer: &'l mut Lexer,
+    offset: u32,
     reserved: HashMap<&'static str, TokenKind>,
 }
 
-impl<'a> Tokenizer<'a> {
-    pub fn new(lexer: &'a mut Lexer) -> Self {
+impl<'l> Tokenizer<'l> {
+    pub fn new(lexer: &'l mut Lexer) -> Self {
         Self {
             lexer,
             offset: 0,
@@ -26,51 +27,63 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn eof(&self) -> bool {
-        self.offset >= self.lexer.source.len()
+        self.offset >= self.lexer.source.data.len() as u32
     }
 
-    pub fn peek(&self) -> Option<char> {
+    pub fn peek(&self) -> Option<u8> {
         self.peekn(0)
     }
 
-    pub fn peekn(&self, offset: usize) -> Option<char> {
-        self.lexer.source.chars().nth(self.offset + offset)
+    pub fn peekn(&self, offset: u32) -> Option<u8> {
+        self.lexer
+            .source
+            .data
+            .bytes()
+            .nth((self.offset + offset) as usize)
     }
 
-    pub fn next(&mut self) -> Option<char> {
+    pub fn next(&mut self) -> Option<u8> {
         let c = self.peek()?;
-        self.adjust(1);
+        self.adjust();
 
         Some(c)
     }
 
-    pub fn current(&self) -> Option<char> {
-        let mut chars = self.lexer.source.chars();
-        chars.nth(self.offset.clamp(1, self.lexer.source.len()) - 1)
+    pub fn current(&self) -> Option<u8> {
+        let src = &self.lexer.source.data;
+        let mut bytes = src.bytes();
+
+        bytes.nth((self.offset.clamp(1, src.len() as u32) - 1) as usize)
     }
 
-    pub fn adjust(&mut self, count: usize) {
+    #[inline]
+    pub fn adjust(&mut self) {
+        self.adjustn(1);
+    }
+
+    #[inline]
+    pub fn adjustn(&mut self, count: u32) {
         self.offset += count;
     }
 
-    pub fn expect(&mut self, c: char) -> bool {
+    pub fn expect(&mut self, c: u8) -> bool {
         self.peek().is_some_and(|ch| {
             let eq = ch == c;
-            self.adjust(eq as usize);
+            self.adjustn(eq as u32);
             eq
         })
     }
 
     fn skip_until<F>(&mut self, mut predicate: F) -> bool
     where
-        F: FnMut(&mut Self, char) -> bool,
+        F: FnMut(&mut Self, u8) -> bool,
     {
         while let Some(c) = self.peek() {
             if predicate(self, c) {
                 return true;
             }
 
-            self.adjust(c.len_utf8());
+            self.adjust();
         }
 
         false
@@ -78,22 +91,25 @@ impl<'a> Tokenizer<'a> {
 
     fn ignore_whitespace(&mut self, tokens: &mut Vec<Token>) {
         self.skip_until(|s, c| {
-            if c == '\n' {
+            if c == b'\n' {
                 tokens.push(token!(TokenKind::LnFeed, (s.offset, s.offset + 1).into()));
             }
 
-            !c.is_whitespace()
+            !c.is_ascii_whitespace()
         });
     }
 
     fn read_ident(&mut self) -> Token {
         let start = self.offset;
 
-        self.skip_until(|_, c| c != '_' && !c.is_alphanumeric());
+        self.skip_until(|_, c| c != b'_' && !c.is_ascii_alphanumeric());
 
         let span = (start, self.offset).into();
 
-        match self.reserved.get(&self.lexer.source[start..self.offset]) {
+        match self
+            .reserved
+            .get(&self.lexer.source.data[(start as usize)..(self.offset as usize)])
+        {
             Some(kind) => token!(kind.clone(), span),
             _ => token!(TokenKind::Ident, span),
         }
@@ -101,11 +117,11 @@ impl<'a> Tokenizer<'a> {
 
     fn read_digits(&mut self, base: u32) {
         self.skip_until(|s, c| {
-            if c.is_whitespace() || !c.is_alphanumeric() {
+            if c.is_ascii_whitespace() || !c.is_ascii_alphanumeric() {
                 return true;
             }
 
-            if !c.is_digit(base) {
+            if !is_ascii_digit(c, base) {
                 s.lexer.diagnostics.error(
                     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
                     &format!(
@@ -126,21 +142,27 @@ impl<'a> Tokenizer<'a> {
         // Identify base according to prefix
         let mut base: u32 = 10;
 
-        if let Some('0') = self.peek() {
+        if let Some(b'0') = self.peek() {
             let c = self.peekn(1)?;
+            let mut n = 1;
 
             base = match c {
-                'b' => 2,
-                'o' => 8,
-                'x' => 16,
-                _ if c.is_digit(10) || c.is_whitespace() || c == '.' => 10,
-                _ => u32::MAX,
+                b'b' => 2,
+                b'o' => 8,
+                b'x' => 16,
+                _ if c.is_ascii_digit() || c.is_ascii_whitespace() || c == b'.' => 10,
+                _ => {
+                    n = c.is_ascii_alphabetic() as u32;
+                    ternary!(n == 1, u32::MAX, 10)
+                }
             };
 
-            self.adjust(match base {
+            n = match base {
                 2 | 8 | 16 => 2,
                 _ => 1,
-            });
+            };
+
+            self.adjustn(n);
         }
 
         if base == u32::MAX {
@@ -155,30 +177,33 @@ impl<'a> Tokenizer<'a> {
 
         self.read_digits(base); // Integral Part
 
-        if self.expect('.') {
+        if self.expect(b'.') {
             self.read_digits(base); // Fractional Part
 
-            Some(token!(TokenKind::Float, (start, self.offset).into()))
+            Some(token!(
+                TokenKind::Float { base },
+                (start, self.offset).into()
+            ))
         } else {
-            Some(token!(TokenKind::Int, (start, self.offset).into()))
+            Some(token!(TokenKind::Int { base }, (start, self.offset).into()))
         }
     }
 
     pub fn read_char_seq(&mut self) -> Option<Token> {
         let (start, quote) = (self.offset, self.next()?);
-        let multi = quote == '"';
+        let multi = quote == b'"';
 
         let mut seq_len = 0;
         let terminated = self.skip_until(|s, c| {
             let cmp = c == quote;
             if cmp {
-                s.adjust(1);
+                s.adjust();
                 return cmp;
             }
 
             seq_len += 1;
-            if c == '\\' {
-                s.adjust(1);
+            if c == b'\\' {
+                s.adjust();
             }
 
             cmp
@@ -203,7 +228,7 @@ impl<'a> Tokenizer<'a> {
 
         // String
         if multi {
-            Some(token!(TokenKind::String, span))
+            Some(token!(TokenKind::String { terminated }, span))
         }
         // Char
         else {
@@ -221,7 +246,7 @@ impl<'a> Tokenizer<'a> {
                 );
             }
 
-            Some(token!(TokenKind::Char, span))
+            Some(token!(TokenKind::Char { terminated }, span))
         }
     }
 
@@ -229,116 +254,107 @@ impl<'a> Tokenizer<'a> {
         let mut tokens = Vec::<Token>::with_capacity(16);
 
         while !self.eof() {
-            if let Some(c) = self.peek() {
-                let start = self.offset;
+            let Some(c) = self.peek() else {
+                break;
+            };
 
-                if c.is_whitespace() {
-                    self.ignore_whitespace(&mut tokens);
-                    continue;
-                }
+            let start = self.offset;
 
-                let len = c.len_utf8();
-                let span: Span = (start, self.offset + len).into();
+            if c.is_ascii_whitespace() {
+                self.ignore_whitespace(&mut tokens);
+                continue;
+            }
 
-                if let Some(token) = match c {
-                    '_' | 'a'..='z' | 'A'..='Z' => Some(self.read_ident()),
-                    '0'..='9' => self.read_num(),
-                    '\'' | '\"' => self.read_char_seq(),
+            let span: Span = (start, self.offset + 1).into();
 
-                    _ => {
-                        let (token, consume) = match c {
-                            '+' => match self.peekn(1) {
-                                Some(ch) if ch == '+' => (
-                                    Some(token!(TokenKind::PlusPlus, span.extend(ch.len_utf8()))),
-                                    len + ch.len_utf8(),
-                                ),
-                                _ => (Some(token!(TokenKind::Plus, span)), len),
-                            },
-                            '-' => (Some(token!(TokenKind::Minus, span)), len),
-                            '*' => (Some(token!(TokenKind::Star, span)), len),
-                            '/' => match self.peekn(1) {
-                                Some('/') => {
-                                    self.skip_until(|_, c| c == '\n');
-                                    (None, 0)
-                                }
-                                _ => (Some(token!(TokenKind::Slash, span)), len),
-                            },
-                            '%' => (Some(token!(TokenKind::Percent, span)), len),
-                            '=' => match self.peekn(1) {
-                                Some(ch) if ch == '=' => (
-                                    Some(token!(TokenKind::EqEq, span.extend(ch.len_utf8()))),
-                                    len + ch.len_utf8(),
-                                ),
-                                _ => (Some(token!(TokenKind::Eq, span)), len),
-                            },
-                            '!' => match self.peekn(1) {
-                                Some('=') => (Some(token!(TokenKind::NotEq, span.extend(1))), 2),
-                                _ => (Some(token!(TokenKind::Not, span)), len),
-                            },
-                            '<' => match self.peekn(1) {
-                                Some('=') => (Some(token!(TokenKind::LessEq, span.extend(1))), 2),
-                                _ => (Some(token!(TokenKind::Less, span)), len),
-                            },
-                            '>' => match self.peekn(1) {
-                                Some(ch) if ch == '=' => (
-                                    Some(token!(TokenKind::GreaterEq, span.extend(ch.len_utf8()))),
-                                    len + ch.len_utf8(),
-                                ),
-                                _ => (Some(token!(TokenKind::Greater, span)), len),
-                            },
-                            '&' => match self.peekn(1) {
-                                Some(ch) if ch == '&' => (
-                                    Some(token!(
-                                        TokenKind::AmpersandAmpersand,
-                                        span.extend(ch.len_utf8())
-                                    )),
-                                    len + ch.len_utf8(),
-                                ),
-                                _ => (Some(token!(TokenKind::Ampersand, span)), len),
-                            },
+            if let Some(token) = match c {
+                b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(self.read_ident()),
+                b'0'..=b'9' => self.read_num(),
+                b'\'' | b'\"' => self.read_char_seq(),
+                _ => None,
+            } {
+                tokens.push(token);
+            }
+            // Delimeters
+            else {
+                let token = match c {
+                    b'+' => Some(match self.peekn(1) {
+                        Some(b'+') => token!(TokenKind::PlusPlus, span.extend_end(1)),
+                        _ => token!(TokenKind::Plus, span),
+                    }),
+                    b'-' => Some(token!(TokenKind::Minus, span)),
+                    b'*' => Some(token!(TokenKind::Star, span)),
+                    b'/' => match self.peekn(1) {
+                        Some(b'/') => {
+                            self.skip_until(|_, c| c == b'\n');
+                            // Some(token!(TokenKind::DocComment))
+                            None
+                        }
+                        _ => Some(token!(TokenKind::Slash, span)),
+                    },
+                    b'%' => Some(token!(TokenKind::Percent, span)),
+                    b'=' => Some(match self.peekn(1) {
+                        Some(b'=') => token!(TokenKind::EqEq, span.extend_end(1)),
+                        _ => token!(TokenKind::Eq, span),
+                    }),
+                    b'!' => Some(match self.peekn(1) {
+                        Some(b'=') => token!(TokenKind::NotEq, span.extend_end(1)),
+                        _ => token!(TokenKind::Not, span),
+                    }),
+                    b'<' => Some(match self.peekn(1) {
+                        Some(b'<') => token!(TokenKind::LessLess, span.extend_end(1)),
+                        Some(b'=') => token!(TokenKind::LessEq, span.extend_end(1)),
+                        _ => token!(TokenKind::Less, span),
+                    }),
+                    b'>' => Some(match self.peekn(1) {
+                        Some(b'>') => token!(TokenKind::GreaterGreater, span.extend_end(1)),
+                        Some(b'=') => token!(TokenKind::GreaterEq, span.extend_end(1)),
+                        _ => token!(TokenKind::Greater, span),
+                    }),
+                    b'&' => Some(match self.peekn(1) {
+                        Some(b'&') => token!(TokenKind::AmpersandAmpersand, span.extend_end(1)),
+                        _ => token!(TokenKind::Ampersand, span),
+                    }),
+                    b'|' => Some(match self.peekn(1) {
+                        Some(b'|') => token!(TokenKind::PipePipe, span.extend_end(1)),
+                        _ => token!(TokenKind::Pipe, span),
+                    }),
+                    b'.' => Some(token!(TokenKind::Dot, span)),
+                    b',' => Some(token!(TokenKind::Comma, span)),
+                    b';' => Some(token!(TokenKind::SemiColon, span)),
+                    b':' => Some(match self.peekn(1) {
+                        Some(b':') => token!(TokenKind::ColonColon, span.extend_end(1)),
+                        _ => token!(TokenKind::Colon, span),
+                    }),
+                    b'(' => Some(token!(TokenKind::LeftParen, span)),
+                    b')' => Some(token!(TokenKind::RightParen, span)),
+                    b'{' => Some(token!(TokenKind::LeftBrace, span)),
+                    b'}' => Some(token!(TokenKind::RightBrace, span)),
+                    b'[' => Some(token!(TokenKind::LeftBracket, span)),
+                    b']' => Some(token!(TokenKind::RightBracket, span)),
 
-                            '|' => match self.peekn(1) {
-                                Some(ch) if ch == '|' => (
-                                    Some(token!(TokenKind::PipePipe, span.extend(ch.len_utf8()))),
-                                    len + ch.len_utf8(),
-                                ),
-                                _ => (Some(token!(TokenKind::Pipe, span)), len),
-                            },
+                    inv => {
+                        self.lexer.diagnostics.error(
+                            DiagnosticErrorKind::UnknownCharacter.into(),
+                            &format!("unknown character `{}`.", inv),
+                            span.clone(),
+                        );
 
-                            ',' => (Some(token!(TokenKind::Comma, span)), len),
-                            ';' => (Some(token!(TokenKind::SemiColon, span)), len),
-                            ':' => (Some(token!(TokenKind::Colon, span)), len),
-                            '.' => (Some(token!(TokenKind::Dot, span)), len),
-                            '(' => (Some(token!(TokenKind::LeftParen, span)), len),
-                            ')' => (Some(token!(TokenKind::RightParen, span)), len),
-                            '{' => (Some(token!(TokenKind::LeftBrace, span)), len),
-                            '}' => (Some(token!(TokenKind::RightBrace, span)), len),
-                            '[' => (Some(token!(TokenKind::LeftBracket, span)), len),
-                            ']' => (Some(token!(TokenKind::RightBracket, span)), len),
-                            inv => {
-                                self.lexer.diagnostics.error(
-                                    DiagnosticErrorKind::UnknownCharacter.into(),
-                                    &format!("unknown character `{}`.", inv),
-                                    span.clone(),
-                                );
-
-                                (Some(Token::Invalid(span)), len)
-                            }
-                        };
-
-                        self.adjust(consume);
-                        token
+                        Some(Token::Invalid(span))
                     }
-                } {
+                };
+
+                if let Some(token) = token {
+                    self.adjustn(token.len());
                     tokens.push(token);
                 }
             }
-        }
 
-        tokens.push(token!(
-            TokenKind::Eof,
-            (self.offset, self.offset + 1).into()
-        ));
+            tokens.push(token!(
+                TokenKind::Eof,
+                (self.offset, self.offset + 1).into()
+            ));
+        }
 
         tokens
     }

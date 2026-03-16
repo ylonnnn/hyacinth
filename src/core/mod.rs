@@ -1,6 +1,6 @@
 pub mod diagnostic;
-pub mod location;
 pub mod program;
+pub mod span;
 
-pub use location::*;
 pub use program::*;
+pub use span::*;

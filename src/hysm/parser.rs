@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::Peekable, vec::IntoIter};
 
 use crate::{
     core::ProgramSource,
@@ -35,7 +35,13 @@ impl HysmParser {
                 "sub" => HysmTokenKind::Sub,
                 "mul" => HysmTokenKind::Mul,
                 "div" => HysmTokenKind::Div,
+                "not" => HysmTokenKind::Not,
+                "and" => HysmTokenKind::And,
+                "or" => HysmTokenKind::Or,
+                "cmp" => HysmTokenKind::Cmp,
+                "eq" => HysmTokenKind::Eq,
                 "jmp" => HysmTokenKind::Jmp,
+                "jmp_if" => HysmTokenKind::JmpIf,
                 "halt" => HysmTokenKind::Halt,
             },
         }
@@ -43,10 +49,10 @@ impl HysmParser {
 
     fn read_ident(&mut self) -> HysmToken {
         let bytes = self.source.lines[self.line - 1].as_bytes();
-        let start = self.offset;
+        let start = (self.offset, self.offset += 1).0;
 
         while let Some(byte) = bytes.get(self.offset)
-            && (byte.is_ascii_alphanumeric() || *byte == b'%' || *byte == b'_')
+            && (byte.is_ascii_alphanumeric() || *byte == b'_')
         {
             self.offset += 1;
         }
@@ -109,28 +115,29 @@ impl HysmParser {
         let mut pref_len = 0;
 
         if let Some(b'0') = bytes.get(self.offset) {
-            let c = *bytes.get(self.offset + 1)?;
-            #[allow(unused)]
-            let mut n = 1; // Used but is not detected
+            if let Some(c) = bytes.get(self.offset + 1) {
+                #[allow(unused)]
+                let mut n = 1; // Used but is not detected
 
-            base = match c {
-                b'b' => 2,
-                b'o' => 8,
-                b'x' => 16,
-                _ if c.is_ascii_digit() || c.is_ascii_whitespace() || c == b'.' => 10,
-                _ => {
-                    n = c.is_ascii_alphabetic() as usize;
-                    ternary!(n == 1, u32::MAX, 10)
-                }
-            };
+                base = match c {
+                    b'b' => 2,
+                    b'o' => 8,
+                    b'x' => 16,
+                    _ if c.is_ascii_digit() || c.is_ascii_whitespace() => 10,
+                    _ => {
+                        n = c.is_ascii_alphabetic() as usize;
+                        ternary!(n == 1, u32::MAX, 10)
+                    }
+                };
 
-            n = match base {
-                2 | 8 | 16 => 2,
-                _ => 1,
-            };
+                n = match base {
+                    2 | 8 | 16 => 2,
+                    _ => 1,
+                };
 
-            self.offset += n;
-            pref_len = ternary!(n == 2, n, 0);
+                self.offset += n;
+                pref_len = ternary!(n == 2, n, 0);
+            }
         }
 
         if base == u32::MAX {
@@ -247,7 +254,13 @@ impl HysmParser {
             HysmTokenKind::Sub => Instr(self.parse_sub(&mut iter)),
             HysmTokenKind::Mul => Instr(self.parse_mul(&mut iter)),
             HysmTokenKind::Div => Instr(self.parse_div(&mut iter)),
+            HysmTokenKind::Not => Instr(self.parse_not(&mut iter)),
+            HysmTokenKind::And => Instr(self.parse_and(&mut iter)),
+            HysmTokenKind::Or => Instr(self.parse_or(&mut iter)),
+            HysmTokenKind::Cmp => Instr(self.parse_cmp(&mut iter)),
+            HysmTokenKind::Eq => Instr(self.parse_eq(&mut iter)),
             HysmTokenKind::Jmp => Instr(self.parse_jmp(&mut iter)),
+            HysmTokenKind::JmpIf => Instr(self.parse_jmp_if(&mut iter)),
             HysmTokenKind::Halt => Instr(self.parse_halt()),
 
             // Labels
@@ -273,8 +286,9 @@ impl HysmParser {
         let tokens = self.tokenize();
 
         let mut instructions = Vec::new();
+        let len = tokens.len();
 
-        for token_set in tokens {
+        for (i, token_set) in tokens.into_iter().enumerate() {
             let Some(token) = token_set.get(0) else {
                 continue;
             };
@@ -287,7 +301,8 @@ impl HysmParser {
                 }
 
                 Label(label) => {
-                    self.labels.add(label, instructions.len());
+                    self.labels
+                        .add(label, instructions.len() - (i == len - 1) as usize);
                 }
             }
         }
@@ -329,7 +344,13 @@ pub enum HysmTokenKind {
     Sub,
     Mul,
     Div,
+    Not,
+    And,
+    Or,
+    Cmp,
+    Eq,
     Jmp,
+    JmpIf,
     Halt,
 
     Register,
@@ -377,13 +398,13 @@ macro_rules! hysm_token_span {
 }
 
 pub(super) struct HysmTokenIter {
-    tokens: <Vec<HysmToken> as IntoIterator>::IntoIter,
+    tokens: Peekable<IntoIter<HysmToken>>,
 }
 
 impl HysmTokenIter {
     pub fn new(tokens: Vec<HysmToken>) -> Self {
         Self {
-            tokens: tokens.into_iter(),
+            tokens: tokens.into_iter().peekable(),
         }
     }
 
@@ -392,10 +413,10 @@ impl HysmTokenIter {
     }
 
     pub fn expect(&mut self, kind: HysmTokenKind) -> (Option<HysmToken>, bool) {
-        let token = self.next();
+        let token = self.tokens.peek();
         let eq = ternary!(token.is_some(), token.as_ref().unwrap().kind == kind, false);
 
-        (token, eq)
+        (ternary!(eq, self.tokens.next(), None), eq)
     }
 
     pub fn require(&mut self, kind: HysmTokenKind) -> HysmToken {

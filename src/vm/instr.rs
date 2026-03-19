@@ -5,16 +5,22 @@ use crate::vm::{label::LabelTable, vm::REGISTER_LIMIT};
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum OpCode {
-    Push, // push [reg]
-    Pop,  // pop
-    Load, // load [reg], [stack-offset]
-    Mov,  // mov [reg], [value]
-    Add,  // add [reg], [reg], [reg]
-    Sub,  // sub [reg], [reg], [reg]
-    Mul,  // mul [reg], [reg], [reg]
-    Div,  // div [reg], [reg], [reg]
-    Jmp,  // jmp [offset]
-    Halt, // halt
+    Push,  // push [reg]
+    Pop,   // pop
+    Load,  // load [reg], [stack-offset]
+    Mov,   // mov [reg], [const]
+    Add,   // add [reg], [reg], [reg]
+    Sub,   // sub [reg], [reg], [reg]
+    Mul,   // mul [reg], [reg], [reg]
+    Div,   // div [reg], [reg], [reg]
+    Not,   // not [reg]
+    And,   // and [reg], [reg|const]
+    Or,    // or [reg], [reg|const]
+    Cmp,   // cmp [reg], [reg], [reg]
+    Eq,    // eq [reg], [reg|const], [reg|const]
+    Jmp,   // jmp [label|offset]
+    JmpIf, // jmp [label|offset], [reg]
+    Halt,  // halt
     COUNT,
 }
 
@@ -23,9 +29,16 @@ impl OpCode {
     pub const fn op_count(&self) -> usize {
         match self {
             Self::Pop | OpCode::Halt => 0,
-            Self::Push | Self::Jmp => 1,
-            Self::Mov | Self::Load => 2,
-            Self::Add | Self::Sub | Self::Mul | Self::Div => 3,
+            Self::Push | Self::Jmp | Self::Not => 1,
+            Self::Mov | Self::Load | Self::JmpIf => 2,
+            Self::Add
+            | Self::Sub
+            | Self::Mul
+            | Self::Div
+            | Self::And
+            | Self::Or
+            | Self::Cmp
+            | Self::Eq => 3,
             Self::COUNT => panic!("not a valid OpCode with an op_count!"),
         }
     }
@@ -216,7 +229,15 @@ pub mod instructions {
     instruction!(Mul, receiver, op1, op2);
     instruction!(Div, receiver, op1, op2);
 
+    instruction!(Not, register);
+    instruction!(And, receiver, op);
+    instruction!(Or, receiver, op);
+
+    instruction!(Eq, receiver, left, right);
+    instruction!(Cmp, receiver, left, right);
+
     instruction!(Jmp, addr);
+    instruction!(JmpIf, addr, basis);
 
     instruction!(Halt);
 }

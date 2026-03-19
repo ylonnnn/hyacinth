@@ -179,12 +179,100 @@ impl VirtualMachine {
                     }
                 }
 
+                OpCode::Not => {
+                    let register = &mut self.registers[op1.reg()];
+                    *register = !*register;
+                }
+
+                OpCode::And => {
+                    let op = ternary!(
+                        op2.is(InstructionOperandKind::Register),
+                        self.registers[op2.reg()],
+                        ternary!(
+                            op2.is(InstructionOperandKind::Constant),
+                            op2.data(),
+                            panic!("unexpected operand: {:?}", op2.kind())
+                        )
+                    );
+
+                    dbg!(op);
+
+                    let register = &mut self.registers[op1.reg()];
+                    *register = *register & op;
+                }
+
+                OpCode::Or => {
+                    let op = ternary!(
+                        op2.is(InstructionOperandKind::Register),
+                        self.registers[op2.reg()],
+                        ternary!(
+                            op2.is(InstructionOperandKind::Constant),
+                            op2.data(),
+                            panic!("unexpected operand: {:?}", op2.kind())
+                        )
+                    );
+
+                    let register = &mut self.registers[op1.reg()];
+                    *register = *register | op;
+                }
+
+                OpCode::Cmp => {
+                    let (left, right) = (self.registers[op2.reg()], self.registers[op3.reg()]);
+
+                    self.registers[op1.reg()] =
+                        ternary!(left > right, 1, ternary!(left < right, 2, 0));
+                }
+
+                OpCode::Eq => {
+                    self.registers[op1.reg()] = (ternary!(
+                        op2.is(InstructionOperandKind::Register),
+                        self.registers[op2.reg()],
+                        ternary!(
+                            op2.is(InstructionOperandKind::Constant),
+                            op2.data(),
+                            panic!("unexpected operand: {:?}", op2.kind())
+                        )
+                    ) == ternary!(
+                        op3.is(InstructionOperandKind::Register),
+                        self.registers[op3.reg()],
+                        ternary!(
+                            op3.is(InstructionOperandKind::Constant),
+                            op3.data(),
+                            panic!("unexpected operand: {:?}", op3.kind())
+                        )
+                    )) as u32;
+                }
+
                 OpCode::Jmp => {
+                    let addr = ternary!(
+                        op1.is(InstructionOperandKind::Label),
+                        op1.label_addr(&self.labels),
+                        ternary!(
+                            op1.is(InstructionOperandKind::StackOffset),
+                            op1.data() as usize,
+                            panic!("unexpected operand: {:?}", op1.kind())
+                        )
+                    );
+
+                    if !self.goto(addr) {
+                        return Err(VirtualMachineError::InvalidAddress(addr as u32));
+                    }
+
+                    continue;
+                }
+
+                OpCode::JmpIf => {
                     let addr = ternary!(
                         op1.is(InstructionOperandKind::Label),
                         op1.label_addr(&self.labels),
                         op1.data() as usize
                     );
+
+                    let register = self.registers[op2.reg()];
+                    if register == 0 {
+                        self.ip += 1;
+                        continue;
+                    }
 
                     if !self.goto(addr) {
                         return Err(VirtualMachineError::InvalidAddress(addr as u32));

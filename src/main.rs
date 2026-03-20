@@ -1,27 +1,55 @@
 use hyacinth::{hysm::hysm::Hysm, vm::vm::VirtualMachine};
 
 fn main() {
-    let mut hysm = Hysm::new("hyc/hysm/conditional.hysm");
+    //
+}
 
-    hysm.execute();
+fn usage() {
+    println!("Usage: hyc [options] input.hysm");
+}
 
-    println!("{:?}", hysm.vm.registers);
-    for frame in &hysm.vm.frames {
-        println!("Frame\n{}", frame);
+#[inline]
+fn shift(args: Vec<String>) -> (String, Vec<String>) {
+    println!("{args:?}");
+    assert!(args.len() >= 1);
+    let mut args = args.into_iter();
+    (args.next().unwrap(), args.as_slice().to_vec())
+}
+
+fn command() {
+    let args: Vec<String> = std::env::args().collect();
+    let (_, args) = shift(args);
+
+    if args.len() < 1 {
+        usage();
+        std::process::exit(1);
     }
 
-    let out = "hyc/hycb/conditional.hycb";
-    hysm.compile(out);
+    let (opt, args) = shift(args);
+    let (input, _) = shift(args);
 
-    let mut vm = VirtualMachine::new_from_file(out).unwrap();
-    match vm.execute() {
-        Ok(_) => {
-            println!("{:?}", vm.registers);
-            for frame in &vm.frames {
-                println!("Frame\n{frame}");
+    match &*opt {
+        "compile" | "c" => {
+            let mut hysm = Hysm::new(&input);
+            hysm.compile(&input.replace(".hysm", ".hycb"));
+        }
+
+        "run" | "r" => {
+            let mut vm = VirtualMachine::new_from_file(&input).unwrap();
+            match vm.execute() {
+                Ok(_) => {
+                    println!("{:?}", vm.registers);
+                    for frame in &vm.frames {
+                        println!("Frame\n{frame}");
+                    }
+                }
+
+                Err(err) => panic!("{err:?}"),
             }
         }
 
-        Err(err) => panic!("{err:?}"),
+        _ => {
+            panic!("unknown option: {opt}");
+        }
     }
 }

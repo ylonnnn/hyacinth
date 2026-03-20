@@ -41,10 +41,11 @@ impl Display for Token {
     }
 }
 
+#[repr(u8)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TokenKind {
-    Int { base: u32 },
-    Float { base: u32 },
+    Int { base: u8 },
+    Float { base: u8 },
     Bool,
     Char { terminated: bool },
     String { terminated: bool },

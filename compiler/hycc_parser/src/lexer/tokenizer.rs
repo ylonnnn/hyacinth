@@ -149,7 +149,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
         let start = self.offset;
 
         // Identify base according to prefix
-        let mut base: u32 = 10;
+        let mut base: u8 = 10;
 
         if let Some(b'0') = self.peek() {
             let c = self.peekn(1)?;
@@ -163,7 +163,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
                 _ if c.is_ascii_digit() || c.is_ascii_whitespace() || c == b'.' => 10,
                 _ => {
                     n = c.is_ascii_alphabetic() as u32;
-                    ternary!(n == 1, u32::MAX, 10)
+                    ternary!(n == 1, u8::MAX, 10)
                 }
             };
 
@@ -175,7 +175,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
             self.adjustn(n);
         }
 
-        if base == u32::MAX {
+        if base == u8::MAX {
             self.lexer.diagnostics.error(
                 DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
                 &format!(
@@ -188,10 +188,10 @@ impl<'l, 's> Tokenizer<'l, 's> {
             return None;
         }
 
-        self.read_digits(base); // Integral Part
+        self.read_digits(base as u32); // Integral Part
 
         if self.expect(b'.') {
-            self.read_digits(base); // Fractional Part
+            self.read_digits(base as u32); // Fractional Part
 
             Some(token!(
                 TokenKind::Float { base },

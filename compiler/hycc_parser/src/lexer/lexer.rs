@@ -91,7 +91,7 @@ impl<'s> Lexer<'s> {
         kind: TokenKind,
         consumption: TokenConsumptionType,
         exclude: Vec<TokenKind>,
-    ) -> Option<Token> {
+    ) -> (Option<Token>, bool) {
         let set: HashSet<TokenKind> = exclude.into_iter().collect();
 
         let mut offset = 0;
@@ -104,19 +104,19 @@ impl<'s> Lexer<'s> {
         }
 
         let Some(token) = self.peekn(offset) else {
-            return None;
+            return (None, false);
         };
 
         let token = token.clone();
         if token.kind != kind {
-            return None;
+            return (Some(token), false);
         }
 
         if consumption == TokenConsumptionType::UponSuccess {
             self.consume(offset + 1);
         }
 
-        Some(token)
+        (Some(token), true)
     }
 
     pub fn tokenize(&mut self) {

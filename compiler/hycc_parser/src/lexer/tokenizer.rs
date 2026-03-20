@@ -104,7 +104,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
     }
 
     fn read_ident(&mut self) -> Token {
-        let start = self.offset;
+        let start = (self.offset, self.offset += 1).0;
 
         self.skip_until(|_, c| c != b'_' && !c.is_ascii_alphanumeric());
 
@@ -115,12 +115,14 @@ impl<'l, 's> Tokenizer<'l, 's> {
         )
             .into();
 
-        match self
-            .reserved
-            .get(&self.lexer.source.data[(start as usize)..(self.offset as usize)])
-        {
-            Some(kind) => token!(kind.clone(), span),
-            _ => token!(TokenKind::Ident, span),
+        let view = &self.lexer.source.data[(start as usize)..(self.offset as usize)];
+        if view.starts_with('@') {
+            token!(TokenKind::MacroIdent, span)
+        } else {
+            match self.reserved.get(view) {
+                Some(kind) => token!(kind.clone(), span),
+                _ => token!(TokenKind::Ident, span),
+            }
         }
     }
 
@@ -301,7 +303,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
 
             // Delimeters
             let token = match c {
-                b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(self.read_ident()),
+                b'@' | b'_' | b'a'..=b'z' | b'A'..=b'Z' => Some(self.read_ident()),
                 b'0'..=b'9' => self.read_num(),
                 b'\'' | b'\"' => self.read_char_seq(),
 

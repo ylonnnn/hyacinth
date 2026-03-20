@@ -49,7 +49,9 @@ pub enum TokenKind {
     Bool,
     Char { terminated: bool },
     String { terminated: bool },
+
     Ident,
+    MacroIdent,
 
     Let,
 

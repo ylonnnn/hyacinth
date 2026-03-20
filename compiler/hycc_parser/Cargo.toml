@@ -1,0 +1,12 @@
+[package]
+name = "hycc_parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hycc_source = { path = "../hycc_source" }
+hycc_diagnostic = { path = "../hycc_diagnostic" }
+
+hycc_span = { path = "../hycc_span" }
+
+hycc_util = { path = "../hycc_util" }

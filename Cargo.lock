@@ -3,5 +3,57 @@
 version = 4
 
 [[package]]
-name = "hyacinth"
+name = "hycc"
+version = "0.1.0"
+dependencies = [
+ "hycc_pipeline",
+]
+
+[[package]]
+name = "hycc_diagnostic"
+version = "0.1.0"
+dependencies = [
+ "hycc_source",
+ "hycc_span",
+ "hycc_util",
+]
+
+[[package]]
+name = "hycc_parser"
+version = "0.1.0"
+dependencies = [
+ "hycc_diagnostic",
+ "hycc_source",
+ "hycc_span",
+ "hycc_util",
+]
+
+[[package]]
+name = "hycc_pipeline"
+version = "0.1.0"
+dependencies = [
+ "hycc_parser",
+ "hycc_source",
+]
+
+[[package]]
+name = "hycc_source"
+version = "0.1.0"
+dependencies = [
+ "hycc_util",
+]
+
+[[package]]
+name = "hycc_span"
+version = "0.1.0"
+dependencies = [
+ "hycc_source",
+]
+
+[[package]]
+name = "hycc_util"
+version = "0.1.0"
+
+[[package]]
+name = "hysm"
 version = "0.1.0"

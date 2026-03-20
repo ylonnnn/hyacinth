@@ -1,0 +1,8 @@
+[package]
+name = "hycc_pipeline"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hycc_source = { path = "../hycc_source" }
+hycc_parser = { path = "../hycc_parser" }

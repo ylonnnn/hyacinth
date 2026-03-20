@@ -49,7 +49,7 @@ impl VirtualMachine {
     }
 
     pub fn goto(&mut self, addr: usize) -> bool {
-        ternary!(addr >= self.instr.len(), false, {
+        ternary!(addr > self.instr.len(), false, {
             self.ip = addr;
             true
         })

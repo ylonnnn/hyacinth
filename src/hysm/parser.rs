@@ -284,11 +284,13 @@ impl HysmParser {
 
     pub fn parse(&mut self) -> Vec<Instruction> {
         let tokens = self.tokenize();
-
         let mut instructions = Vec::new();
-        let len = tokens.len();
 
-        for (i, token_set) in tokens.into_iter().enumerate() {
+        for token_set in tokens {
+            if token_set.is_empty() {
+                continue;
+            }
+
             let Some(token) = token_set.get(0) else {
                 continue;
             };
@@ -301,8 +303,7 @@ impl HysmParser {
                 }
 
                 Label(label) => {
-                    self.labels
-                        .add(label, instructions.len() - (i == len - 1) as usize);
+                    self.labels.add(label, instructions.len());
                 }
             }
         }

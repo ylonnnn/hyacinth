@@ -1,8 +1,8 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use hycc_span::Span;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
@@ -29,6 +29,12 @@ impl Token {
     }
 }
 
+impl Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -39,6 +45,12 @@ impl Display for Token {
             self.span.offset + self.span.len as u32
         )
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum TokenGraph {
+    Node(Token),
+    Collection(Vec<TokenGraph>),
 }
 
 #[repr(u8)]
@@ -53,6 +65,8 @@ pub enum TokenKind {
     Ident,
     MacroIdent,
 
+    // Keywords
+    Fn,
     Let,
 
     // Operators

@@ -18,7 +18,13 @@ impl SourceTree {
         }
     }
 
-    pub fn append(_source: Source) {
+    pub fn append(&mut self, _source: Source) {
+        assert!(
+            (self.counter as usize) < Self::CAPACITY,
+            "project source tree cannot exceed {} source nodes!",
+            Self::CAPACITY
+        );
+
         todo!()
     }
 }

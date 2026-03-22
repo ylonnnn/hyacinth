@@ -156,6 +156,7 @@ impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
     }
 
     fn read_num(&mut self) -> Option<Token> {
+        let src_id = self.lexer.source.identifier.0;
         let start = self.offset;
 
         // Identify base according to prefix
@@ -185,42 +186,47 @@ impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
             self.adjustn(n);
         }
 
+        let source = &self.lexer.source.data[..];
         if base == u8::MAX {
             self.lexer.dctx.error(
                 DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
                 &format!(
                     "invalid numeric literal prefix `{}`.",
-                    &self.lexer.source.data[(start as usize)..=(self.offset as usize)]
+                    &source[(start as usize)..=(self.offset as usize)]
                 ),
-                (start, 1, self.lexer.source.identifier.0).into(),
+                (start, 2, src_id).into(),
             );
 
             return None;
         }
 
+        let _start = self.offset;
         self.read_digits(base as u32); // Integral Part
+
+        // If the digit reading failed to proceed while the number is not
+        // decimal (base != 10), there could be a dangling numeric literal prefix
+        if _start == self.offset && base != 10 {
+            self.lexer.dctx.error(
+                DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+                &format!(
+                    "dangling numeric literal prefix `{}`.",
+                    &source[(start as usize)..(self.offset as usize)]
+                ),
+                (start, (_start - start) as u16, src_id).into(),
+            );
+        }
 
         Some(if self.expect(b'.') {
             self.read_digits(base as u32); // Fractional Part
 
             token!(
                 TokenKind::Float { base },
-                (
-                    start,
-                    (self.offset - start) as u16,
-                    self.lexer.source.identifier.0
-                )
-                    .into()
+                (start, (self.offset - start) as u16, src_id).into()
             )
         } else {
             token!(
                 TokenKind::Int { base },
-                (
-                    start,
-                    (self.offset - start) as u16,
-                    self.lexer.source.identifier.0
-                )
-                    .into()
+                (start, (self.offset - start) as u16, src_id).into()
             )
         })
     }

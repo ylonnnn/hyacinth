@@ -1,10 +1,7 @@
-use std::collections::HashSet;
+use crate::lexer::{TokenKind, Tokenizer, token::TokenGraph};
 
-use crate::lexer::{Token, TokenKind, Tokenizer, token::TokenGraph};
-
-use hycc_diagnostic::DiagnosticList;
+use hycc_diagnostic::DiagnosticContext;
 use hycc_source::source::Source;
-use hycc_util::ternary;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenConsumptionType {
@@ -14,19 +11,19 @@ pub enum TokenConsumptionType {
 }
 
 #[derive(Debug)]
-pub struct Lexer<'s> {
+pub struct Lexer<'s, 'd> {
     pub source: &'s Source,
-    pub diagnostics: DiagnosticList,
+    pub dctx: &'d mut DiagnosticContext,
 
     pub(crate) token_graph: TokenGraph,
     offset: usize,
 }
 
-impl<'s> Lexer<'s> {
-    pub fn new(source: &'s Source) -> Self {
+impl<'s, 'd> Lexer<'s, 'd> {
+    pub fn new(source: &'s Source, dctx: &'d mut DiagnosticContext) -> Self {
         Self {
             source,
-            diagnostics: DiagnosticList::default(),
+            dctx,
             token_graph: TokenGraph::Collection(Vec::new()),
             offset: 0,
         }

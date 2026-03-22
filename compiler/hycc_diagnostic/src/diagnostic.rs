@@ -36,6 +36,11 @@ impl Diagnostic {
         }
     }
 
+    pub fn add_detail(&mut self, detail: Diagnostic) -> &mut Self {
+        self.details.push(Box::new(detail));
+        self
+    }
+
     pub fn detail(
         &mut self,
         span: Span,
@@ -43,9 +48,7 @@ impl Diagnostic {
         code: DiagnosticCode,
         message: String,
     ) -> &mut Self {
-        self.details
-            .push(Box::new(Diagnostic::new(span, severity, code, message)));
-
+        self.add_detail(Diagnostic::new(span, severity, code, message));
         self
     }
 }
@@ -65,24 +68,18 @@ impl Display for DiagnosticSeverity {
 }
 
 #[derive(Debug)]
-pub struct DiagnosticList(Vec<Diagnostic>);
+pub struct DiagnosticContext {
+    pub data: Vec<Diagnostic>,
+}
 
-impl DiagnosticList {
+impl DiagnosticContext {
     pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    pub fn data(&self) -> &Vec<Diagnostic> {
-        &self.0
-    }
-
-    pub fn data_mut(&mut self) -> &mut Vec<Diagnostic> {
-        &mut self.0
+        Self { data: Vec::new() }
     }
 
     pub fn add(&mut self, diagnostic: Diagnostic) -> &mut Diagnostic {
-        self.0.push(diagnostic);
-        self.0.iter_mut().last().unwrap()
+        self.data.push(diagnostic);
+        self.data.last_mut().unwrap()
     }
 
     pub fn info(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
@@ -113,8 +110,10 @@ impl DiagnosticList {
     }
 }
 
-impl Default for DiagnosticList {
+impl Default for DiagnosticContext {
     fn default() -> Self {
-        Self(Vec::with_capacity(32))
+        Self {
+            data: Vec::with_capacity(32),
+        }
     }
 }

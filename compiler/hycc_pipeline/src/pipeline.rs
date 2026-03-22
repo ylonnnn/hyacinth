@@ -1,3 +1,4 @@
+use hycc_diagnostic::reporter::{CLIReporter, DiagnosticReporter};
 use hycc_parser::lexer::Lexer;
 use hycc_source::Source;
 
@@ -9,6 +10,9 @@ pub fn start(root_path: &str) {
 }
 
 pub fn compile(session: &mut Session) {
-    let mut lexer = Lexer::new(&session.source_tree.root.data);
+    let mut lexer = Lexer::new(session.source_registry.root(), &mut session.dctx);
     lexer.tokenize();
+
+    let reporter = CLIReporter::new(&session.dctx, &session.source_registry);
+    reporter.report();
 }

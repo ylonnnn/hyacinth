@@ -9,14 +9,14 @@ use hycc_diagnostic::code::DiagnosticErrorKind;
 use hycc_span::Span;
 use hycc_util::{hashmap, is_ascii_digit, ternary};
 
-pub struct Tokenizer<'l, 's> {
-    lexer: &'l mut Lexer<'s>,
+pub struct Tokenizer<'l, 's, 'd> {
+    lexer: &'l mut Lexer<'s, 'd>,
     offset: u32,
     reserved: HashMap<&'static str, TokenKind>,
 }
 
-impl<'l, 's> Tokenizer<'l, 's> {
-    pub fn new(lexer: &'l mut Lexer<'s>) -> Self {
+impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
+    pub fn new(lexer: &'l mut Lexer<'s, 'd>) -> Self {
         Self {
             lexer,
             offset: 0,
@@ -141,7 +141,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
             }
 
             if !is_ascii_digit(c, base) {
-                s.lexer.diagnostics.error(
+                s.lexer.dctx.error(
                     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
                     &format!(
                         "invalid numeric digit `{}` for numeric literals with base `{}`",
@@ -186,7 +186,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
         }
 
         if base == u8::MAX {
-            self.lexer.diagnostics.error(
+            self.lexer.dctx.error(
                 DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
                 &format!(
                     "invalid numeric literal prefix `{}`.",
@@ -245,7 +245,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
             cmp
         });
 
-        let diagnostics = &mut self.lexer.diagnostics;
+        let diagnostics = &mut self.lexer.dctx;
         let span: Span = (
             start,
             (self.offset - start) as u16,
@@ -410,7 +410,7 @@ impl<'l, 's> Tokenizer<'l, 's> {
                     b']' => Some(token!(TokenKind::RightBracket, span)),
 
                     inv => {
-                        self.lexer.diagnostics.error(
+                        self.lexer.dctx.error(
                             DiagnosticErrorKind::UnknownCharacter.into(),
                             &format!("unknown character `{}`.", inv as char),
                             span.clone(),

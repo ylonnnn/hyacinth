@@ -1,23 +1,23 @@
 use crate::{
-    Diagnostic, DiagnosticList, DiagnosticSeverity,
+    Diagnostic, DiagnosticContext, DiagnosticSeverity,
     reporter::{DiagnosticReportStatus, DiagnosticReporter},
 };
 
-use hycc_source::Source;
+use hycc_source::{Source, SourceRegistry};
 use hycc_span::Position;
 use hycc_util::{Style, color, style, ternary};
 
 #[derive(Debug)]
-pub struct CLIReporter<'s> {
-    pub diagnostics: DiagnosticList,
-    pub source: &'s Source,
+pub struct CLIReporter<'d, 's> {
+    pub dctx: &'d DiagnosticContext,
+    pub source_registry: &'s SourceRegistry,
 }
 
-impl<'s> CLIReporter<'s> {
-    pub fn new(diagnostics: DiagnosticList, source: &'s Source) -> Self {
+impl<'d, 's> CLIReporter<'d, 's> {
+    pub fn new(dctx: &'d DiagnosticContext, source_registry: &'s SourceRegistry) -> Self {
         Self {
-            diagnostics,
-            source,
+            dctx,
+            source_registry,
         }
     }
 
@@ -35,11 +35,12 @@ impl<'s> CLIReporter<'s> {
 
     pub fn emphasize(
         &self,
+        source: &Source,
         severity_color: &'static str,
         position_range: (Position, Position),
     ) -> String {
         let (start, end) = &position_range;
-        self.source
+        source
             .data
             .lines()
             .zip(1_u32..)
@@ -95,17 +96,20 @@ impl<'s> CLIReporter<'s> {
     }
 }
 
-impl<'a> DiagnosticReporter for CLIReporter<'a> {
+impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
     fn format_diagnostic(&self, diagnostic: &Diagnostic) -> String {
         let Diagnostic {
             span,
             severity,
             code,
             message,
-            details: _,
+            ..
         } = diagnostic;
 
-        let source = &self.source;
+        let Some(source) = self.source_registry.get(span.src_id) else {
+            panic!("source identifier of span is invalid!");
+        };
+
         let (start, end) = span.to_position_range(&source);
         let sev_color = self.color_from_severity(severity);
 
@@ -118,7 +122,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
             "----->".bright_black(),
             source.identifier.1,
             start.clone(),
-            self.emphasize(sev_color, (start, end)),
+            self.emphasize(source, sev_color, (start, end)),
             style::RESET
         )
     }
@@ -126,7 +130,7 @@ impl<'a> DiagnosticReporter for CLIReporter<'a> {
     fn report(&self) -> DiagnosticReportStatus {
         let mut status: DiagnosticReportStatus = [0; 3];
 
-        self.diagnostics.data().iter().for_each(|diagnostic| {
+        self.dctx.data.iter().for_each(|diagnostic| {
             let formatted = self.format_diagnostic(diagnostic);
             status[diagnostic.severity as usize] += 1;
 

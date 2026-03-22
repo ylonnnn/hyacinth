@@ -23,18 +23,3 @@ impl Source {
         self.identifier.0 != u16::MAX
     }
 }
-
-#[derive(Debug)]
-pub struct SourceNode {
-    pub data: Source,
-    pub children: Vec<SourceNode>,
-}
-
-impl SourceNode {
-    pub fn new(data: Source) -> Self {
-        Self {
-            data,
-            children: Vec::new(),
-        }
-    }
-}

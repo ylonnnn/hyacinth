@@ -1,5 +1,5 @@
 use hycc_pipeline::pipeline;
 
 fn main() {
-    pipeline::compile_file("hyc-tests/lexer/test.hyc");
+    pipeline::start("hyc-tests/lexer/test.hyc");
 }

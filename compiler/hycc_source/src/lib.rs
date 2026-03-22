@@ -1,5 +1,5 @@
-pub mod registry;
+pub mod tree;
 pub mod source;
 
-pub use registry::SourceRegistry;
+pub use tree::SourceTree;
 pub use source::Source;

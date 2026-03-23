@@ -61,6 +61,8 @@ pub enum DiagnosticErrorKind {
     UnterminatedCharacterSequence,
     InvalidCharacterSequence,
 
+    UnclosedDelimeterCollection,
+
     UnexpectedToken,
     MissingExplicitTypeAnnotation,
     InvalidVariableDeclaration,

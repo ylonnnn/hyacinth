@@ -293,20 +293,59 @@ impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
 
     pub fn tokenize_collection(
         &mut self,
-        closing: u8,
+        mut condition: impl FnMut(u8) -> bool,
         mut collection: Vec<TokenGraph>,
     ) -> TokenGraph {
+        let mut eof = true;
         while let Some(c) = self.peek() {
             if let Some(tg) = self.tokenize() {
                 collection.push(tg);
             }
 
-            if c == closing {
+            if condition(c) {
+                eof = false;
                 break;
             }
         }
 
-        TokenGraph::Collection(collection)
+        TokenGraph::Collection {
+            data: collection,
+            eof,
+        }
+    }
+
+    pub fn tokenize_delimeter_collection(
+        &mut self,
+        pair: (u8, u8),
+        collection: Vec<TokenGraph>,
+    ) -> TokenGraph {
+        let (op, cl) = pair;
+
+        let token_graph = self.tokenize_collection(|c| c == cl, collection);
+        if let TokenGraph::Collection { data, eof } = &token_graph {
+            // If the collection reached the eof, the delimeter
+            // collection is not closed.
+            if *eof {
+                let Some(TokenGraph::Node(op_tok)) = data.first() else {
+                    unreachable!(
+                        "BUG: token graph delimeter collection is always expected to at least have the opening token!"
+                    );
+                };
+
+                self.lexer.dctx.error(
+                    DiagnosticErrorKind::UnclosedDelimeterCollection.into(),
+                    &format!(
+                        "missing closing pair `{}` for  `{}`.",
+                        cl as char, op as char,
+                    ),
+                    op_tok.span.clone(),
+                );
+            }
+
+            token_graph
+        } else {
+            unreachable!()
+        }
     }
 
     #[inline]
@@ -334,22 +373,22 @@ impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
         let graph = match c {
             b'(' => {
                 self.adjust();
-                self.tokenize_collection(
-                    b')',
+                self.tokenize_delimeter_collection(
+                    (b'(', b')'),
                     vec![TokenGraph::Node(token!(TokenKind::LeftParen, span))],
                 )
             }
             b'{' => {
                 self.adjust();
-                self.tokenize_collection(
-                    b'}',
+                self.tokenize_delimeter_collection(
+                    (b'{', b'}'),
                     vec![TokenGraph::Node(token!(TokenKind::LeftBrace, span))],
                 )
             }
             b'[' => {
                 self.adjust();
-                self.tokenize_collection(
-                    b']',
+                self.tokenize_delimeter_collection(
+                    (b'[', b']'),
                     vec![TokenGraph::Node(token!(TokenKind::LeftBracket, span))],
                 )
             }

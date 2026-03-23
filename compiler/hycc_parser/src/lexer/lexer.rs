@@ -15,7 +15,7 @@ pub struct Lexer<'s, 'd> {
     pub source: &'s Source,
     pub dctx: &'d mut DiagnosticContext,
 
-    pub(crate) token_graph: TokenGraph,
+    pub token_graph: TokenGraph,
     offset: usize,
 }
 
@@ -24,7 +24,10 @@ impl<'s, 'd> Lexer<'s, 'd> {
         Self {
             source,
             dctx,
-            token_graph: TokenGraph::Collection(Vec::new()),
+            token_graph: TokenGraph::Collection {
+                data: Vec::new(),
+                eof: false,
+            },
             offset: 0,
         }
     }
@@ -136,12 +139,12 @@ impl<'s, 'd> Lexer<'s, 'd> {
             collection.push(tg);
         }
 
-        let TokenGraph::Collection(tg_col) = &mut self.token_graph else {
+        let TokenGraph::Collection { data, .. } = &mut self.token_graph else {
             unreachable!()
         };
 
-        std::mem::swap(tg_col, &mut collection);
-        dbg!(tg_col);
+        std::mem::swap(data, &mut collection);
+        dbg!(data);
         // self.tokens.iter().for_each(|token| println!("{token}"));
     }
 }

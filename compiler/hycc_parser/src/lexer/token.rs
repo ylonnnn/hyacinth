@@ -50,7 +50,7 @@ impl Display for Token {
 #[derive(Debug, Clone)]
 pub enum TokenGraph {
     Node(Token),
-    Collection(Vec<TokenGraph>),
+    Collection { data: Vec<TokenGraph>, eof: bool },
 }
 
 #[repr(u8)]

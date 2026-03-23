@@ -1,5 +1,11 @@
-use hycc_diagnostic::reporter::{CLIReporter, DiagnosticReporter};
-use hycc_parser::{lexer::Lexer, parser::Parser};
+use hycc_diagnostic::{
+    DiagnosticContext,
+    reporter::{CLIReporter, DiagnosticReporter},
+};
+use hycc_parser::{
+    lexer::Lexer,
+    parser::{Parser, diag_ctx::ParserDiagCtx},
+};
 use hycc_source::Source;
 
 use crate::session::Session;
@@ -13,8 +19,12 @@ pub fn compile(session: &mut Session) {
     let mut lexer = Lexer::new(session.source_registry.root(), &mut session.dctx);
     let tok_stream = lexer.tokenize();
 
-    #[allow(unused)]
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::new(
+        &session.source_registry.root(),
+        ParserDiagCtx::new(session.dctx.data_mut()),
+        tok_stream,
+    );
+    parser.parse();
 
     let reporter = CLIReporter::new(&session.dctx, &session.source_registry);
     reporter.report();

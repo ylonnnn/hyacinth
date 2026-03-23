@@ -142,7 +142,7 @@ impl HysmParser {
 
         if base == u32::MAX {
             // TODO: throw error invalid numeric litera prefix
-            // self.lexer.diagnostics.error(
+            // self.dctx.error(
             //     DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
             //     &format!(
             //         "invalid numeric literal prefix `{}`.",

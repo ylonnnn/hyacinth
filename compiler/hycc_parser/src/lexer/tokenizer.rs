@@ -334,10 +334,7 @@ impl<'l, 's, 'd> Tokenizer<'l, 's, 'd> {
 
                 self.lexer.dctx.error(
                     DiagnosticErrorKind::UnclosedDelimeterCollection.into(),
-                    &format!(
-                        "missing closing pair `{}` for  `{}`.",
-                        cl as char, op as char,
-                    ),
+                    &format!("missing closing `{}` for `{}`.", cl as char, op as char,),
                     op_tok.span.clone(),
                 );
             }

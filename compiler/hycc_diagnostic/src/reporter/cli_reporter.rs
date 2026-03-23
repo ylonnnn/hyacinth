@@ -88,7 +88,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                 highlight = !highlight;
                 ternary!(
                     highlight,
-                    (cs + severity_color).bold(),
+                    cs + &severity_color.bold(),
                     cs.reset().bright_white()
                 )
             })

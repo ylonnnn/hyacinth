@@ -11,7 +11,7 @@ pub fn start(root_path: &str) {
 
 pub fn compile(session: &mut Session) {
     let mut lexer = Lexer::new(session.source_registry.root(), &mut session.dctx);
-    lexer.tokenize();
+    let tok_stream = lexer.tokenize();
 
     #[allow(unused)]
     let mut parser = Parser::new(lexer);

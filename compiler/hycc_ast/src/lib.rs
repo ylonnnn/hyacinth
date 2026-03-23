@@ -4,6 +4,7 @@ pub mod path;
 mod program;
 pub mod stmt;
 pub mod token;
+pub mod token_stream;
 pub mod ty;
 
 pub use expr::{Expr, ExprKind};

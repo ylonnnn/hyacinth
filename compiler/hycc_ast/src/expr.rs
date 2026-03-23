@@ -83,8 +83,6 @@ impl LiteralExpr {
             Self::Int(tok) => tok.span,
             Self::Float(tok) => tok.span,
             Self::Bool(tok) => tok.span,
-            #[allow(unreachable_patterns)]
-            _ => unreachable!(),
         }
     }
 }

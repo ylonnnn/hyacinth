@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use hycc_ast::{
     token,
-    token::{Token, TokenGraph, TokenKind},
+    token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_diagnostic::{DiagnosticContext, code::DiagnosticErrorKind};
+use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx, code::DiagnosticErrorKind};
 use hycc_source::source::Source;
 use hycc_span::Span;
 use hycc_util::{hashmap, is_ascii_digit, ternary};
@@ -13,21 +13,21 @@ use hycc_util::{hashmap, is_ascii_digit, ternary};
 #[derive(Debug)]
 pub struct Lexer<'s, 'd> {
     pub source: &'s Source,
-    pub dctx: &'d mut DiagnosticContext,
+    pub dctx: &'d mut DiagnosticCtx,
 
     offset: u32,
     reserved: HashMap<&'static str, TokenKind>,
 }
 
 impl<'s, 'd> Lexer<'s, 'd> {
-    pub fn new(source: &'s Source, dctx: &'d mut DiagnosticContext) -> Self {
+    pub fn new(source: &'s Source, dctx: &'d mut DiagnosticCtx) -> Self {
         Self {
             source,
             dctx,
             offset: 0,
             reserved: hashmap! {
-                "fn" => TokenKind::Fn,
-                "let" => TokenKind::Let,
+                "fn" => TokenKind::Ident(TokenIdentKind::Fn),
+                "let" => TokenKind::Ident(TokenIdentKind::Let),
                 "true", "false" => TokenKind::Bool,
             },
         }
@@ -133,7 +133,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
         } else {
             match self.reserved.get(view) {
                 Some(kind) => token!(kind.clone(), span),
-                _ => token!(TokenKind::Ident, span),
+                _ => token!(TokenKind::Ident(TokenIdentKind::Normal), span),
             }
         }
     }
@@ -255,7 +255,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             cmp
         });
 
-        let diagnostics = &mut self.dctx;
+        let Diagnostics = &mut self.dctx;
         let span: Span = (
             start,
             (self.offset - start) as u16,
@@ -264,7 +264,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             .into();
 
         if !terminated {
-            diagnostics.error(
+            Diagnostics.error(
                 DiagnosticErrorKind::UnterminatedCharacterSequence.into(),
                 "unterminated character sequence.",
                 span,
@@ -280,7 +280,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
         // Char
         else {
             if seq_len != 1 {
-                diagnostics.error(
+                Diagnostics.error(
                     DiagnosticErrorKind::InvalidCharacterSequence.into(),
                     &format!(
                         "character sequence within `'` must contain exactly `{}` character, contains `{}`.",

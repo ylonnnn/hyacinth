@@ -54,13 +54,17 @@ pub enum TokenGraph {
 }
 
 impl TokenGraph {
-    pub fn expect(&self, kind: TokenKind) -> bool {
+    pub fn underlying(&self) -> Option<&Token> {
         match self {
-            Self::Node(token) => token.kind == kind,
-            Self::Collection { data, .. } => match data.get(0) {
-                Some(tg) => tg.expect(kind),
-                _ => false,
-            },
+            Self::Node(token) => Some(token),
+            Self::Collection { data, .. } => data.get(0)?.underlying(),
+        }
+    }
+
+    pub fn expect(&self, kind: TokenKind) -> bool {
+        match self.underlying() {
+            Some(tok) => tok.kind == kind,
+            _ => false,
         }
     }
 
@@ -88,7 +92,17 @@ impl Display for TokenGraph {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum TokenIdentKind {
+    Normal,
+
+    // Keywords
+    Fn,
+    Let,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum TokenKind {
     Int { base: u8 },
     Float { base: u8 },
@@ -96,12 +110,8 @@ pub enum TokenKind {
     Char { terminated: bool },
     String { terminated: bool },
 
-    Ident,
+    Ident(TokenIdentKind),
     MacroIdent,
-
-    // Keywords
-    Fn,
-    Let,
 
     // Operators
     Plus,
@@ -163,9 +173,11 @@ impl Display for TokenKind {
                 Self::Bool => "bool",
                 Self::Char { .. } => "char",
                 Self::String { .. } => "string",
-                Self::Ident => "ident",
-
-                Self::Let => "let",
+                Self::Ident(kind) => match kind {
+                    TokenIdentKind::Fn => "fn",
+                    TokenIdentKind::Let => "let",
+                    _ => "ident",
+                },
 
                 Self::Plus => "+",
                 Self::PlusPlus => "++",

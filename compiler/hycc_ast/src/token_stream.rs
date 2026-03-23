@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
+use hycc_source::Source;
 use hycc_util::ternary;
 
 use crate::token::{Token, TokenGraph, TokenKind};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenConsumptionKind {
     Absolute,
     Preserve,
@@ -111,7 +112,7 @@ impl TokenStream {
         let tok_graph = tok_graph.clone();
         let matched = tok_graph.expect(kind);
 
-        if matched && matches!(consumption, TokenConsumptionKind::UponSuccess) {
+        if matched && consumption == TokenConsumptionKind::UponSuccess {
             self.adjustn(offset + 1);
         }
 

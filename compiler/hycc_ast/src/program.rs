@@ -1,13 +1,12 @@
-use crate::{core::Program, syntax::Item};
+use crate::Item;
 
 #[derive(Debug)]
-pub struct ProgramNode<'program> {
-    pub program: &'program mut Program,
+pub struct Program {
     pub items: Vec<Item>,
 }
 
-impl<'program> ProgramNode<'program> {
-    pub fn new(program: &'program mut Program, items: Vec<Item>) -> Self {
-        Self { program, items }
+impl Program {
+    pub fn new(items: Vec<Item>) -> Self {
+        Self { items }
     }
 }

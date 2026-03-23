@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-hycc_parser = { path = "../hycc_parser" }
+hycc_span = { path = "../hycc_span" }
+hycc_util = { path = "../hycc_util" }

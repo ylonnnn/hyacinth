@@ -10,6 +10,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hycc_ast"
+version = "0.1.0"
+dependencies = [
+ "hycc_span",
+]
+
+[[package]]
 name = "hycc_diagnostic"
 version = "0.1.0"
 dependencies = [
@@ -22,6 +29,7 @@ dependencies = [
 name = "hycc_parser"
 version = "0.1.0"
 dependencies = [
+ "hycc_ast",
  "hycc_diagnostic",
  "hycc_source",
  "hycc_span",

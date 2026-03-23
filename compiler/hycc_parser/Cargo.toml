@@ -7,6 +7,7 @@ edition = "2024"
 hycc_source = { path = "../hycc_source" }
 hycc_diagnostic = { path = "../hycc_diagnostic" }
 
+hycc_ast = { path = "../hycc_ast" }
 hycc_span = { path = "../hycc_span" }
 
 hycc_util = { path = "../hycc_util" }

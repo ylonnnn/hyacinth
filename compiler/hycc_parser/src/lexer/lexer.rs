@@ -1,10 +1,14 @@
-use crate::lexer::{TokenKind, Tokenizer, token::TokenGraph};
+use std::collections::HashSet;
 
+use crate::lexer::Tokenizer;
+
+use hycc_ast::token::{Token, TokenGraph, TokenKind};
 use hycc_diagnostic::DiagnosticContext;
 use hycc_source::source::Source;
+use hycc_util::ternary;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TokenConsumptionType {
+#[derive(Debug, Clone)]
+pub enum TokenConsumptionKind {
     Absolute,
     Preserve,
     UponSuccess,
@@ -15,7 +19,7 @@ pub struct Lexer<'s, 'd> {
     pub source: &'s Source,
     pub dctx: &'d mut DiagnosticContext,
 
-    pub token_graph: TokenGraph,
+    pub stream: Vec<TokenGraph>,
     offset: usize,
 }
 
@@ -24,100 +28,111 @@ impl<'s, 'd> Lexer<'s, 'd> {
         Self {
             source,
             dctx,
-            token_graph: TokenGraph::Collection {
-                data: Vec::new(),
-                eof: false,
-            },
+            stream: Vec::new(),
             offset: 0,
         }
     }
 
-    // pub fn len(&self) -> usize {
-    //     self.tokens.len()
-    // }
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.stream.len()
+    }
 
-    // pub fn bsof(&self) -> bool {
-    //     self.offset == 0
-    // }
+    pub fn bsof(&self) -> bool {
+        self.offset == 0
+    }
 
-    // pub fn abs_eof(&self) -> bool {
-    //     self.eof(true)
-    // }
+    pub fn abs_eof(&self) -> bool {
+        self.eof(true)
+    }
 
-    // pub fn at_eof(&self) -> bool {
-    //     self.eof(false)
-    // }
+    pub fn at_eof(&self) -> bool {
+        self.eof(false)
+    }
 
-    // pub fn eof(&self, absolute: bool) -> bool {
-    //     self.offset >= (self.len() - (1 + (!absolute as usize)))
-    // }
+    pub fn eof(&self, absolute: bool) -> bool {
+        self.offset >= (self.stream.len() - (1 + (!absolute as usize)))
+    }
 
-    // pub fn peek(&self) -> Option<&Token> {
-    //     self.peekn(0)
-    // }
+    pub fn adjust(&mut self) {
+        self.adjustn(1)
+    }
 
-    // pub fn peekn(&self, offset: usize) -> Option<&Token> {
-    //     let pos = self.offset + offset;
-    //     ternary!(pos >= self.len() - 1, None, self.tokens.get(pos))
-    // }
+    pub fn adjustn(&mut self, n: usize) {
+        self.offset += n
+    }
 
-    // pub fn next(&mut self) -> Option<Token> {
-    //     self.consume(1);
-    //     Some(self.tokens.get(self.offset - 1)?.clone())
-    // }
+    pub fn peek(&self) -> Option<&TokenGraph> {
+        self.peekn(0)
+    }
 
-    // pub fn skip_while(&mut self, mut predicate: impl FnMut(&Token) -> bool) {
-    //     while let Some(token) = self.peek()
-    //         && predicate(token)
-    //     {
-    //         self.consume(1);
-    //     }
-    // }
+    pub fn peekn(&self, offset: usize) -> Option<&TokenGraph> {
+        let pos = self.offset + offset;
+        ternary!(pos >= self.len() - 1, None, self.stream.get(pos))
+    }
 
-    // pub fn skip_lf(&mut self) {
-    //     self.skip_while(|token| token.kind == TokenKind::LnFeed);
-    // }
+    pub fn next(&mut self) -> Option<TokenGraph> {
+        self.adjustn(1);
+        Some(self.stream.get(self.offset - 1)?.clone())
+    }
 
-    // pub fn current(&self) -> &Token {
-    //     &self.tokens[(self.offset - 1).clamp(0, self.len() - 1)]
-    // }
+    pub fn skip_while(&mut self, mut predicate: impl FnMut(&TokenGraph) -> bool) {
+        while let Some(token) = self.peek()
+            && predicate(token)
+        {
+            self.adjust();
+        }
+    }
 
-    // pub fn consume(&mut self, offset: usize) {
-    //     self.offset += offset
-    // }
+    pub fn skip_lf(&mut self) {
+        self.skip_while(|token| {
+            matches!(
+                token,
+                TokenGraph::Node(Token {
+                    kind: TokenKind::LnFeed,
+                    ..
+                })
+            )
+        });
+    }
 
-    // pub fn expect(
-    //     &mut self,
-    //     kind: TokenKind,
-    //     consumption: TokenConsumptionType,
-    //     exclude: Vec<TokenKind>,
-    // ) -> (Option<Token>, bool) {
-    //     let set: HashSet<TokenKind> = exclude.into_iter().collect();
+    pub fn current(&self) -> &TokenGraph {
+        self.stream
+            .get((self.offset - 1).clamp(0, self.len() - 1))
+            .unwrap()
+    }
 
-    //     let mut offset = 0;
-    //     while let Some(token) = self.peekn(offset) {
-    //         if !set.contains(&token.kind) {
-    //             break;
-    //         }
+    pub fn expect(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionKind,
+        exclude: Vec<TokenKind>,
+    ) -> (bool, Option<TokenGraph>) {
+        let set: HashSet<TokenKind> = exclude.into_iter().collect();
 
-    //         offset += 1;
-    //     }
+        // Skip excluded tokens whose kinds are within the token kind exclusion set
+        let mut offset = 0;
+        while let Some(TokenGraph::Node(token)) = self.peekn(offset) {
+            if set.contains(&token.kind) {
+                offset += 1;
+            } else {
+                break;
+            }
+        }
 
-    //     let Some(token) = self.peekn(offset) else {
-    //         return (None, false);
-    //     };
+        let Some(tok_graph) = self.peekn(offset) else {
+            return (false, None);
+        };
 
-    //     let token = token.clone();
-    //     if token.kind != kind {
-    //         return (Some(token), false);
-    //     }
+        let tok_graph = tok_graph.clone();
+        let matched = tok_graph.expect(kind);
 
-    //     if consumption == TokenConsumptionType::UponSuccess {
-    //         self.consume(offset + 1);
-    //     }
+        if matched && matches!(consumption, TokenConsumptionKind::UponSuccess) {
+            self.adjustn(offset + 1);
+        }
 
-    //     (Some(token.clone()), true)
-    // }
+        (matched, Some(tok_graph))
+    }
 
     pub fn tokenize(&mut self) {
         let mut tokenizer = Tokenizer::new(self);
@@ -139,12 +154,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             collection.push(tg);
         }
 
-        let TokenGraph::Collection { data, .. } = &mut self.token_graph else {
-            unreachable!()
-        };
-
-        std::mem::swap(data, &mut collection);
-        dbg!(data);
-        // self.tokens.iter().for_each(|token| println!("{token}"));
+        std::mem::swap(&mut self.stream, &mut collection);
+        self.stream.iter().for_each(|tg| println!("{tg}"));
     }
 }

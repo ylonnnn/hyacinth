@@ -1,15 +1,15 @@
-use hycc_diagnostic::DiagnosticContext;
-
-use crate::lexer::token::TokenGraph;
+use crate::lexer::Lexer;
 
 #[derive(Debug)]
-pub struct Parser<'d> {
-    dctx: &'d mut DiagnosticContext,
-    token_graph: TokenGraph,
+pub struct Parser<'l, 's> {
+    lexer: Lexer<'l, 's>,
 }
 
-impl<'d> Parser<'d> {
-    pub fn new(dctx: &'d mut DiagnosticContext, token_graph: TokenGraph) -> Self {
-        Self { dctx, token_graph }
+impl<'l, 's> Parser<'l, 's> {
+    pub fn new(lexer: Lexer<'l, 's>) -> Self {
+        Self { lexer }
+    }
+
+    pub fn parse(&mut self) {
     }
 }

@@ -53,6 +53,40 @@ pub enum TokenGraph {
     Collection { data: Vec<TokenGraph>, eof: bool },
 }
 
+impl TokenGraph {
+    pub fn expect(&self, kind: TokenKind) -> bool {
+        match self {
+            Self::Node(token) => token.kind == kind,
+            Self::Collection { data, .. } => match data.get(0) {
+                Some(tg) => tg.expect(kind),
+                _ => false,
+            },
+        }
+    }
+
+    fn fmt_with_indent(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+        match self {
+            Self::Node(token) => write!(f, "{token}"),
+            Self::Collection { data, .. } => {
+                write!(f, "[\n")?;
+                for tg in data {
+                    write!(f, "{: <indent$}", "", indent = (indent + 1) * 4)?;
+                    tg.fmt_with_indent(f, indent + 1)?;
+                    writeln!(f)?;
+                }
+
+                write!(f, "{: <indent$}]", "", indent = indent * 4)
+            }
+        }
+    }
+}
+
+impl Display for TokenGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_with_indent(f, 0)
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TokenKind {

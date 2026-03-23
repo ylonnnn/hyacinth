@@ -2,7 +2,7 @@ use crate::Position;
 
 use hycc_source::source::Source;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Span {
     pub offset: u32,
     pub len: u16,
@@ -16,6 +16,25 @@ impl Span {
             len,
             src_id: program_id,
         }
+    }
+
+    pub fn merge(&self, other: &Span) -> Span {
+        assert!(
+            self.src_id == other.src_id,
+            "both spans must have the same sources for them to be merged!"
+        );
+
+        let start = self.offset.min(other.offset);
+        Self::new(
+            start,
+            (self.end().max(other.end()) - start) as u16,
+            self.src_id,
+        )
+    }
+
+    #[inline]
+    pub const fn end(&self) -> u32 {
+        self.offset + self.len as u32
     }
 
     pub fn extend(mut self, n: u16) -> Self {

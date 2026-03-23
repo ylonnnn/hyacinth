@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{
-    lexer::{Lexer, Token, TokenKind, token::TokenGraph},
-    token,
-};
+use crate::lexer::Lexer;
 
+use hycc_ast::{
+    token,
+    token::{Token, TokenGraph, TokenKind},
+};
 use hycc_diagnostic::code::DiagnosticErrorKind;
 use hycc_span::Span;
 use hycc_util::{hashmap, is_ascii_digit, ternary};

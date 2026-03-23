@@ -1,5 +1,5 @@
 use crate::{
-    Diagnostic, DiagnosticContext, DiagnosticSeverity,
+    Diagnostic, DiagnosticContext, DiagnosticCtx, DiagnosticSeverity,
     reporter::{DiagnosticReportStatus, DiagnosticReporter},
 };
 
@@ -9,12 +9,12 @@ use hycc_util::{Style, color, style, ternary};
 
 #[derive(Debug)]
 pub struct CLIReporter<'d, 's> {
-    pub dctx: &'d DiagnosticContext,
+    pub dctx: &'d DiagnosticCtx,
     pub source_registry: &'s SourceRegistry,
 }
 
 impl<'d, 's> CLIReporter<'d, 's> {
-    pub fn new(dctx: &'d DiagnosticContext, source_registry: &'s SourceRegistry) -> Self {
+    pub fn new(dctx: &'d DiagnosticCtx, source_registry: &'s SourceRegistry) -> Self {
         Self {
             dctx,
             source_registry,
@@ -130,7 +130,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
     fn report(&self) -> DiagnosticReportStatus {
         let mut status: DiagnosticReportStatus = [0; 3];
 
-        self.dctx.data.iter().for_each(|diagnostic| {
+        self.dctx.data().iter().for_each(|diagnostic| {
             let formatted = self.format_diagnostic(diagnostic);
             status[diagnostic.severity as usize] += 1;
 

@@ -1,7 +1,8 @@
 use std::fmt::{self, Display};
 
-use crate::code::DiagnosticCode;
 use hycc_span::Span;
+
+use crate::code::DiagnosticCode;
 
 #[derive(Debug)]
 pub struct Diagnostic {
@@ -13,7 +14,7 @@ pub struct Diagnostic {
 }
 
 #[repr(u32)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticSeverity {
     Info,
     Warning,
@@ -34,6 +35,18 @@ impl Diagnostic {
             message,
             details: Vec::new(),
         }
+    }
+
+    pub fn is_info(&self) -> bool {
+        self.severity == DiagnosticSeverity::Info
+    }
+
+    pub fn is_warning(&self) -> bool {
+        self.severity == DiagnosticSeverity::Warning
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.severity == DiagnosticSeverity::Error
     }
 
     pub fn add_detail(&mut self, detail: Diagnostic) -> &mut Self {
@@ -67,53 +80,71 @@ impl Display for DiagnosticSeverity {
     }
 }
 
-#[derive(Debug)]
-pub struct DiagnosticContext {
-    pub data: Vec<Diagnostic>,
-}
+pub trait DiagnosticContext {
+    fn data(&self) -> &Vec<Diagnostic>;
+    fn data_mut(&mut self) -> &mut Vec<Diagnostic>;
 
-impl DiagnosticContext {
-    pub fn new() -> Self {
-        Self { data: Vec::new() }
+    fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
+        let data = self.data_mut();
+
+        data.push(diagnostic);
+        data.last_mut()
     }
 
-    pub fn add(&mut self, diagnostic: Diagnostic) -> &mut Diagnostic {
-        self.data.push(diagnostic);
-        self.data.last_mut().unwrap()
-    }
-
-    pub fn info(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
+    fn info(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
         self.add(Diagnostic::new(
             span,
             DiagnosticSeverity::Info,
             code,
             message.into(),
         ))
+        .unwrap()
     }
 
-    pub fn warn(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
+    fn warn(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
         self.add(Diagnostic::new(
             span,
             DiagnosticSeverity::Warning,
             code,
             message.into(),
         ))
+        .unwrap()
     }
 
-    pub fn error(&mut self, code: DiagnosticCode, message: &str, span: Span) -> &Diagnostic {
-        self.add(Diagnostic::new(
-            span,
-            DiagnosticSeverity::Error,
-            code,
-            message.into(),
-        ))
+    fn error(&mut self, code: DiagnosticCode, message: &str, span: Span) -> Option<&Diagnostic> {
+        Some(
+            self.add(Diagnostic::new(
+                span,
+                DiagnosticSeverity::Error,
+                code,
+                message.into(),
+            ))
+            .unwrap(),
+        )
     }
 }
 
-impl Default for DiagnosticContext {
+#[derive(Debug)]
+pub struct DiagnosticCtx(Vec<Diagnostic>);
+
+impl Default for DiagnosticCtx {
     fn default() -> Self {
-        Self {
-            data: Vec::with_capacity(32),
-        }
+        Self(Vec::with_capacity(32))
+    }
+}
+
+impl DiagnosticCtx {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl DiagnosticContext for DiagnosticCtx {
+    fn data(&self) -> &Vec<Diagnostic> {
+        &self.0
+    }
+
+    fn data_mut(&mut self) -> &mut Vec<Diagnostic> {
+        &mut self.0
     }
 }

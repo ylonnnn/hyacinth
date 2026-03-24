@@ -1,18 +1,23 @@
 use crate::{Expr, Ty, token::Token};
 
 use hycc_span::Span;
+use hycc_util::ternary;
 
 #[derive(Debug, Clone)]
 pub struct Identifier {
     pub ident: Token,
-    pub arguments: IdentifierArguments,
+    pub arguments: Option<IdentifierArguments>,
     pub span: Span,
 }
 
 impl Identifier {
-    pub fn new(ident: Token, arguments: IdentifierArguments) -> Self {
+    pub fn new(ident: Token, arguments: Option<IdentifierArguments>) -> Self {
         Self {
-            span: ident.span.merge(&arguments.span),
+            span: ternary!(
+                arguments.is_some(),
+                ident.span.merge(&arguments.as_ref().unwrap().span),
+                ident.span
+            ),
             ident,
             arguments,
         }
@@ -21,20 +26,14 @@ impl Identifier {
 
 #[derive(Debug, Clone)]
 pub enum IdentifierArgument {
-    Expr(Expr),
-    Ty(Ty),
+    Expr(Box<Expr>),
+    Ty(Box<Ty>),
 }
 
 #[derive(Debug, Clone)]
 pub struct IdentifierArguments {
     pub data: Vec<IdentifierArgument>,
     pub span: Span,
-}
-
-impl IdentifierArguments {
-    pub fn new(data: Vec<IdentifierArgument>, span: Span) -> Self {
-        Self { data, span }
-    }
 }
 
 #[derive(Debug, Clone)]

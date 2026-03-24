@@ -13,6 +13,8 @@ pub struct Parser<'d, 's> {
     pub(super) stream: TokenStream,
     pub(super) dctx: ParserDiagCtx<'d>,
     pub(super) source: &'s Source,
+
+    pub(super) generic_delimeter_encounters: usize,
 }
 
 impl<'d, 's> Parser<'d, 's> {
@@ -21,7 +23,14 @@ impl<'d, 's> Parser<'d, 's> {
             stream,
             dctx,
             source,
+
+            generic_delimeter_encounters: 0,
         }
+    }
+
+    pub fn adjust_to_nonlf(&mut self) {
+        self.stream
+            .adjustn(self.stream.first_not_offset(vec![TokenKind::LnFeed]));
     }
 
     pub fn peek_nonlf(&mut self) -> Option<&TokenGraph> {
@@ -48,6 +57,51 @@ impl<'d, 's> Parser<'d, 's> {
         let offset = self.stream.first_not_offset(vec![TokenKind::LnFeed]);
         self.stream.adjustn(offset);
         Some(self.stream.current().clone())
+    }
+
+    pub fn expect_nonlf(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionKind,
+        expectation: TokenMatchExpectation,
+    ) -> (bool, Option<TokenGraph>) {
+        self.stream
+            .expect(kind, consumption, vec![TokenKind::LnFeed], expectation)
+    }
+
+    pub fn expect_exact_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::UponSuccess,
+            TokenMatchExpectation::Exact,
+        )
+    }
+
+    pub fn expect_preserved_exact_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::Preserve,
+            TokenMatchExpectation::Exact,
+        )
+    }
+
+    pub fn expect_similar_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::UponSuccess,
+            TokenMatchExpectation::Similar,
+        )
+    }
+
+    pub fn expect_preserved_similar_nonlf(
+        &mut self,
+        kind: TokenKind,
+    ) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::Preserve,
+            TokenMatchExpectation::Similar,
+        )
     }
 
     pub fn require(

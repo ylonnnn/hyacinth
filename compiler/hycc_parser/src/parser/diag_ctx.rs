@@ -25,6 +25,10 @@ impl<'d> ParserDiagCtx<'d> {
     pub fn is(&self, state: ParserDiagCtxState) -> bool {
         self.state == state
     }
+
+    pub fn is_in_disarray(&self) -> bool {
+        self.is(ParserDiagCtxState::Disarray)
+    }
 }
 
 impl<'d> DiagnosticContext for ParserDiagCtx<'d> {
@@ -37,14 +41,19 @@ impl<'d> DiagnosticContext for ParserDiagCtx<'d> {
     }
 
     fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
-        if self.is(ParserDiagCtxState::Disarray) && diagnostic.is_error() {
-            None
-        } else {
-            let data = self.data_mut();
+        let is_err = diagnostic.is_error();
+        if is_err {
+            if self.is(ParserDiagCtxState::Disarray) {
+                return None;
+            }
 
-            data.push(diagnostic);
-            data.last_mut()
+            self.state = ParserDiagCtxState::Disarray;
         }
+
+        let data = self.data_mut();
+
+        data.push(diagnostic);
+        data.last_mut()
     }
 
     fn error(

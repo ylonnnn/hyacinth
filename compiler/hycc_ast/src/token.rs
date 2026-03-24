@@ -61,9 +61,17 @@ impl TokenGraph {
         }
     }
 
-    pub fn expect(&self, kind: TokenKind) -> bool {
+    pub fn is(&self, kind: TokenKind) -> bool {
         match self.underlying() {
             Some(tok) => tok.kind == kind,
+            _ => false,
+        }
+    }
+
+    pub fn is_like(&self, kind: TokenKind) -> bool {
+        use std::mem::discriminant;
+        match self.underlying() {
+            Some(tok) => discriminant(&tok.kind) == discriminant(&kind),
             _ => false,
         }
     }

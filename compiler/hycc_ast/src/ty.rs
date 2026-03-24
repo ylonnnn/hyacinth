@@ -38,9 +38,3 @@ pub struct Array {
     pub ty: Box<Ty>,
     pub span: Span,
 }
-
-impl Array {
-    pub fn new(size: Box<Expr>, ty: Box<Ty>, span: Span) -> Self {
-        Self { size, ty, span }
-    }
-}

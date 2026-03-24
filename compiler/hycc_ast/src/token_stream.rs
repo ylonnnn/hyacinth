@@ -1,6 +1,5 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display};
 
-use hycc_source::Source;
 use hycc_util::ternary;
 
 use crate::token::{Token, TokenGraph, TokenKind};
@@ -10,6 +9,12 @@ pub enum TokenConsumptionKind {
     Absolute,
     Preserve,
     UponSuccess,
+}
+
+#[derive(Debug, Clone)]
+pub enum TokenMatchExpectation {
+    Exact,
+    Similar,
 }
 
 #[derive(Debug)]
@@ -87,16 +92,10 @@ impl TokenStream {
             .unwrap()
     }
 
-    pub fn expect(
-        &mut self,
-        kind: TokenKind,
-        consumption: TokenConsumptionKind,
-        exclude: Vec<TokenKind>,
-    ) -> (bool, Option<TokenGraph>) {
-        let set: HashSet<TokenKind> = exclude.into_iter().collect();
-
-        // Skip excluded tokens whose kinds are within the token kind exclusion set
+    pub fn first_not_offset(&self, exclude: Vec<TokenKind>) -> usize {
+        let set: HashSet<_> = exclude.into_iter().collect();
         let mut offset = 0;
+
         while let Some(TokenGraph::Node(token)) = self.peekn(offset) {
             if set.contains(&token.kind) {
                 offset += 1;
@@ -105,17 +104,59 @@ impl TokenStream {
             }
         }
 
+        offset
+    }
+
+    pub fn expect(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionKind,
+        exclude: Vec<TokenKind>,
+        expectation: TokenMatchExpectation,
+    ) -> (bool, Option<TokenGraph>) {
+        let offset = self.first_not_offset(exclude);
         let Some(tok_graph) = self.peekn(offset) else {
             return (false, None);
         };
 
         let tok_graph = tok_graph.clone();
-        let matched = tok_graph.expect(kind);
+        let matched = match expectation {
+            TokenMatchExpectation::Exact => tok_graph.is(kind),
+            TokenMatchExpectation::Similar => tok_graph.is_like(kind),
+        };
 
         if matched && consumption == TokenConsumptionKind::UponSuccess {
             self.adjustn(offset + 1);
         }
 
         (matched, Some(tok_graph))
+    }
+
+    pub fn expect_exact(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionKind,
+        exclude: Vec<TokenKind>,
+    ) -> (bool, Option<TokenGraph>) {
+        self.expect(kind, consumption, exclude, TokenMatchExpectation::Exact)
+    }
+
+    pub fn expect_similar(
+        &mut self,
+        kind: TokenKind,
+        consumption: TokenConsumptionKind,
+        exclude: Vec<TokenKind>,
+    ) -> (bool, Option<TokenGraph>) {
+        self.expect(kind, consumption, exclude, TokenMatchExpectation::Similar)
+    }
+}
+
+impl Display for TokenStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for tg in &self.data {
+            writeln!(f, "{tg}")?;
+        }
+
+        Ok(())
     }
 }

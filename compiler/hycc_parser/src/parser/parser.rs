@@ -1,6 +1,6 @@
 use hycc_ast::{
     Program,
-    token::{TokenGraph, TokenKind},
+    token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_diagnostic::DiagnosticContext;
@@ -16,6 +16,8 @@ pub struct Parser<'d, 's> {
 
     pub(super) generic_delimeter_encounters: usize,
 }
+
+pub type ParseResult<T> = Result<T, bool>;
 
 impl<'d, 's> Parser<'d, 's> {
     pub fn new(source: &'s Source, dctx: ParserDiagCtx<'d>, stream: TokenStream) -> Self {
@@ -33,7 +35,7 @@ impl<'d, 's> Parser<'d, 's> {
             .adjustn(self.stream.first_not_offset(vec![TokenKind::LnFeed]));
     }
 
-    pub fn peek_nonlf(&mut self) -> Option<&TokenGraph> {
+    pub fn peek_nonlf(&self) -> Option<&TokenGraph> {
         self.peekn_nonlf(0)
     }
 
@@ -53,10 +55,18 @@ impl<'d, 's> Parser<'d, 's> {
         }
     }
 
+    pub fn peek_nonlf_token(&self) -> Option<&Token> {
+        self.peek_nonlf()?.underlying()
+    }
+
     pub fn next_nonlf(&mut self) -> Option<TokenGraph> {
-        let offset = self.stream.first_not_offset(vec![TokenKind::LnFeed]);
+        let offset = self.stream.first_not_offset(vec![TokenKind::LnFeed]) + 1;
         self.stream.adjustn(offset);
         Some(self.stream.current().clone())
+    }
+
+    pub fn next_nonlf_token(&mut self) -> Option<Token> {
+        Some(self.next_nonlf()?.underlying()?.clone())
     }
 
     pub fn expect_nonlf(
@@ -135,19 +145,33 @@ impl<'d, 's> Parser<'d, 's> {
     }
 
     pub fn require_exact_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
-        self.require(
+        self.require_nonlf(
             kind,
             TokenConsumptionKind::UponSuccess,
-            vec![TokenKind::LnFeed],
             TokenMatchExpectation::Exact,
         )
     }
 
     pub fn require_similar_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
-        self.require(
+        self.require_nonlf(
             kind,
             TokenConsumptionKind::UponSuccess,
-            vec![TokenKind::LnFeed],
+            TokenMatchExpectation::Similar,
+        )
+    }
+
+    pub fn require_abs_exact_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+        self.require_nonlf(
+            kind,
+            TokenConsumptionKind::Absolute,
+            TokenMatchExpectation::Exact,
+        )
+    }
+
+    pub fn require_abs_similar_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+        self.require_nonlf(
+            kind,
+            TokenConsumptionKind::Absolute,
             TokenMatchExpectation::Similar,
         )
     }
@@ -163,12 +187,23 @@ impl<'d, 's> Parser<'d, 's> {
     }
 
     pub fn parse(&mut self) -> Program {
-        let program = Program::new(Vec::new());
+        let mut program = Program::new(Vec::new());
 
         while !self.stream.at_eof() {
-            self.parse_item();
+            if let Ok(item) = self.parse_item_with_recovery() {
+                program.items.push(item);
+            }
         }
 
         program
+    }
+
+    pub fn try_sync(&mut self, with: Vec<TokenKind>) {
+        if self.dctx.is_in_disarray() {
+            dbg!(&with);
+            self.stream
+                .adjustn(dbg!(self.stream.first_of_offset(with)) + 1);
+            self.dctx.sync();
+        }
     }
 }

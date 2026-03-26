@@ -22,6 +22,10 @@ impl<'d> ParserDiagCtx<'d> {
         }
     }
 
+    pub fn sync(&mut self) {
+        self.state = ParserDiagCtxState::Synchronized
+    }
+
     pub fn is(&self, state: ParserDiagCtxState) -> bool {
         self.state == state
     }

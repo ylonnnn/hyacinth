@@ -21,11 +21,16 @@ pub enum TokenMatchExpectation {
 pub struct TokenStream {
     data: Vec<TokenGraph>,
     offset: usize,
+    saved_offset: usize,
 }
 
 impl TokenStream {
     pub fn new(data: Vec<TokenGraph>) -> Self {
-        Self { data, offset: 0 }
+        Self {
+            data,
+            offset: 0,
+            saved_offset: 0,
+        }
     }
 
     pub fn bsof(&self) -> bool {
@@ -52,6 +57,14 @@ impl TokenStream {
         self.offset += n
     }
 
+    pub fn save_offset(&mut self) {
+        self.saved_offset = self.offset;
+    }
+
+    pub fn revert(&mut self) {
+        self.offset = self.saved_offset;
+    }
+
     pub fn peek(&self) -> Option<&TokenGraph> {
         self.peekn(0)
     }
@@ -64,6 +77,12 @@ impl TokenStream {
     pub fn next(&mut self) -> Option<TokenGraph> {
         self.adjustn(1);
         Some(self.data.get(self.offset - 1)?.clone())
+    }
+
+    pub fn current(&self) -> &TokenGraph {
+        self.data
+            .get(self.offset.saturating_sub(1).clamp(0, self.data.len() - 1))
+            .unwrap()
     }
 
     pub fn skip_while(&mut self, mut predicate: impl FnMut(&TokenGraph) -> bool) {
@@ -86,10 +105,19 @@ impl TokenStream {
         });
     }
 
-    pub fn current(&self) -> &TokenGraph {
-        self.data
-            .get((self.offset - 1).clamp(0, self.data.len() - 1))
-            .unwrap()
+    pub fn first_of_offset(&self, include: Vec<TokenKind>) -> usize {
+        let set: HashSet<_> = include.into_iter().collect();
+        let mut offset = 0;
+
+        while let Some(TokenGraph::Node(token)) = self.peekn(offset) {
+            if !set.contains(&token.kind) {
+                offset += 1;
+            } else {
+                break;
+            }
+        }
+
+        offset
     }
 
     pub fn first_not_offset(&self, exclude: Vec<TokenKind>) -> usize {
@@ -120,6 +148,10 @@ impl TokenStream {
         };
 
         let tok_graph = tok_graph.clone();
+        if consumption == TokenConsumptionKind::Absolute {
+            self.adjustn(offset + 1);
+        }
+
         let matched = match expectation {
             TokenMatchExpectation::Exact => tok_graph.is(kind),
             TokenMatchExpectation::Similar => tok_graph.is_like(kind),

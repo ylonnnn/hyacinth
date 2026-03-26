@@ -4,28 +4,37 @@ use hycc_ast::{
     token_stream::TokenStream,
 };
 
-use crate::parser::Parser;
+use crate::parser::{Parser, parser::ParseResult};
 
 impl<'d, 's> Parser<'d, 's> {
-    pub fn parse_block(&mut self) -> Option<Block> {
-        let TokenGraph::Collection { data, .. } = self.require_exact_nonlf(TokenKind::LeftBrace)?
+    pub fn parse_block(&mut self) -> ParseResult<Block> {
+        let Some(TokenGraph::Collection { data, .. }) =
+            self.require_exact_nonlf(TokenKind::LeftBrace)
         else {
-            return None;
+            return Err(true);
         };
 
-        self.use_stream(TokenStream::new(data), |s| -> Option<Block> {
-            let span = s.stream.next()?.underlying()?.span;
+        self.use_stream(TokenStream::new(data), |s| -> ParseResult<Block> {
+            let Some(tok) = s.next_nonlf_token() else {
+                return Err(false);
+            };
 
+            let span = tok.span;
             let mut stmts = Vec::new();
+
             while !s.stream.at_eof() {
-                if let Some(stmt) = s.parse_stmt() {
+                if let Ok(stmt) = s.parse_stmt_with_recovery() {
                     stmts.push(stmt)
                 }
             }
 
-            Some(Block {
+            let Some(tok) = s.next_nonlf_token() else {
+                return Err(false);
+            };
+
+            Ok(Block {
                 stmts,
-                span: s.stream.next()?.underlying()?.span.merge(&span),
+                span: tok.span.merge(&span),
             })
         })
     }

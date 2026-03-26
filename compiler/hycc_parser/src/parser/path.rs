@@ -4,24 +4,29 @@ use hycc_ast::{
     token::{Token, TokenIdentKind, TokenKind},
 };
 
-use crate::parser::Parser;
+use crate::parser::{Parser, parser::ParseResult};
 
 impl<'d, 's> Parser<'d, 's> {
-    pub fn parse_raw_ident(&mut self) -> Option<Token> {
-        Some(
-            self.require_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))?
-                .underlying()?
-                .clone(),
-        )
+    pub fn parse_raw_ident(&mut self) -> ParseResult<Token> {
+        let Some(tg) = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))
+        else {
+            return Err(true);
+        };
+
+        let Some(tok) = tg.underlying() else {
+            return Err(false);
+        };
+
+        Ok(tok.clone())
     }
 
     // IDENT (:: IDENT)*
-    pub fn parse_path(&mut self) -> Option<Path> {
+    pub fn parse_path(&mut self) -> ParseResult<Path> {
         todo!()
     }
 
     // RAW_IDENT < GENERIC_ARG (, GENERIC_ARG)* >
-    pub fn parse_ident(&mut self) -> Option<Identifier> {
+    pub fn parse_ident(&mut self) -> ParseResult<Identifier> {
         // RAW_IDENT
         let raw_ident = self.parse_raw_ident();
 
@@ -69,7 +74,7 @@ impl<'d, 's> Parser<'d, 's> {
 
                 // Revert to the initial position/offset
 
-                return Some(Identifier::new(raw_ident?, None));
+                return Ok(Identifier::new(raw_ident?, None));
             }
 
             // If not misinterpreted, simply emit an error
@@ -77,7 +82,7 @@ impl<'d, 's> Parser<'d, 's> {
             self.require_exact_nonlf(TokenKind::Greater);
         }
 
-        Some(Identifier::new(raw_ident?, args))
+        Ok(Identifier::new(raw_ident?, args))
     }
 
     // < GENERIC_ARG (, GENERIC_ARG) >

@@ -255,7 +255,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             cmp
         });
 
-        let Diagnostics = &mut self.dctx;
+        let diagnostics = &mut self.dctx;
         let span: Span = (
             start,
             (self.offset - start) as u16,
@@ -264,7 +264,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             .into();
 
         if !terminated {
-            Diagnostics.error(
+            diagnostics.error(
                 DiagnosticErrorKind::UnterminatedCharacterSequence.into(),
                 "unterminated character sequence.",
                 span,
@@ -280,7 +280,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
         // Char
         else {
             if seq_len != 1 {
-                Diagnostics.error(
+                diagnostics.error(
                     DiagnosticErrorKind::InvalidCharacterSequence.into(),
                     &format!(
                         "character sequence within `'` must contain exactly `{}` character, contains `{}`.",

@@ -1,4 +1,4 @@
-use hycc_ast::{Stmt, StmtKind, token::TokenKind};
+use hycc_ast::{Stmt, StmtKind};
 
 use crate::parser::Parser;
 
@@ -11,7 +11,7 @@ impl<'d, 's> Parser<'d, 's> {
 
         match tok.kind {
             // TODO: implement other statements
-            TokenKind::Ident(..) => None,
+            // TokenKind::Ident(..) => None,
             _ => {
                 if let Some(item) = self.parse_item() {
                     Some(Stmt::new(StmtKind::Item(item)))

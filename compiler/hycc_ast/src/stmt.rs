@@ -2,10 +2,11 @@ use crate::{Expr, Item};
 
 use hycc_span::Span;
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum StmtKind {
-    Expr(Expr),
-    Item(Item),
+    Expr(Box<Expr>),
+    Item(Box<Item>),
 }
 
 impl StmtKind {

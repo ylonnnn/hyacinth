@@ -14,28 +14,27 @@ impl<'d, 's> Parser<'d, 's> {
             return Err(true);
         };
 
-        self.use_stream(TokenStream::new(data), |s| -> ParseResult<Block> {
-            let Some(tok) = s.next_nonlf_token() else {
-                return Err(false);
-            };
+        let n = data.len();
+        let span = data
+            .first()
+            .unwrap()
+            .underlying()
+            .unwrap()
+            .span
+            .merge(&data.last().unwrap().underlying().unwrap().span);
 
-            let span = tok.span;
-            let mut stmts = Vec::new();
-
-            while !s.stream.at_eof() {
-                if let Ok(stmt) = s.parse_stmt_with_recovery() {
-                    stmts.push(stmt)
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> ParseResult<Block> {
+                let mut stmts = Vec::new();
+                while !s.stream.at_eof() {
+                    if let Ok(stmt) = s.parse_stmt_with_recovery() {
+                        stmts.push(stmt)
+                    }
                 }
-            }
 
-            let Some(tok) = s.next_nonlf_token() else {
-                return Err(false);
-            };
-
-            Ok(Block {
-                stmts,
-                span: tok.span.merge(&span),
-            })
-        })
+                Ok(Block { stmts, span })
+            },
+        )
     }
 }

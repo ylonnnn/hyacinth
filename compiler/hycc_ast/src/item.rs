@@ -3,10 +3,11 @@ use crate::{Block, Expr, Ty, token::Token};
 use hycc_span::Span;
 use hycc_util::ternary;
 
+#[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum ItemKind {
-    VarDecl(VarDecl),
-    Fn(Fn),
+    Fn(Box<Fn>),
+    VarDecl(Box<VarDecl>),
 }
 
 impl ItemKind {
@@ -36,24 +37,22 @@ impl Item {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
     pub ident: Token,
-    pub comp: VarDeclComposition,
-}
-
-#[derive(Debug, Clone)]
-pub enum VarDeclComposition {
-    TypeAnnotated(Box<Ty>),
-    ValueInitialized(Box<Expr>),
-    Full(Box<Ty>, Box<Expr>),
+    pub ty: Option<Box<Ty>>,
+    pub val: Option<Box<Expr>>,
 }
 
 impl VarDecl {
     pub fn span(&self) -> Span {
-        self.ident.span.merge(&match &self.comp {
-            VarDeclComposition::TypeAnnotated(ty) => ty.span,
-            VarDeclComposition::ValueInitialized(expr) | VarDeclComposition::Full(_, expr) => {
-                expr.span
-            }
-        })
+        assert!(
+            self.ty.is_some() || self.val.is_some(),
+            "variable declarations must have either an explicit type annotation, or an initializer value"
+        );
+
+        self.ident.span.merge(&ternary!(
+            self.val.is_some(),
+            self.val.as_ref().unwrap().span,
+            self.ty.as_ref().unwrap().span
+        ))
     }
 }
 

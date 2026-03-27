@@ -10,9 +10,13 @@ pub(crate) mod errors {
             DiagnosticSeverity::Error,
             DiagnosticErrorKind::UnexpectedToken.into(),
             format!(
-                "unexpected `{}`, {}.",
+                "unexpected `{}`{}.",
                 token.view(&source.data).replace("\n", "\\n"),
-                ternary!(expected.is_some(), expected.unwrap(), "")
+                ternary!(
+                    expected.is_some(),
+                    format!(", {}", expected.unwrap()),
+                    "".into()
+                )
             ),
         )
     }

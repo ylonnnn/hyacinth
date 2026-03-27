@@ -40,19 +40,19 @@ impl<'d, 's> Parser<'d, 's> {
     }
 
     pub fn peekn_nonlf(&self, mut offset: usize) -> Option<&TokenGraph> {
-        loop {
-            let tg = self.stream.peekn(offset);
-            let Some(tg) = tg else {
-                break tg;
+        while let Some(tg) = self.stream.peekn(offset) {
+            let Some(tok) = tg.underlying() else {
+                return None;
             };
 
-            if tg.underlying()?.kind != TokenKind::LnFeed {
-                break Some(tg);
+            if tok.kind != TokenKind::LnFeed {
+                return Some(tg);
             }
 
-            offset += 1;
-            continue;
+            offset += 1
         }
+
+        None
     }
 
     pub fn peek_nonlf_token(&self) -> Option<&Token> {
@@ -95,6 +95,14 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
+    pub fn expect_abs_exact_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::Absolute,
+            TokenMatchExpectation::Exact,
+        )
+    }
+
     pub fn expect_similar_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
         self.expect_nonlf(
             kind,
@@ -110,6 +118,14 @@ impl<'d, 's> Parser<'d, 's> {
         self.expect_nonlf(
             kind,
             TokenConsumptionKind::Preserve,
+            TokenMatchExpectation::Similar,
+        )
+    }
+
+    pub fn expect_abs_similar_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
+        self.expect_nonlf(
+            kind,
+            TokenConsumptionKind::Absolute,
             TokenMatchExpectation::Similar,
         )
     }
@@ -198,12 +214,14 @@ impl<'d, 's> Parser<'d, 's> {
         program
     }
 
+    pub fn sync(&mut self, with: Vec<TokenKind>) {
+        self.stream.adjustn(self.stream.first_of_offset(with) + 1);
+        self.dctx.sync();
+    }
+
     pub fn try_sync(&mut self, with: Vec<TokenKind>) {
         if self.dctx.is_in_disarray() {
-            dbg!(&with);
-            self.stream
-                .adjustn(dbg!(self.stream.first_of_offset(with)) + 1);
-            self.dctx.sync();
+            self.sync(with);
         }
     }
 }

@@ -33,6 +33,10 @@ impl TokenStream {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     pub fn bsof(&self) -> bool {
         self.offset == 0
     }
@@ -46,7 +50,7 @@ impl TokenStream {
     }
 
     pub fn eof(&self, absolute: bool) -> bool {
-        self.offset >= (self.data.len() - (1 + (!absolute as usize)))
+        self.offset >= (self.data.len() - (!absolute as usize))
     }
 
     pub fn adjust(&mut self) {
@@ -71,7 +75,7 @@ impl TokenStream {
 
     pub fn peekn(&self, offset: usize) -> Option<&TokenGraph> {
         let pos = self.offset + offset;
-        ternary!(pos >= self.data.len() - 1, None, self.data.get(pos))
+        ternary!(pos >= self.data.len(), None, self.data.get(pos))
     }
 
     pub fn next(&mut self) -> Option<TokenGraph> {
@@ -185,6 +189,7 @@ impl TokenStream {
 
 impl Display for TokenStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        println!("offset: {}", self.offset);
         for tg in &self.data {
             writeln!(f, "{tg}")?;
         }

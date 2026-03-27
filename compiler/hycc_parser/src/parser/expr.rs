@@ -1,6 +1,11 @@
-use hycc_ast::{Expr, token::TokenKind};
+use hycc_ast::{Expr, ExprKind, token::TokenKind};
+use hycc_diagnostic::DiagnosticContext;
+use hycc_util::ternary;
 
-use crate::parser::{Parser, parser::ParseResult};
+use crate::{
+    errors,
+    parser::{Parser, parser::ParseResult},
+};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -38,13 +43,14 @@ impl<'d, 's> Parser<'d, 's> {
                 return Err(false);
             };
 
-            if let Some((lbp, _)) = Self::expr_infix_binding_power_of(tok.kind)
-                && min_bp > lbp
-            {
-                break;
+            let rbp = match Self::expr_infix_binding_power_of(tok.kind) {
+                Some((_, rbp)) => ternary!(min_bp > rbp, break, rbp),
+                _ => {
+                    break;
+                }
             };
 
-            let Ok(infix) = self.parse_infix_expr() else {
+            let Ok(infix) = self.parse_infix_expr(&prefix, rbp) else {
                 break;
             };
 
@@ -67,26 +73,37 @@ impl<'d, 's> Parser<'d, 's> {
             // | TokenKind::String { .. } => {
             //     todo!("parse literals")
             // }
+            TokenKind::Ident(..) => match self.parse_path() {
+                Ok(expr) => Ok(Expr::new(ExprKind::Path(Box::new(expr)))),
+                Err(_) => Err(true)?,
+            },
 
-            // TokenKind::Ident(..) => {
-            //     todo!("parse identifiers")
-            // }
             _ => {
-                // TODO: throw an error: unexpected token or something
-                Err(false)
+                self.dctx.add(errors::unexpected_token(
+                    self.source,
+                    &token,
+                    Some("expected expr prefix token"),
+                ));
+
+                Err(true)
             }
         }
     }
 
-    pub fn parse_infix_expr(&mut self) -> ParseResult<Expr> {
+    pub fn parse_infix_expr(&mut self, _left: &Expr, _min_bp: u8) -> ParseResult<Expr> {
         let Some(token) = self.peek_nonlf_token() else {
             return Err(false);
         };
 
         match token.kind {
             _ => {
-                // TODO: throw an error: unexpected token or something
-                Err(false)
+                self.dctx.add(errors::unexpected_token(
+                    self.source,
+                    &token,
+                    Some("expected expr infix token"),
+                ));
+
+                Err(true)
             }
         }
     }

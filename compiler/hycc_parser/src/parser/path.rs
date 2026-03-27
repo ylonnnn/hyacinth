@@ -22,7 +22,16 @@ impl<'d, 's> Parser<'d, 's> {
 
     // IDENT (:: IDENT)*
     pub fn parse_path(&mut self) -> ParseResult<Path> {
-        todo!()
+        let lead = self.parse_ident()?;
+        let mut path = Path::new(vec![lead]);
+
+        while self.expect_exact_nonlf(TokenKind::ColonColon).0 {
+            path.add(self.parse_ident()?)
+        }
+
+        println!("peek: {:?}", self.peek_nonlf());
+
+        Ok(path)
     }
 
     // RAW_IDENT < GENERIC_ARG (, GENERIC_ARG)* >
@@ -38,6 +47,7 @@ impl<'d, 's> Parser<'d, 's> {
         if let (matched, Some(_)) = self.expect_preserved_exact_nonlf(TokenKind::Less)
             && matched
         {
+            println!("in generic args");
             closed = false;
             args = self.parse_ident_args();
 
@@ -61,6 +71,8 @@ impl<'d, 's> Parser<'d, 's> {
                 }
             }
         }
+
+        println!("closed: {closed}");
 
         if !closed {
             // If the argument count of is less than or equal to one (1),

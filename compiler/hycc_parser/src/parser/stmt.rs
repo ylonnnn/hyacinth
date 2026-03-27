@@ -36,24 +36,41 @@ impl<'d, 's> Parser<'d, 's> {
     }
 
     pub fn try_parse_stmt(&mut self) -> ParseResult<Stmt> {
+        self.stream.save_offset();
         let Some(tok) = self.next_nonlf_token() else {
             return Err(false);
         };
 
+        dbg!(&tok);
         match tok.kind {
             // TODO: implement other statements
             // TokenKind::Ident(..) => None,
             _ => {
+                self.stream.revert();
                 self.stream.save_offset();
 
-                if let Ok(item) = self.try_parse_item() {
-                    Ok(Stmt::new(StmtKind::Item(item)))
-                } else if let Ok(expr) = self.parse_expr(0) {
-                    self.stream.revert();
-                    Ok(Stmt::new(StmtKind::Expr(expr)))
-                } else {
-                    self.stream.revert();
-                    Err(false)
+                match self.try_parse_item_with_recovery() {
+                    Ok(item) => return Ok(Stmt::new(StmtKind::Item(Box::new(item)))),
+                    Err(true) => Err(true)?,
+                    Err(false) => {
+                        self.stream.revert();
+                        match dbg!(self.parse_expr(0)) {
+                            Ok(expr) => {
+                                return Ok(Stmt::new(StmtKind::Expr(Box::new(expr))));
+                            }
+
+                            Err(true) => {
+                                self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+                                Err(true)
+                            }
+
+                            Err(false) => {
+                                println!("here");
+                                self.stream.revert();
+                                Err(false)
+                            }
+                        }
+                    }
                 }
             }
         }

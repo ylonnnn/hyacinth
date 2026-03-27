@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 
 use hycc_span::Span;
+use hycc_util::ternary;
 
 #[derive(Clone)]
 pub struct Token {
@@ -25,7 +26,11 @@ impl Token {
 
     pub fn view<'a>(&self, source: &'a String) -> &'a str {
         let offset = self.span.offset;
-        &source[(offset as usize)..((offset + self.span.len as u32) as usize)]
+        ternary!(
+            self.kind != TokenKind::Eof,
+            &source[(offset as usize)..((offset + self.span.len as u32) as usize)],
+            "EOF"
+        )
     }
 }
 

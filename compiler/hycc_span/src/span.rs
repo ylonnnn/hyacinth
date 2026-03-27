@@ -45,11 +45,13 @@ impl Span {
     pub fn to_position_range(&self, source: &Source) -> (Position, Position) {
         let Span { offset, len, .. } = &self;
         let convert = |mut offset: u32| -> Position {
-            for (line, i) in source.data.lines().zip(0_u32..) {
+            let mut line_no = 0;
+            for line in source.data.lines() {
+                line_no += 1;
                 let len = line.len() as u32;
                 if offset <= len {
                     return Position {
-                        line: i + 1,
+                        line: line_no,
                         column: offset + 1,
                     };
                 }
@@ -57,7 +59,10 @@ impl Span {
                 offset -= len + 1
             }
 
-            unreachable!()
+            Position {
+                line: line_no,
+                column: offset + 2,
+            }
         };
 
         (convert(*offset), convert(*offset + (*len as u32)))

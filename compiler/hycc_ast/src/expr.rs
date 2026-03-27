@@ -5,10 +5,10 @@ use hycc_span::Span;
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    Path(Path),
-    Literal(LiteralExpr),
+    Path(Box<Path>),
+    Literal(Box<LiteralExpr>),
     Binary(Token, Box<Expr>, Box<Expr>),
-    Unary(Unary),
+    Unary(Box<Unary>),
 }
 
 impl ExprKind {

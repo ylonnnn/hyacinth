@@ -1,6 +1,6 @@
 use hycc_ast::{
-    Item, ItemKind,
-    item::{Fn, FnParam, FnParamList},
+    Expr, Item, ItemKind, Ty,
+    item::{Fn, FnParam, FnParamList, VarDecl},
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
@@ -38,7 +38,18 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.parse_item();
-        self.try_sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+        if let Err(_) = item {
+            self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+        }
+
+        item
+    }
+
+    pub fn try_parse_item_with_recovery(&mut self) -> ParseResult<Item> {
+        let item = self.try_parse_item();
+        if let Err(_) = item {
+            self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+        }
 
         item
     }
@@ -49,9 +60,16 @@ impl<'d, 's> Parser<'d, 's> {
         };
 
         let item_kind = match tok.kind {
-            TokenKind::Ident(TokenIdentKind::Fn) => {
-                Ok(ItemKind::Fn(self.parse_fn_with_recovery()?))
-            }
+            TokenKind::Ident(TokenIdentKind::Fn) => match self.parse_fn_with_recovery() {
+                Ok(item) => Ok(ItemKind::Fn(Box::new(item))),
+                Err(_) => Err(true)?,
+            },
+
+            TokenKind::Ident(TokenIdentKind::Let) => match self.parse_var_decl_with_recovery() {
+                Ok(item) => Ok(ItemKind::VarDecl(Box::new(item))),
+                Err(_) => Err(true)?,
+            },
+
             _ => Err(false),
         }?;
 
@@ -79,10 +97,10 @@ impl<'d, 's> Parser<'d, 's> {
         // { STMT* }
         let body = self.parse_block();
 
-        if let Ok(ident) = &ident {
-            println!("ident: {}", ident.view(&self.source.data));
-        }
-        dbg!(&body);
+        // if let Ok(ident) = &ident {
+        //     println!("ident: {}", ident.view(&self.source.data));
+        // }
+        // dbg!(&body);
 
         Ok(Fn {
             ident: ident?,
@@ -115,5 +133,39 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_fn_param(&mut self) -> ParseResult<FnParam> {
         todo!()
+    }
+
+    pub fn parse_var_decl_with_recovery(&mut self) -> ParseResult<VarDecl> {
+        let decl = self.parse_var_decl();
+        self.try_sync(vec![TokenKind::LnFeed]);
+
+        decl
+    }
+
+    // TODO: allow patterns rather than just raw identifiers
+    // let IDENT (: TY)? (= EXPR)? (TERM ::= '\n')
+    pub fn parse_var_decl(&mut self) -> ParseResult<VarDecl> {
+        // IDENT
+        let ident = self.parse_raw_ident();
+
+        // :
+        let mut ty = Option::<Ty>::None;
+        if self.expect_abs_exact_nonlf(TokenKind::Colon).0 {
+            // TY
+            ty = Some(self.parse_ty(0)?)
+        }
+
+        // =
+        let mut val = Option::<Expr>::None;
+        if self.expect_abs_exact_nonlf(TokenKind::Eq).0 {
+            // EXPR
+            val = Some(self.parse_expr(0)?)
+        }
+
+        Ok(VarDecl {
+            ident: ident?,
+            ty: ty.map(Box::new),
+            val: val.map(Box::new),
+        })
     }
 }

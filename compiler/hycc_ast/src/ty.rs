@@ -4,8 +4,9 @@ use hycc_span::Span;
 
 #[derive(Debug, Clone)]
 pub enum TyKind {
-    Path(Path),
-    Array(Array),
+    Path(Box<Path>),
+    Array(Box<Array>),
+    Unit(Span),
 }
 
 impl TyKind {
@@ -13,6 +14,7 @@ impl TyKind {
         match self {
             Self::Path(path) => path.span,
             Self::Array(arr) => arr.span,
+            Self::Unit(span) => *span,
         }
     }
 }

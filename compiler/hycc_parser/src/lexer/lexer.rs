@@ -487,6 +487,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
             if let TokenGraph::Node(token) = &tg
                 && matches!(token.kind, TokenKind::Eof)
             {
+                collection.pop();
                 terminate = true;
             }
 

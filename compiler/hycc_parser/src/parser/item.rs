@@ -152,7 +152,7 @@ impl<'d, 's> Parser<'d, 's> {
         let mut ty = Option::<Ty>::None;
         if self.expect_abs_exact_nonlf(TokenKind::Colon).0 {
             // TY
-            ty = Some(self.parse_ty(0)?)
+            ty = Some(self.parse_ty()?)
         }
 
         // =

@@ -4,7 +4,6 @@ use hycc_ast::{
     token_stream::TokenStream,
 };
 use hycc_diagnostic::DiagnosticContext;
-use hycc_util::ternary;
 
 use crate::{
     errors,
@@ -12,104 +11,91 @@ use crate::{
 };
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-pub enum TyInfixBindingPower {
-    Default,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdentLeadTyKind {
+    // Path types.
+    // e.g. `std::vec`, `test`
+    Path,
+
+    // Function types.
+    // e.g. `fn (i32) -> i32`,
+    // NOTE: `fn` is not considered a function type if not followed by a `(`.
     Fn,
-    Ref,
-    Ptr,
-    Array,
-    Primary,
+    // TODO: other identifier-lead types
 }
 
 impl<'d, 's> Parser<'d, 's> {
-    pub fn ty_infix_binding_power_of(kind: TokenKind) -> Option<(u8, u8)> {
-        use TyInfixBindingPower::*;
-
-        match kind {
-            TokenKind::LeftParen => Some((Default as u8, Default as u8)),
-
-            TokenKind::Ampersand => Some((Ref as u8, Ref as u8)),
-            TokenKind::Star => Some((Ptr as u8, Ptr as u8)),
-            TokenKind::LeftBracket => Some((Array as u8, Array as u8)),
-
-            TokenKind::Ident(kind) => match kind {
-                TokenIdentKind::Normal => Some((Primary as u8, Primary as u8)),
-                TokenIdentKind::Fn => Some((Fn as u8, Fn as u8)),
-
-                _ => None,
-            },
-
-            _ => None,
-        }
-    }
-
-    pub fn parse_ty(&mut self, min_bp: u8) -> ParseResult<Ty> {
-        let Ok(mut prefix) = self.parse_prefix_ty() else {
+    pub fn parse_ty(&mut self) -> ParseResult<Ty> {
+        let Some(tok) = self.peek_nonlf_token() else {
             return Err(false);
         };
 
-        while !self.stream.abs_eof() {
-            let Some(tok) = self.peek_nonlf_token() else {
-                return Err(true);
-            };
-
-            let rbp = match Self::ty_infix_binding_power_of(tok.kind) {
-                Some((lbp, rbp)) => ternary!(min_bp > lbp, break, rbp),
-                _ => {
-                    break;
-                }
-            };
-
-            let Ok(infix) = self.parse_infix_ty(&prefix, rbp) else {
-                break;
-            };
-
-            prefix = infix;
-        }
-
-        Ok(prefix)
-    }
-
-    pub fn parse_prefix_ty(&mut self) -> ParseResult<Ty> {
-        let Some(token) = self.peek_nonlf_token() else {
-            return Err(false);
-        };
-
-        match token.kind {
+        let ty = match tok.kind {
             TokenKind::LeftParen => {
                 // TODO: allow the parser to diverge from a grouped type, or a tuple
                 self.parse_grouped_ty()
             }
 
-            TokenKind::Ident(..) => Ok(Ty::new(TyKind::Path(Box::new(self.parse_path()?)))),
+            TokenKind::Ident(kind) => {
+                self.stream.save_offset();
+
+                if self.next_nonlf_token().is_none() {
+                    self.stream.revert();
+                    return self.parse_path_ty();
+                };
+
+                let ident_ty_kind = match self.peek_nonlf_token() {
+                    Some(tok) => match tok.kind {
+                        TokenKind::LeftParen => IdentLeadTyKind::Fn,
+                        _ => IdentLeadTyKind::Path,
+                    },
+
+                    _ => IdentLeadTyKind::Path,
+                };
+
+                self.stream.revert();
+
+                match kind {
+                    TokenIdentKind::Fn if ident_ty_kind == IdentLeadTyKind::Fn => {
+                        todo!("parse fn type")
+                    }
+                    _ => self.parse_path_ty(),
+                }
+            }
+
+            // TODO: improve
+            TokenKind::Eq | TokenKind::Comma => {
+                todo!(
+                    "perhaps you forgot the type, or did not mean to explicitly add the type annotation"
+                );
+            }
 
             _ => {
                 self.dctx.add(errors::unexpected_token(
                     self.source,
-                    &token,
-                    Some("expected type prefix token"),
+                    &tok,
+                    Some("expected type"),
                 ));
 
                 Err(false)
             }
-        }
-    }
+        }?;
 
-    pub fn parse_infix_ty(&mut self, _left: &Ty, _min_bp: u8) -> ParseResult<Ty> {
-        let Some(token) = self.peek_nonlf_token() else {
-            return Err(false);
+        let Some(tok) = self.peek_nonlf_token() else {
+            return Ok(ty);
         };
 
-        match token.kind {
+        match tok.kind {
+            TokenKind::Eq | TokenKind::Comma => return Ok(ty),
+
             _ => {
                 self.dctx.add(errors::unexpected_token(
                     self.source,
-                    &token,
-                    Some("expected type infix token"),
+                    &tok,
+                    Some("expected type suffix"),
                 ));
 
-                Err(true)
+                Err(false)
             }
         }
     }
@@ -137,7 +123,7 @@ impl<'d, 's> Parser<'d, 's> {
                     return Ok(Ty::new(TyKind::Unit(span)));
                 }
 
-                let inner = s.parse_ty(0);
+                let inner = s.parse_ty();
                 if !s.stream.abs_eof() {
                     let Some(tok) = s.peek_nonlf_token() else {
                         return Err(false);
@@ -150,4 +136,77 @@ impl<'d, 's> Parser<'d, 's> {
             },
         )
     }
+
+    // PATH
+    pub fn parse_path_ty(&mut self) -> ParseResult<Ty> {
+        Ok(Ty::new(TyKind::Path(Box::new(self.parse_path()?))))
+    }
+
+    // pub fn parse_ty(&mut self, min_bp: u8) -> ParseResult<Ty> {
+    //     let Ok(mut prefix) = self.parse_prefix_ty() else {
+    //         return Err(false);
+    //     };
+
+    //     while !self.stream.abs_eof() {
+    //         let Some(tok) = self.peek_nonlf_token() else {
+    //             return Err(true);
+    //         };
+
+    //         let rbp = match Self::ty_infix_binding_power_of(tok.kind) {
+    //             Some((lbp, rbp)) => ternary!(min_bp > lbp, break, rbp),
+    //             _ => {
+    //                 break;
+    //             }
+    //         };
+
+    //         let Ok(infix) = self.parse_infix_ty(&prefix, rbp) else {
+    //             break;
+    //         };
+
+    //         prefix = infix;
+    //     }
+
+    //     Ok(prefix)
+    // }
+
+    // pub fn parse_prefix_ty(&mut self) -> ParseResult<Ty> {
+    //     let Some(token) = self.peek_nonlf_token() else {
+    //         return Err(false);
+    //     };
+
+    //     match token.kind {
+    //         TokenKind::LeftParen => {
+    //         }
+
+    //         TokenKind::Ident(..) => Ok(Ty::new(TyKind::Path(Box::new(self.parse_path()?)))),
+
+    //         _ => {
+    //             self.dctx.add(errors::unexpected_token(
+    //                 self.source,
+    //                 &token,
+    //                 Some("expected type prefix token"),
+    //             ));
+
+    //             Err(false)
+    //         }
+    //     }
+    // }
+
+    // pub fn parse_infix_ty(&mut self, _left: &Ty, _min_bp: u8) -> ParseResult<Ty> {
+    //     let Some(token) = self.peek_nonlf_token() else {
+    //         return Err(false);
+    //     };
+
+    //     match token.kind {
+    //         _ => {
+    //             self.dctx.add(errors::unexpected_token(
+    //                 self.source,
+    //                 &token,
+    //                 Some("expected type infix token"),
+    //             ));
+
+    //             Err(true)
+    //         }
+    //     }
+    // }
 }

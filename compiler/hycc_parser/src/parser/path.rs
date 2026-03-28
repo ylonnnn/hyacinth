@@ -29,8 +29,6 @@ impl<'d, 's> Parser<'d, 's> {
             path.add(self.parse_ident()?)
         }
 
-        println!("peek: {:?}", self.peek_nonlf());
-
         Ok(path)
     }
 
@@ -47,7 +45,6 @@ impl<'d, 's> Parser<'d, 's> {
         if let (matched, Some(_)) = self.expect_preserved_exact_nonlf(TokenKind::Less)
             && matched
         {
-            println!("in generic args");
             closed = false;
             args = self.parse_ident_args();
 
@@ -55,7 +52,7 @@ impl<'d, 's> Parser<'d, 's> {
             if self.expect_exact_nonlf(TokenKind::Greater).0 {
             }
             // If the generic argument closing token did not match, it may
-            // be a grouped token such as ">>"
+            // be a bound token (e.g. >>, >=)
             else {
                 if self
                     .expect_preserved_exact_nonlf(TokenKind::GreaterGreater)
@@ -69,10 +66,10 @@ impl<'d, 's> Parser<'d, 's> {
 
                     closed = true;
                 }
+
+                // TODO: for the token kind ">="
             }
         }
-
-        println!("closed: {closed}");
 
         if !closed {
             // If the argument count of is less than or equal to one (1),

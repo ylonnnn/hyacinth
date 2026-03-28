@@ -150,17 +150,19 @@ impl<'d, 's> Parser<'d, 's> {
 
         // :
         let mut ty = Option::<Ty>::None;
-        if self.expect_abs_exact_nonlf(TokenKind::Colon).0 {
+        if self.expect_exact_nonlf(TokenKind::Colon).0 {
             // TY
             ty = Some(self.parse_ty()?)
         }
 
         // =
         let mut val = Option::<Expr>::None;
-        if self.expect_abs_exact_nonlf(TokenKind::Eq).0 {
+        if self.expect_exact_nonlf(TokenKind::Eq).0 {
             // EXPR
             val = Some(self.parse_expr(0)?)
         }
+
+        self.require_exact_nonlf(TokenKind::LnFeed);
 
         Ok(VarDecl {
             ident: ident?,

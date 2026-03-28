@@ -29,6 +29,15 @@ impl<'d, 's> Parser<'d, 's> {
 
         match kind {
             TokenKind::Plus | TokenKind::Minus => Some((Add as u8, Add as u8)),
+            TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Some((Mul as u8, Mul as u8)),
+
+            TokenKind::Int { .. }
+            | TokenKind::Float { .. }
+            | TokenKind::Bool
+            | TokenKind::Char { .. }
+            | TokenKind::String { .. }
+            | TokenKind::Ident(..) => Some((Primary as u8, Primary as u8)),
+
             _ => None,
         }
     }
@@ -73,16 +82,13 @@ impl<'d, 's> Parser<'d, 's> {
             // | TokenKind::String { .. } => {
             //     todo!("parse literals")
             // }
-            TokenKind::Ident(..) => match self.parse_path() {
-                Ok(expr) => Ok(Expr::new(ExprKind::Path(Box::new(expr)))),
-                Err(_) => Err(true)?,
-            },
+            TokenKind::Ident(..) => Ok(Expr::new(ExprKind::Path(Box::new(self.parse_path()?)))),
 
             _ => {
                 self.dctx.add(errors::unexpected_token(
                     self.source,
                     &token,
-                    Some("expected expr prefix token"),
+                    Some("expected expr prefix"),
                 ));
 
                 Err(true)
@@ -96,11 +102,18 @@ impl<'d, 's> Parser<'d, 's> {
         };
 
         match token.kind {
+            TokenKind::Int { .. }
+            | TokenKind::Float { .. }
+            | TokenKind::Bool
+            | TokenKind::Char { .. }
+            | TokenKind::String { .. }
+            | TokenKind::Ident(..) => Err(false),
+
             _ => {
                 self.dctx.add(errors::unexpected_token(
                     self.source,
                     &token,
-                    Some("expected expr infix token"),
+                    Some("expected expr infix operation"),
                 ));
 
                 Err(true)

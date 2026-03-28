@@ -35,28 +35,6 @@ impl Item {
 }
 
 #[derive(Debug, Clone)]
-pub struct VarDecl {
-    pub ident: Token,
-    pub ty: Option<Box<Ty>>,
-    pub val: Option<Box<Expr>>,
-}
-
-impl VarDecl {
-    pub fn span(&self) -> Span {
-        assert!(
-            self.ty.is_some() || self.val.is_some(),
-            "variable declarations must have either an explicit type annotation, or an initializer value"
-        );
-
-        self.ident.span.merge(&ternary!(
-            self.val.is_some(),
-            self.val.as_ref().unwrap().span,
-            self.ty.as_ref().unwrap().span
-        ))
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Fn {
     pub ident: Token,
     pub params: FnParamList,
@@ -92,4 +70,26 @@ impl FnParam {
 pub struct FnParamList {
     pub list: Vec<Box<FnParam>>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct VarDecl {
+    pub ident: Token,
+    pub ty: Option<Box<Ty>>,
+    pub val: Option<Box<Expr>>,
+}
+
+impl VarDecl {
+    pub fn span(&self) -> Span {
+        assert!(
+            self.ty.is_some() || self.val.is_some(),
+            "variable declarations must have either an explicit type annotation, or an initializer value"
+        );
+
+        self.ident.span.merge(&ternary!(
+            self.val.is_some(),
+            self.val.as_ref().unwrap().span,
+            self.ty.as_ref().unwrap().span
+        ))
+    }
 }

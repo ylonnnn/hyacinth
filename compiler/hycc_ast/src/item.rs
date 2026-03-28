@@ -68,7 +68,7 @@ impl FnParam {
 
 #[derive(Debug, Clone)]
 pub struct FnParamList {
-    pub list: Vec<Box<FnParam>>,
+    pub list: Vec<FnParam>,
     pub span: Span,
 }
 

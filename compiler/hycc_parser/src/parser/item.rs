@@ -12,30 +12,6 @@ use crate::{
 };
 
 impl<'d, 's> Parser<'d, 's> {
-    pub fn parse_item(&mut self) -> ParseResult<Item> {
-        let Some(tok) = self.peek_nonlf_token() else {
-            return Err(false);
-        };
-
-        let tok = tok.clone();
-        let item = self.try_parse_item();
-
-        // TODO: fix misdiagnosis of errors when item is None,
-        //       the issue may be not this part, but rather how
-        //       item parsers handle malformed items
-        if let Err(matched) = item
-            && !matched
-        {
-            self.dctx.add(errors::unexpected_token(
-                self.source,
-                &tok,
-                Some("expected an item"),
-            ));
-        }
-
-        item
-    }
-
     pub fn parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.parse_item();
         if let Err(_) = item {
@@ -49,6 +25,27 @@ impl<'d, 's> Parser<'d, 's> {
         let item = self.try_parse_item();
         if let Err(_) = item {
             self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+        }
+
+        item
+    }
+
+    pub fn parse_item(&mut self) -> ParseResult<Item> {
+        let Some(tok) = self.peek_nonlf_token() else {
+            return Err(false);
+        };
+
+        let tok = tok.clone();
+        let item = self.try_parse_item();
+
+        if let Err(matched) = item
+            && !matched
+        {
+            self.dctx.add(errors::unexpected_token(
+                self.source,
+                &tok,
+                Some("expected an item"),
+            ));
         }
 
         item
@@ -97,11 +94,6 @@ impl<'d, 's> Parser<'d, 's> {
         // { STMT* }
         let body = self.parse_block();
 
-        // if let Ok(ident) = &ident {
-        //     println!("ident: {}", ident.view(&self.source.data));
-        // }
-        // dbg!(&body);
-
         Ok(Fn {
             ident: ident?,
             params: params?,
@@ -119,20 +111,54 @@ impl<'d, 's> Parser<'d, 's> {
             return Err(true);
         };
 
-        self.use_stream(TokenStream::new(data), |s| {
-            // TODO: parse function params
+        let n = data.len();
+        let span = data
+            .first()
+            .unwrap()
+            .underlying()
+            .unwrap()
+            .span
+            .merge(&data.last().unwrap().underlying().unwrap().span);
 
-            println!("{}", s.stream);
-            // Some(FnParamList {
-            //     span: s.next_nonlf()?.underlying()?.span,
-            //     list: Vec::new(),
-            // })
-            Err(true)
-        })
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| {
+                let mut params = FnParamList {
+                    span: span,
+                    list: Vec::new(),
+                };
+
+                if s.stream.is_empty() {
+                    return Ok(params);
+                }
+
+                if let Ok(lead) = s.parse_fn_param() {
+                    params.list.push(lead);
+                    while s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        params.list.push(s.parse_fn_param()?);
+                    }
+                }
+
+                Ok(params)
+            },
+        )
     }
 
+    // IDENT : TY
     pub fn parse_fn_param(&mut self) -> ParseResult<FnParam> {
-        todo!()
+        // IDENT
+        let ident = self.parse_raw_ident()?;
+
+        // :
+        self.require_abs_exact_nonlf(TokenKind::Colon);
+
+        // TY
+        let ty = self.parse_ty()?;
+
+        Ok(FnParam {
+            ident,
+            ty: Box::new(ty),
+        })
     }
 
     pub fn parse_var_decl_with_recovery(&mut self) -> ParseResult<VarDecl> {

@@ -41,7 +41,6 @@ impl<'d, 's> Parser<'d, 's> {
             return Err(false);
         };
 
-        dbg!(&tok);
         match tok.kind {
             // TODO: implement other statements
             // TokenKind::Ident(..) => None,
@@ -54,21 +53,15 @@ impl<'d, 's> Parser<'d, 's> {
                     Err(true) => Err(true)?,
                     Err(false) => {
                         self.stream.revert();
-                        match dbg!(self.parse_expr(0)) {
-                            Ok(expr) => {
-                                return Ok(Stmt::new(StmtKind::Expr(Box::new(expr))));
-                            }
+                        match self.try_parse_expr_stmt() {
+                            Ok(expr) => Ok(Stmt::new(StmtKind::Expr(Box::new(expr)))),
 
                             Err(true) => {
                                 self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
                                 Err(true)
                             }
 
-                            Err(false) => {
-                                println!("here");
-                                self.stream.revert();
-                                Err(false)
-                            }
+                            Err(false) => Err(false),
                         }
                     }
                 }

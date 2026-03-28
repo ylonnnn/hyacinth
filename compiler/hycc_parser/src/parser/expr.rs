@@ -1,4 +1,8 @@
-use hycc_ast::{Expr, ExprKind, token::TokenKind};
+use hycc_ast::{
+    Expr, ExprKind,
+    token::TokenKind,
+    token_stream::{TokenConsumptionKind, TokenMatchExpectation},
+};
 use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;
 
@@ -42,6 +46,29 @@ impl<'d, 's> Parser<'d, 's> {
         }
     }
 
+    pub fn try_parse_expr_stmt(&mut self) -> ParseResult<Expr> {
+        let expr = self.parse_expr(0)?;
+        let is_lf = self
+            .stream
+            .expect(
+                TokenKind::LnFeed,
+                TokenConsumptionKind::UponSuccess,
+                Vec::new(),
+                TokenMatchExpectation::Exact,
+            )
+            .0;
+
+        ternary!(is_lf, Ok(expr), Err(false))
+    }
+
+    pub fn parse_expr_stmt(&mut self) -> ParseResult<Expr> {
+        let expr = self.parse_expr(0)?;
+        match self.require_terminator() {
+            Some(_) => Ok(expr),
+            None => Err(true),
+        }
+    }
+
     pub fn parse_expr(&mut self, min_bp: u8) -> ParseResult<Expr> {
         let Ok(mut prefix) = self.parse_prefix_expr() else {
             return Err(false);
@@ -75,13 +102,11 @@ impl<'d, 's> Parser<'d, 's> {
         };
 
         match token.kind {
-            // TokenKind::Int { .. }
-            // | TokenKind::Float { .. }
-            // | TokenKind::Bool
-            // | TokenKind::Char { .. }
-            // | TokenKind::String { .. } => {
-            //     todo!("parse literals")
-            // }
+            TokenKind::Int { .. }
+            | TokenKind::Float { .. }
+            | TokenKind::Bool
+            | TokenKind::Char { .. }
+            | TokenKind::String { .. } => Ok(Expr::new(ExprKind::Literal(token.clone()))),
             TokenKind::Ident(..) => Ok(Expr::new(ExprKind::Path(Box::new(self.parse_path()?)))),
 
             _ => {

@@ -162,7 +162,7 @@ impl<'d, 's> Parser<'d, 's> {
             val = Some(self.parse_expr(0)?)
         }
 
-        self.require_exact_nonlf(TokenKind::LnFeed);
+        self.require_terminator();
 
         Ok(VarDecl {
             ident: ident?,

@@ -6,7 +6,7 @@ use hycc_span::Span;
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     Path(Box<Path>),
-    Literal(Box<LiteralExpr>),
+    Literal(Token),
     Binary(Token, Box<Expr>, Box<Expr>),
     Unary(Box<Unary>),
 }
@@ -15,7 +15,7 @@ impl ExprKind {
     pub fn span(&self) -> Span {
         match self {
             Self::Path(path) => path.span,
-            Self::Literal(expr) => expr.span(),
+            Self::Literal(expr) => expr.span,
             Self::Binary(_, left, right) => left.span.merge(&right.span),
             Self::Unary(expr) => expr.span(),
         }
@@ -64,25 +64,6 @@ impl Expr {
             span: kind.span(),
             eval: kind.eval(),
             kind,
-        }
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone)]
-pub enum LiteralExpr {
-    Int(Token),
-    Float(Token),
-    Bool(Token),
-    // TODO: Add other literal expression types
-}
-
-impl LiteralExpr {
-    pub fn span(&self) -> Span {
-        match self {
-            Self::Int(tok) => tok.span,
-            Self::Float(tok) => tok.span,
-            Self::Bool(tok) => tok.span,
         }
     }
 }

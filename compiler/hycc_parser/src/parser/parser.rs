@@ -192,6 +192,15 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
+    pub fn require_terminator(&mut self) -> Option<TokenGraph> {
+        self.require(
+            TokenKind::LnFeed,
+            TokenConsumptionKind::UponSuccess,
+            vec![],
+            TokenMatchExpectation::Exact,
+        )
+    }
+
     pub fn use_stream<F, T>(&mut self, mut stream: TokenStream, mut f: F) -> T
     where
         F: FnMut(&mut Self) -> T,

@@ -16,7 +16,7 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_stmt(&mut self) -> ParseResult<Stmt> {
         let Some(tok) = self.peek_nonlf_token() else {
-            return Err(true);
+            return Err(false);
         };
 
         let tok = tok.clone();

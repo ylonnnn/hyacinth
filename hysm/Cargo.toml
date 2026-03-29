@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-
-[lib]
-path = "hysm.rs"
+hycc_source = { path = "../compiler/hycc_source" }
+hycc_util = { path = "../compiler/hycc_util" }
+hycc_vm = { path = "../compiler/hycc_vm" }

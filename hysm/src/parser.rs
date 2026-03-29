@@ -1,11 +1,9 @@
 use std::{collections::HashMap, iter::Peekable, vec::IntoIter};
 
-use crate::{
-    core::Source,
-    hashmap, hysm_token_span, ternary,
-    utils::is_ascii_digit,
-    vm::{instr::Instruction, label::LabelTable},
-};
+use hycc_source::Source;
+use hycc_util::{is_ascii_digit, ternary};
+
+use hycc_vm::{instr::Instruction, label::LabelTable};
 
 #[derive(Debug, Clone)]
 pub struct HysmParser {

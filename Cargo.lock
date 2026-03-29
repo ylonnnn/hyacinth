@@ -66,5 +66,14 @@ name = "hycc_util"
 version = "0.1.0"
 
 [[package]]
+name = "hycc_vm"
+version = "0.1.0"
+
+[[package]]
 name = "hysm"
 version = "0.1.0"
+dependencies = [
+ "hycc_source",
+ "hycc_util",
+ "hycc_vm",
+]

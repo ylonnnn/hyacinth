@@ -1,10 +1,9 @@
-use crate::{
-    hysm::parser::{HysmParser, HysmTokenIter, HysmTokenKind},
-    vm::instr::{
-        Const, Instruction, InstructionOperand, Label, Reg, StackOffset,
-        instructions::{Add, And, Cmp, Div, Eq, Halt, Jmp, JmpIf, Mov, Mul, Not, Or, Pop, Push, Sub},
-    },
+use hycc_vm::instr::{
+    Const, Instruction, InstructionOperand, Label, Reg, StackOffset,
+    instructions::{Add, And, Cmp, Div, Eq, Halt, Jmp, JmpIf, Mov, Mul, Not, Or, Pop, Push, Sub},
 };
+
+use crate::parser::{HysmParser, HysmTokenIter, HysmTokenKind};
 
 impl HysmParser {
     // push [register]

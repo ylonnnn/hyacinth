@@ -1,7 +1,6 @@
-use crate::{
-    hysm::parser::HysmParser,
-    vm::{label::LabelTable, vm::VirtualMachine},
-};
+use hycc_vm::{label::LabelTable, vm::VirtualMachine};
+
+use crate::parser::HysmParser;
 
 #[derive(Debug)]
 pub struct Hysm {

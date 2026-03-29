@@ -1,14 +1,11 @@
 use std::{fs, io};
 
+use hycc_util::ternary;
+
 use crate::{
-    ternary,
-    vm::{
-        frame::Frame,
-        instr::{
-            INSTR_OPERAND_LIMIT, Instruction, InstructionOperand, InstructionOperandKind, OpCode,
-        },
-        label::LabelTable,
-    },
+    frame::Frame,
+    instr::{INSTR_OPERAND_LIMIT, Instruction, InstructionOperand, InstructionOperandKind, OpCode},
+    label::LabelTable,
 };
 
 #[derive(Debug)]

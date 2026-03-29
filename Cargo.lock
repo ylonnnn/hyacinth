@@ -68,6 +68,9 @@ version = "0.1.0"
 [[package]]
 name = "hycc_vm"
 version = "0.1.0"
+dependencies = [
+ "hycc_util",
+]
 
 [[package]]
 name = "hysm"

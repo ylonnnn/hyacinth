@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::vm::{label::LabelTable, vm::REGISTER_LIMIT};
+use crate::{label::LabelTable, vm::REGISTER_LIMIT};
 
 #[repr(u8)]
 #[derive(Debug, Clone)]

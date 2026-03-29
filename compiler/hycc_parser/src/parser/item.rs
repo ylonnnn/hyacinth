@@ -89,7 +89,12 @@ impl<'d, 's> Parser<'d, 's> {
         // (PARAM (, PARAM)*)
         let params = self.parse_fn_param_list();
 
-        // TODO: parse ret type
+        // ->
+        let mut ret_ty = Option::<Ty>::None;
+        if self.expect_exact_nonlf(TokenKind::MinusGreater).0 {
+            // RET_TY
+            ret_ty = Some(self.parse_ty()?);
+        }
 
         // { STMT* }
         let body = self.parse_block();
@@ -97,14 +102,13 @@ impl<'d, 's> Parser<'d, 's> {
         Ok(Fn {
             ident: ident?,
             params: params?,
-            ret_ty: None,
+            ret_ty: ret_ty.map(Box::new),
             body: body?,
         })
     }
 
     // (PARAM (, PARAM)*)
     pub fn parse_fn_param_list(&mut self) -> ParseResult<FnParamList> {
-        println!("TODO: parse function param list");
         let Some(TokenGraph::Collection { data, .. }) =
             self.require_exact_nonlf(TokenKind::LeftParen)
         else {

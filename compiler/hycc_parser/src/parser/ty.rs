@@ -86,7 +86,7 @@ impl<'d, 's> Parser<'d, 's> {
         };
 
         match tok.kind {
-            TokenKind::Eq | TokenKind::Comma => return Ok(ty),
+            TokenKind::Eq | TokenKind::Comma | TokenKind::LeftBrace => return Ok(ty),
 
             _ => {
                 self.dctx.add(errors::unexpected_token(
@@ -95,7 +95,7 @@ impl<'d, 's> Parser<'d, 's> {
                     Some("expected type suffix"),
                 ));
 
-                Err(false)
+                Err(true)
             }
         }
     }

@@ -401,10 +401,22 @@ impl<'s, 'd> Lexer<'s, 'd> {
 
                     b'+' => Some(match self.peekn(1) {
                         Some(b'+') => token!(TokenKind::PlusPlus, span.extend(1)),
+                        Some(b'=') => token!(TokenKind::PlusEq, span.extend(1)),
                         _ => token!(TokenKind::Plus, span),
                     }),
-                    b'-' => Some(token!(TokenKind::Minus, span)),
-                    b'*' => Some(token!(TokenKind::Star, span)),
+
+                    b'-' => Some(match self.peekn(1) {
+                        Some(b'-') => token!(TokenKind::MinusMinus, span.extend(1)),
+                        Some(b'=') => token!(TokenKind::MinusEq, span.extend(1)),
+                        Some(b'>') => token!(TokenKind::MinusGreater, span.extend(1)),
+                        _ => token!(TokenKind::Minus, span),
+                    }),
+
+                    b'*' => Some(match self.peekn(1) {
+                        Some(b'=') => token!(TokenKind::StarEq, span.extend(1)),
+                        _ => token!(TokenKind::Star, span),
+                    }),
+
                     b'/' => match self.peekn(1) {
                         Some(b'/') => {
                             self.skip_until(|_, c| c == b'\n');
@@ -415,36 +427,49 @@ impl<'s, 'd> Lexer<'s, 'd> {
                         }
                         _ => Some(token!(TokenKind::Slash, span)),
                     },
-                    b'%' => Some(token!(TokenKind::Percent, span)),
+
+                    b'%' => Some(match self.peekn(1) {
+                        Some(b'=') => token!(TokenKind::PercentEq, span.extend(1)),
+                        _ => token!(TokenKind::Percent, span),
+                    }),
+
                     b'=' => Some(match self.peekn(1) {
                         Some(b'=') => token!(TokenKind::EqEq, span.extend(1)),
                         _ => token!(TokenKind::Eq, span),
                     }),
+
                     b'!' => Some(match self.peekn(1) {
-                        Some(b'=') => token!(TokenKind::NotEq, span.extend(1)),
-                        _ => token!(TokenKind::Not, span),
+                        Some(b'=') => token!(TokenKind::BangEq, span.extend(1)),
+                        _ => token!(TokenKind::Bang, span),
                     }),
+
                     b'<' => Some(match self.peekn(1) {
-                        Some(b'<') => token!(TokenKind::LessLess, span.extend(1)),
                         Some(b'=') => token!(TokenKind::LessEq, span.extend(1)),
+                        Some(b'<') => token!(TokenKind::LessLess, span.extend(1)),
+                        Some(b'-') => token!(TokenKind::LessMinus, span.extend(1)),
                         _ => token!(TokenKind::Less, span),
                     }),
+
                     b'>' => Some(match self.peekn(1) {
-                        Some(b'>') => token!(TokenKind::GreaterGreater, span.extend(1)),
                         Some(b'=') => token!(TokenKind::GreaterEq, span.extend(1)),
+                        Some(b'>') => token!(TokenKind::GreaterGreater, span.extend(1)),
                         _ => token!(TokenKind::Greater, span),
                     }),
+
                     b'&' => Some(match self.peekn(1) {
                         Some(b'&') => token!(TokenKind::AmpersandAmpersand, span.extend(1)),
                         _ => token!(TokenKind::Ampersand, span),
                     }),
+
                     b'|' => Some(match self.peekn(1) {
                         Some(b'|') => token!(TokenKind::PipePipe, span.extend(1)),
                         _ => token!(TokenKind::Pipe, span),
                     }),
+
                     b'.' => Some(token!(TokenKind::Dot, span)),
                     b',' => Some(token!(TokenKind::Comma, span)),
                     b';' => Some(token!(TokenKind::SemiColon, span)),
+
                     b':' => Some(match self.peekn(1) {
                         Some(b':') => token!(TokenKind::ColonColon, span.extend(1)),
                         _ => token!(TokenKind::Colon, span),

@@ -433,6 +433,11 @@ impl<'s, 'd> Lexer<'s, 'd> {
                         _ => token!(TokenKind::Percent, span),
                     }),
 
+                    b'^' => Some(match self.peekn(1) {
+                        Some(b'^') => token!(TokenKind::CaretCaret, span.extend(1)),
+                        _ => token!(TokenKind::Caret, span),
+                    }),
+
                     b'=' => Some(match self.peekn(1) {
                         Some(b'=') => token!(TokenKind::EqEq, span.extend(1)),
                         _ => token!(TokenKind::Eq, span),
@@ -442,6 +447,8 @@ impl<'s, 'd> Lexer<'s, 'd> {
                         Some(b'=') => token!(TokenKind::BangEq, span.extend(1)),
                         _ => token!(TokenKind::Bang, span),
                     }),
+
+                    b'~' => Some(token!(TokenKind::Tilde, span)),
 
                     b'<' => Some(match self.peekn(1) {
                         Some(b'=') => token!(TokenKind::LessEq, span.extend(1)),

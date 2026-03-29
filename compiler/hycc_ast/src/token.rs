@@ -139,6 +139,8 @@ pub enum TokenKind {
     SlashEq,
     Percent,
     PercentEq,
+    Caret,
+    CaretCaret,
     Eq,
     EqEq,
     BangEq,
@@ -154,6 +156,7 @@ pub enum TokenKind {
     AmpersandAmpersand,
     Pipe,
     PipePipe,
+    Tilde,
     Bang,
 
     // Delimiters
@@ -214,6 +217,8 @@ impl Display for TokenKind {
                 Self::SlashEq => "/=",
                 Self::Percent => "%",
                 Self::PercentEq => "%=",
+                Self::Caret => "^",
+                Self::CaretCaret => "^^",
                 Self::Eq => "=",
                 Self::EqEq => "==",
                 Self::BangEq => "!=",
@@ -229,6 +234,7 @@ impl Display for TokenKind {
                 Self::AmpersandAmpersand => "&&",
                 Self::Pipe => "|",
                 Self::PipePipe => "||",
+                Self::Tilde => "~",
                 Self::Bang => "!",
 
                 // Delimiters

@@ -17,7 +17,7 @@ pub struct Parser<'d, 's> {
     pub(super) generic_delimeter_encounters: usize,
 }
 
-pub type ParseResult<T> = Result<T, bool>;
+pub type ParseResult<T, E = bool> = Result<T, E>;
 
 impl<'d, 's> Parser<'d, 's> {
     pub fn new(source: &'s Source, dctx: ParserDiagCtx<'d>, stream: TokenStream) -> Self {

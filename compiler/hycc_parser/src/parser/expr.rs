@@ -80,17 +80,17 @@ impl<'d, 's> Parser<'d, 's> {
             };
 
             let rbp = match Self::expr_infix_binding_power_of(tok.kind) {
-                Some((_, rbp)) => ternary!(min_bp > rbp, break, rbp),
-                _ => {
+                Some((_, rbp)) if min_bp < rbp => rbp,
+                _ => break
+            };
+
+            match self.parse_infix_expr(prefix, rbp) {
+                Ok(infix) => prefix= infix,
+                Err((left, _)) => {
+                    prefix = left;
                     break;
                 }
             };
-
-            let Ok(infix) = self.parse_infix_expr(&prefix, rbp) else {
-                break;
-            };
-
-            prefix = infix;
         }
 
         Ok(prefix)
@@ -106,7 +106,10 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Float { .. }
             | TokenKind::Bool
             | TokenKind::Char { .. }
-            | TokenKind::String { .. } => Ok(Expr::new(ExprKind::Literal(token.clone()))),
+            | TokenKind::String { .. } => Ok(Expr::new(ExprKind::Literal(
+                self.next_nonlf_token().unwrap().clone(),
+            ))),
+
             TokenKind::Ident(..) => Ok(Expr::new(ExprKind::Path(Box::new(self.parse_path()?)))),
 
             _ => {
@@ -121,9 +124,9 @@ impl<'d, 's> Parser<'d, 's> {
         }
     }
 
-    pub fn parse_infix_expr(&mut self, _left: &Expr, _min_bp: u8) -> ParseResult<Expr> {
-        let Some(token) = self.peek_nonlf_token() else {
-            return Err(false);
+    pub fn parse_infix_expr(&mut self, left:Expr, min_bp: u8) -> ParseResult<Expr, (Expr, bool)> {
+        let Some(token) = self.next_nonlf_token() else {
+            return Err((left,false));
         };
 
         match token.kind {
@@ -132,7 +135,47 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Bool
             | TokenKind::Char { .. }
             | TokenKind::String { .. }
-            | TokenKind::Ident(..) => Err(false),
+            | TokenKind::Ident(..) => Err((left,false)),
+
+            // Common Binary Operations
+            // Arithmetic
+            TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+
+            // Relational
+            | TokenKind::EqEq 
+            | TokenKind::BangEq
+            | TokenKind::Less
+            | TokenKind::LessEq
+            | TokenKind::Greater
+            | TokenKind::GreaterEq
+
+            // Logical
+            | TokenKind::AmpersandAmpersand
+            | TokenKind::PipePipe
+            | TokenKind::Bang
+
+            // Bitwise
+            | TokenKind::LessLess
+            | TokenKind::GreaterGreater
+            | TokenKind::Ampersand
+            | TokenKind::Pipe
+            | TokenKind::Tilde 
+            | TokenKind::Caret
+            => {
+                let right = match self.parse_expr(min_bp) {
+                    Ok(right) => right,
+                    Err(matched) => return Err((left, matched)),
+                };
+
+                Ok(Expr::new(ExprKind::Binary(token, Box::new(left), Box::new(right))))
+            }
+
+            // TODO: assignment operations
+            // TODO: array access
 
             _ => {
                 self.dctx.add(errors::unexpected_token(
@@ -141,7 +184,7 @@ impl<'d, 's> Parser<'d, 's> {
                     Some("expected expr infix operation"),
                 ));
 
-                Err(true)
+                Err((left,true))
             }
         }
     }

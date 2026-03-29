@@ -15,6 +15,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum ExprInfixBindingPower {
     Default,
+    Assign,
     Bitwise,
     Rel,
     BitShift,
@@ -32,6 +33,12 @@ impl<'d, 's> Parser<'d, 's> {
         use ExprInfixBindingPower::*;
 
         match kind {
+            TokenKind::PlusEq
+            | TokenKind::MinusEq
+            | TokenKind::StarEq
+            | TokenKind::SlashEq
+            | TokenKind::PercentEq => Some((Assign as u8, Assign as u8)),
+
             TokenKind::Plus | TokenKind::Minus => Some((Add as u8, Add as u8)),
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Some((Mul as u8, Mul as u8)),
 
@@ -81,11 +88,11 @@ impl<'d, 's> Parser<'d, 's> {
 
             let rbp = match Self::expr_infix_binding_power_of(tok.kind) {
                 Some((_, rbp)) if min_bp < rbp => rbp,
-                _ => break
+                _ => break,
             };
 
             match self.parse_infix_expr(prefix, rbp) {
-                Ok(infix) => prefix= infix,
+                Ok(infix) => prefix = infix,
                 Err((left, _)) => {
                     prefix = left;
                     break;
@@ -124,9 +131,9 @@ impl<'d, 's> Parser<'d, 's> {
         }
     }
 
-    pub fn parse_infix_expr(&mut self, left:Expr, min_bp: u8) -> ParseResult<Expr, (Expr, bool)> {
+    pub fn parse_infix_expr(&mut self, left: Expr, min_bp: u8) -> ParseResult<Expr, (Expr, bool)> {
         let Some(token) = self.peek_nonlf_token() else {
-            return Err((left, false))
+            return Err((left, false));
         };
 
         match token.kind {
@@ -135,39 +142,30 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Bool
             | TokenKind::Char { .. }
             | TokenKind::String { .. }
-            | TokenKind::Ident(..) => Err((left,false)),
+            | TokenKind::Ident(..) => Err((left, false)),
 
-            // Common Binary Operations
-            // Arithmetic
             TokenKind::Plus
             | TokenKind::Minus
             | TokenKind::Star
             | TokenKind::Slash
             | TokenKind::Percent
-
-            // Relational
-            | TokenKind::EqEq 
+            | TokenKind::EqEq
             | TokenKind::BangEq
             | TokenKind::Less
             | TokenKind::LessEq
             | TokenKind::Greater
             | TokenKind::GreaterEq
-
-            // Logical
             | TokenKind::AmpersandAmpersand
             | TokenKind::PipePipe
             | TokenKind::Bang
-
-            // Bitwise
             | TokenKind::LessLess
             | TokenKind::GreaterGreater
             | TokenKind::Ampersand
             | TokenKind::Pipe
-            | TokenKind::Tilde 
-            | TokenKind::Caret
-            => {
+            | TokenKind::Tilde
+            | TokenKind::Caret => {
                 let Some(token) = self.next_nonlf_token() else {
-                    return Err((left, false)); 
+                    return Err((left, false));
                 };
 
                 let right = match self.parse_expr(min_bp) {
@@ -175,11 +173,30 @@ impl<'d, 's> Parser<'d, 's> {
                     Err(matched) => return Err((left, matched)),
                 };
 
-                Ok(Expr::new(ExprKind::Binary(token, Box::new(left), Box::new(right))))
+                Ok(Expr::new(ExprKind::Binary(
+                    token,
+                    Box::new(left),
+                    Box::new(right),
+                )))
             }
 
-            // TODO: assignment operations
-            // TODO: array access
+            TokenKind::Eq
+            | TokenKind::PlusEq
+            | TokenKind::MinusEq
+            | TokenKind::StarEq
+            | TokenKind::SlashEq
+            | TokenKind::PercentEq => {
+                if self.next_nonlf_token().is_none() {
+                    return Err((left, false));
+                };
+
+                let right = match self.parse_expr(min_bp) {
+                    Ok(right) => right,
+                    Err(matched) => return Err((left, matched)),
+                };
+
+                Ok(Expr::new(ExprKind::Assign(Box::new(left), Box::new(right))))
+            }
 
             _ => {
                 self.dctx.add(errors::unexpected_token(

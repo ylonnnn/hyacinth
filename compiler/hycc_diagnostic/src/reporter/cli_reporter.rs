@@ -21,10 +21,6 @@ impl<'d, 's> CLIReporter<'d, 's> {
         }
     }
 
-    // pub fn new(program: &'a mut Program) -> Self {
-    //     Self { program }
-    // }
-
     pub fn color_from_severity(&self, severity: &DiagnosticSeverity) -> &'static str {
         match severity {
             DiagnosticSeverity::Info => color::BRIGHT_BLUE,
@@ -40,6 +36,8 @@ impl<'d, 's> CLIReporter<'d, 's> {
         position_range: (Position, Position),
     ) -> String {
         let (start, end) = &position_range;
+        let digit_n = ((start.line as f32).log10().floor() as usize) + 1;
+
         source
             .data
             .lines()
@@ -49,13 +47,11 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .map(|(line, num)| {
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                 let prefix = format!(
-                    "  {line_num}  {pipe}  {reset}",
+                    "  {line_num}  {pipe}  {r}",
                     line_num = num.to_string().style(bb),
                     pipe = "|".style(b),
-                    reset = r
                 );
 
-                let p_len = prefix.len() - (bb.len() + b.len() + r.len());
                 let (ln_start, ln_end) = (
                     ternary!(num == start.line, start.column - 1, 0),
                     ternary!(num == end.line, end.column - 1, line.len() as u32),
@@ -63,8 +59,13 @@ impl<'d, 's> CLIReporter<'d, 's> {
 
                 format!("{prefix}{line}")
                     + &format!(
-                        "\n{padding}{pointer}",
-                        padding = " ".repeat(p_len + ln_start as usize),
+                        "\n{ptr_prefix}{padding}{pointer}",
+                        ptr_prefix = format!(
+                            "  {space}  {pipe}  {r}",
+                            space = " ".repeat(digit_n as usize),
+                            pipe = "|".style(b),
+                        ),
+                        padding = " ".repeat(ln_start as usize),
                         pointer = "^"
                             .repeat((ln_end - ln_start) as usize)
                             .style(severity_color)
@@ -130,12 +131,12 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
     fn report(&self) -> DiagnosticReportStatus {
         let mut status: DiagnosticReportStatus = [0; 3];
 
-        self.dctx.data().iter().for_each(|diagnostic| {
+        for diagnostic in self.dctx.data() {
             let formatted = self.format_diagnostic(diagnostic);
             status[diagnostic.severity as usize] += 1;
 
             println!("{formatted}");
-        });
+        }
 
         status
     }

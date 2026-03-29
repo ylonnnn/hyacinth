@@ -425,6 +425,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
                                 (start, (self.offset - start) as u16, src_id).into()
                             ))
                         }
+                        Some(b'=') => Some(token!(TokenKind::SlashEq, span.extend(1))),
                         _ => Some(token!(TokenKind::Slash, span)),
                     },
 

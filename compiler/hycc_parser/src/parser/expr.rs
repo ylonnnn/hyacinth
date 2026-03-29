@@ -125,8 +125,8 @@ impl<'d, 's> Parser<'d, 's> {
     }
 
     pub fn parse_infix_expr(&mut self, left:Expr, min_bp: u8) -> ParseResult<Expr, (Expr, bool)> {
-        let Some(token) = self.next_nonlf_token() else {
-            return Err((left,false));
+        let Some(token) = self.peek_nonlf_token() else {
+            return Err((left, false))
         };
 
         match token.kind {
@@ -166,6 +166,10 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Tilde 
             | TokenKind::Caret
             => {
+                let Some(token) = self.next_nonlf_token() else {
+                    return Err((left, false)); 
+                };
+
                 let right = match self.parse_expr(min_bp) {
                     Ok(right) => right,
                     Err(matched) => return Err((left, matched)),
@@ -184,7 +188,7 @@ impl<'d, 's> Parser<'d, 's> {
                     Some("expected expr infix operation"),
                 ));
 
-                Err((left,true))
+                Err((left, true))
             }
         }
     }

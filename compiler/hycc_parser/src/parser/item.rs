@@ -187,12 +187,19 @@ impl<'d, 's> Parser<'d, 's> {
 
         // =
         let mut val = Option::<Expr>::None;
-        if self.expect_exact_nonlf(TokenKind::Eq).0 {
+        if self.peek_nonlf().is_some() && self.require_abs_exact_nonlf(TokenKind::Eq).is_some() {
             // EXPR
             val = Some(self.parse_expr(0)?)
         }
 
         self.require_terminator();
+
+        // Validate variable declaration composition
+        if ty.is_none() && val.is_none() {
+            self.dctx
+                .add(errors::invalid_var_decl(&self.source, &ident?));
+            return Err(true);
+        }
 
         Ok(VarDecl {
             ident: ident?,

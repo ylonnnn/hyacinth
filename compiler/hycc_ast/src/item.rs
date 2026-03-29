@@ -81,15 +81,9 @@ pub struct VarDecl {
 
 impl VarDecl {
     pub fn span(&self) -> Span {
-        assert!(
-            self.ty.is_some() || self.val.is_some(),
-            "variable declarations must have either an explicit type annotation, or an initializer value"
-        );
-
-        self.ident.span.merge(&ternary!(
-            self.val.is_some(),
-            self.val.as_ref().unwrap().span,
-            self.ty.as_ref().unwrap().span
+        self.ident.span.merge(&self.val.as_ref().map_or_else(
+            || self.ty.as_ref().map_or_else(|| self.ident.span, |t| t.span),
+            |v| v.span,
         ))
     }
 }

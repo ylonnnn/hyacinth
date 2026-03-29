@@ -64,7 +64,6 @@ pub enum DiagnosticErrorKind {
     UnclosedDelimeterCollection,
 
     UnexpectedToken,
-    MissingExplicitTypeAnnotation,
     InvalidVariableDeclaration,
 }
 

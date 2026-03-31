@@ -1,7 +1,6 @@
 [workspace]
 resolver = "3"
 members = [
-    "compiler/hycc",     
+    "compiler/hycc", 
     "hysm",
-    # "compiler/hycc_ast", "compiler/hycc_diagnostic", "compiler/hycc_parser", "compiler/hycc_span", "compiler/hycc_util", 
 ]

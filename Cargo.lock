@@ -19,6 +19,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hycc_collection"
+version = "0.1.0"
+dependencies = [
+ "hycc_symbol",
+]
+
+[[package]]
 name = "hycc_diagnostic"
 version = "0.1.0"
 dependencies = [
@@ -43,9 +50,11 @@ name = "hycc_pipeline"
 version = "0.1.0"
 dependencies = [
  "hycc_ast",
+ "hycc_collection",
  "hycc_diagnostic",
  "hycc_parser",
  "hycc_source",
+ "hycc_symbol",
  "hycc_util",
 ]
 
@@ -62,6 +71,10 @@ version = "0.1.0"
 dependencies = [
  "hycc_source",
 ]
+
+[[package]]
+name = "hycc_symbol"
+version = "0.1.0"
 
 [[package]]
 name = "hycc_util"

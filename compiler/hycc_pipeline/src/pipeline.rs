@@ -1,4 +1,5 @@
 use hycc_ast::Program;
+use hycc_collection::collector::SymCollector;
 use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
@@ -8,6 +9,7 @@ use hycc_parser::{
     parser::{Parser, diag_ctx::ParserDiagCtx},
 };
 use hycc_source::Source;
+use hycc_symbol::SymbolInterner;
 use hycc_util::ternary;
 
 use crate::session::Session;
@@ -38,9 +40,12 @@ pub fn analyze_source(session: &mut Session) -> Option<Program> {
 }
 
 pub fn compile(session: &mut Session) {
-    let Some(tree) = analyze_source(session) else {
+    let Some(_tree) = analyze_source(session) else {
         return;
     };
 
-    dbg!(tree);
+    let mut interner = SymbolInterner::new();
+    let mut collector = SymCollector::new(&mut interner);
+
+    collector.collect();
 }

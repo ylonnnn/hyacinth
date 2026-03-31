@@ -42,9 +42,11 @@ dependencies = [
 name = "hycc_pipeline"
 version = "0.1.0"
 dependencies = [
+ "hycc_ast",
  "hycc_diagnostic",
  "hycc_parser",
  "hycc_source",
+ "hycc_util",
 ]
 
 [[package]]

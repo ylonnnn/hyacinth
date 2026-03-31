@@ -5,6 +5,7 @@ use hycc_util::ternary;
 pub struct ParserDiagCtx<'d> {
     data: &'d mut Vec<Diagnostic>,
     state: ParserDiagCtxState,
+    errored: bool,
 }
 
 #[repr(u8)]
@@ -19,6 +20,7 @@ impl<'d> ParserDiagCtx<'d> {
         Self {
             data,
             state: ParserDiagCtxState::Synchronized,
+            errored: false,
         }
     }
 
@@ -44,6 +46,10 @@ impl<'d> DiagnosticContext for ParserDiagCtx<'d> {
         &mut self.data
     }
 
+    fn error_occurred(&self) -> bool {
+        self.errored
+    }
+
     fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
         let is_err = diagnostic.is_error();
         if is_err {
@@ -52,6 +58,7 @@ impl<'d> DiagnosticContext for ParserDiagCtx<'d> {
             }
 
             self.state = ParserDiagCtxState::Disarray;
+            self.errored = true;
         }
 
         let data = self.data_mut();

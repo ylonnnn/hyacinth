@@ -11,7 +11,7 @@ use crate::{errors, parser::diag_ctx::ParserDiagCtx};
 #[derive(Debug)]
 pub struct Parser<'d, 's> {
     pub(super) stream: TokenStream,
-    pub(super) dctx: ParserDiagCtx<'d>,
+    pub dctx: ParserDiagCtx<'d>,
     pub(super) source: &'s Source,
 
     pub(super) generic_delimeter_encounters: usize,

@@ -84,6 +84,8 @@ pub trait DiagnosticContext {
     fn data(&self) -> &Vec<Diagnostic>;
     fn data_mut(&mut self) -> &mut Vec<Diagnostic>;
 
+    fn error_occurred(&self) -> bool;
+
     fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
         let data = self.data_mut();
 
@@ -125,17 +127,17 @@ pub trait DiagnosticContext {
 }
 
 #[derive(Debug)]
-pub struct DiagnosticCtx(Vec<Diagnostic>);
+pub struct DiagnosticCtx(Vec<Diagnostic>, bool);
 
 impl Default for DiagnosticCtx {
     fn default() -> Self {
-        Self(Vec::with_capacity(32))
+        Self(Vec::with_capacity(32), false)
     }
 }
 
 impl DiagnosticCtx {
     pub fn new() -> Self {
-        Self(Vec::new())
+        Self(Vec::new(), false)
     }
 }
 
@@ -146,5 +148,20 @@ impl DiagnosticContext for DiagnosticCtx {
 
     fn data_mut(&mut self) -> &mut Vec<Diagnostic> {
         &mut self.0
+    }
+
+    fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
+        if diagnostic.severity == DiagnosticSeverity::Error {
+            self.1 = true
+        }
+
+        let data = self.data_mut();
+
+        data.push(diagnostic);
+        data.last_mut()
+    }
+
+    fn error_occurred(&self) -> bool {
+        self.1
     }
 }

@@ -45,6 +45,9 @@ pub enum UnaryOp {
     Negative,
     Not,
     BitwiseNot,
+
+    Increment,
+    Decrement,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -73,4 +76,6 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+    BitwiseLShift,
+    BitwiseRShift,
 }

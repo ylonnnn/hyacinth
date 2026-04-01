@@ -3,7 +3,7 @@ use hycc_ast::{
     expr::Unary,
     item::{Fn, FnParamList},
     path::{IdentifierArgument, IdentifierArguments},
-    token::Token,
+    token::{Token, TokenKind},
     ty::Array,
 };
 use hycc_source::Source;
@@ -120,21 +120,62 @@ impl<'s> HirBuilder<'s> {
         left: &Box<Expr>,
         right: &Box<Expr>,
     ) -> (BinaryOp, Box<HirExpr>, Box<HirExpr>) {
-        // TODO: binary operations
         (
-            BinaryOp::Nop,
+            match &op.kind {
+                TokenKind::Plus => BinaryOp::Add,
+                TokenKind::Minus => BinaryOp::Add,
+                TokenKind::Star => BinaryOp::Add,
+                TokenKind::Slash => BinaryOp::Add,
+                TokenKind::Percent => BinaryOp::Mod,
+                TokenKind::CaretCaret => BinaryOp::Exp,
+
+                TokenKind::EqEq => BinaryOp::Eq,
+                TokenKind::BangEq => BinaryOp::Neq,
+                TokenKind::Less => BinaryOp::Less,
+                TokenKind::LessEq => BinaryOp::LessEq,
+                TokenKind::Greater => BinaryOp::Greater,
+                TokenKind::GreaterEq => BinaryOp::GreaterEq,
+
+                TokenKind::AmpersandAmpersand => BinaryOp::And,
+                TokenKind::PipePipe => BinaryOp::Or,
+
+                TokenKind::Ampersand => BinaryOp::BitwiseAnd,
+                TokenKind::Pipe => BinaryOp::Or,
+                TokenKind::Caret => BinaryOp::BitwiseXor,
+                TokenKind::LessLess => BinaryOp::BitwiseLShift,
+                TokenKind::GreaterGreater => BinaryOp::BitwiseRShift,
+
+                _ => BinaryOp::Nop,
+            },
             Box::new(self.lower_expr(left)),
             Box::new(self.lower_expr(right)),
         )
     }
 
     pub fn lower_unary(&mut self, expr: &Unary) -> HirUnary {
-        // TODO: unary operations
         match expr {
-            Unary::Pre(_op, expr) => HirUnary::Pre(UnaryOp::Nop, Box::new(self.lower_expr(&expr))),
-            Unary::Post(_op, expr) => {
-                HirUnary::Post(UnaryOp::Nop, Box::new(self.lower_expr(&expr)))
-            }
+            Unary::Pre(op, expr) => HirUnary::Pre(
+                match op.kind {
+                    TokenKind::Minus => UnaryOp::Negative,
+                    TokenKind::Bang => UnaryOp::Not,
+                    TokenKind::Tilde => UnaryOp::BitwiseNot,
+
+                    TokenKind::PlusPlus => UnaryOp::Increment,
+                    TokenKind::MinusMinus => UnaryOp::Decrement,
+
+                    _ => UnaryOp::Nop,
+                },
+                Box::new(self.lower_expr(&expr)),
+            ),
+            Unary::Post(op, expr) => HirUnary::Post(
+                match op.kind {
+                    TokenKind::PlusPlus => UnaryOp::Increment,
+                    TokenKind::MinusMinus => UnaryOp::Decrement,
+
+                    _ => UnaryOp::Nop,
+                },
+                Box::new(self.lower_expr(&expr)),
+            ),
         }
     }
 

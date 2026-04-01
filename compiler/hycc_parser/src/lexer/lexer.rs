@@ -163,6 +163,11 @@ impl<'s, 'd> Lexer<'s, 'd> {
         let src_id = self.source.identifier.0;
         let start = self.offset;
 
+        // Skip `-` for negative literals
+        if let Some(b'-') = self.peek() {
+            self.adjust();
+        }
+
         // Identify base according to prefix
         let mut base: u8 = 10;
 
@@ -409,6 +414,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
                         Some(b'-') => token!(TokenKind::MinusMinus, span.extend(1)),
                         Some(b'=') => token!(TokenKind::MinusEq, span.extend(1)),
                         Some(b'>') => token!(TokenKind::MinusGreater, span.extend(1)),
+                        Some(b'0') => self.read_num().unwrap(),
                         _ => token!(TokenKind::Minus, span),
                     }),
 

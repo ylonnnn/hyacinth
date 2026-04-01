@@ -115,7 +115,7 @@ pub enum TokenIdentKind {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum TokenKind {
     Int { base: u8 },
     Float { base: u8 },
@@ -176,14 +176,9 @@ pub enum TokenKind {
     LnFeed,
     DocComment,
 
+    #[default]
     Invalid,
     Eof,
-}
-
-impl Default for TokenKind {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 impl Display for TokenKind {

@@ -1,17 +1,17 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Symbol {
-    Valid(usize),
-    Invalid,
-}
+pub struct Symbol(usize);
 
 impl Symbol {
+    #[allow(non_snake_case)]
+    pub fn Invalid() -> Self {
+        Self(usize::MAX)
+    }
+
     pub fn unwrap(&self) -> usize {
-        match self {
-            Self::Valid(id) => *id,
-            _ => panic!("symbol is not valid"),
-        }
+        assert_ne!(self.0, usize::MAX, "symbol id must be valid");
+        self.0
     }
 }
 
@@ -35,7 +35,7 @@ impl SymbolInterner {
         match self.symbols.entry(data.into()) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
-                let sym = Symbol::Valid(self.data.len());
+                let sym = Symbol(self.data.len());
 
                 self.data.push(data.into());
                 entry.insert(sym);

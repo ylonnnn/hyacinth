@@ -1,9 +1,10 @@
 use hycc_ast::Program;
-use hycc_collection::collector::SymCollector;
+use hycc_collection::collector::Collector;
 use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
 };
+use hycc_hir::{builder::HirBuilder, program::HirProgram};
 use hycc_parser::{
     lexer::Lexer,
     parser::{Parser, diag_ctx::ParserDiagCtx},
@@ -11,6 +12,8 @@ use hycc_parser::{
 use hycc_source::Source;
 use hycc_symbol::SymbolInterner;
 use hycc_util::ternary;
+
+// use hycc_collection::collector::SymCollector;
 
 use crate::session::Session;
 
@@ -22,6 +25,7 @@ pub fn start(root_path: &str) {
     reporter.report();
 }
 
+// TODO: analyze all sources starting from the root
 pub fn analyze_source(session: &mut Session) -> Option<Program> {
     let mut lexer = Lexer::new(session.source_registry.root(), &mut session.dctx);
     let tok_stream = lexer.tokenize();
@@ -39,13 +43,22 @@ pub fn analyze_source(session: &mut Session) -> Option<Program> {
     ternary!(parser.dctx.error_occurred(), None, Some(program))
 }
 
+// TODO: lower the trees of other sources other than the root
+pub fn lower_ast_to_hir(session: &Session, tree: Program) -> HirProgram {
+    let mut hir_builder = HirBuilder::new(session.source_registry.root());
+    hir_builder.lower(tree)
+}
+
 pub fn compile(session: &mut Session) {
-    let Some(_tree) = analyze_source(session) else {
+    let Some(tree) = analyze_source(session) else {
         return;
     };
 
-    let mut interner = SymbolInterner::new();
-    let mut collector = SymCollector::new(&mut interner);
+    let hir = lower_ast_to_hir(session, tree);
+    dbg!(hir);
 
-    collector.collect();
+    // let mut interner = SymbolInterner::new();
+    // let mut collector = Collector::new(&mut interner, &session.source_registry.root());
+
+    // collector.collect(tree);
 }

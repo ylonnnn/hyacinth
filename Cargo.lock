@@ -22,6 +22,8 @@ dependencies = [
 name = "hycc_collection"
 version = "0.1.0"
 dependencies = [
+ "hycc_ast",
+ "hycc_source",
  "hycc_symbol",
 ]
 
@@ -31,6 +33,17 @@ version = "0.1.0"
 dependencies = [
  "hycc_source",
  "hycc_span",
+ "hycc_util",
+]
+
+[[package]]
+name = "hycc_hir"
+version = "0.1.0"
+dependencies = [
+ "hycc_ast",
+ "hycc_source",
+ "hycc_span",
+ "hycc_symbol",
  "hycc_util",
 ]
 
@@ -52,6 +65,7 @@ dependencies = [
  "hycc_ast",
  "hycc_collection",
  "hycc_diagnostic",
+ "hycc_hir",
  "hycc_parser",
  "hycc_source",
  "hycc_symbol",

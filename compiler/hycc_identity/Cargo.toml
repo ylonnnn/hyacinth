@@ -1,7 +1,0 @@
-[package]
-name = "hycc_identity"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-hycc_symbol = { path = "../hycc_symbol" }

@@ -8,6 +8,7 @@ use hycc_ast::{
 };
 use hycc_source::Source;
 use hycc_symbol::{Symbol, SymbolInterner};
+use hycc_util::{digit_value, ternary};
 
 use crate::{
     HirId,
@@ -165,7 +166,31 @@ impl<'s> HirBuilder<'s> {
 
         match &lit.kind {
             TokenKind::Int { base } | TokenKind::Float { base } => {
-                todo!("{view} of base {base}")
+                let is_negative = view.as_bytes()[0] == b'-';
+                let view = ternary!(*base != 10, &view[(2 + (is_negative as usize))..], view);
+                let mut split = view.split(".");
+                let (integral, fractional) = (split.next().unwrap(), split.next());
+
+                let mut val = u64::from_str_radix(integral, *base as u32).unwrap() as f64;
+
+                if let Some(frac) = fractional {
+                    let mut divisor = *base as u64;
+                    val += frac
+                        .as_bytes()
+                        .iter()
+                        .map(|byte| {
+                            (digit_value(*byte, *base as u32) as f64)
+                                * (1_f64 / (divisor as f64, divisor *= *base as u64).0)
+                        })
+                        .sum::<f64>();
+
+                    HirLiteral::Float(val)
+                } else {
+                    HirLiteral::Int {
+                        data: val as u64,
+                        is_negative,
+                    }
+                }
             }
 
             TokenKind::Bool => HirLiteral::Bool(view == "true"),

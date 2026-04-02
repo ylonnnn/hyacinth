@@ -1,10 +1,12 @@
 pub mod builder;
 pub mod def;
 
+pub mod block;
 pub mod expr;
 pub mod item;
 pub mod path;
 pub mod program;
+pub mod stmt;
 pub mod ty;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

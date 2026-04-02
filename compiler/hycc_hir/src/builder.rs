@@ -1,7 +1,7 @@
 use hycc_ast::{
-    Expr, ExprKind, Identifier, Item, ItemKind, Path, Program, Ty, TyKind,
+    Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Program, Stmt, StmtKind, Ty, TyKind,
     expr::Unary,
-    item::{Fn, FnParamList},
+    item::{Fn, FnParamList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
     ty::Array,
@@ -11,10 +11,12 @@ use hycc_symbol::{Symbol, SymbolInterner};
 
 use crate::{
     HirId,
+    block::HirBlock,
     expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
-    item::{HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind},
+    item::{HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirVarDecl},
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     program::HirProgram,
+    stmt::{HirStmt, HirStmtKind},
     ty::{HirArray, HirTy, HirTyKind},
 };
 
@@ -59,7 +61,7 @@ impl<'s> HirBuilder<'s> {
     fn lower_item(&mut self, item: &Item) -> HirItem {
         let kind = match &item.kind {
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
-            _ => todo!(),
+            ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
         };
 
         HirItem {
@@ -73,8 +75,8 @@ impl<'s> HirBuilder<'s> {
         HirFn {
             ident: self.lower_raw_ident(&func.ident),
             params: self.lower_fn_params(&func.params),
-            ret_ty: None, // TODO
-            // ret_ty: self.lower_ty(func.ret_ty),
+            ret_ty: func.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
+            body: self.lower_block(&func.body),
             span: func.span(),
         }
     }
@@ -85,7 +87,7 @@ impl<'s> HirBuilder<'s> {
         for param in &params.list {
             data.push(HirFnParam {
                 ident: self.lower_raw_ident(&param.ident),
-                // TODO: ty: None,
+                ty: Box::new(self.lower_ty(&param.ty)),
                 span: param.span(),
             })
         }
@@ -93,6 +95,41 @@ impl<'s> HirBuilder<'s> {
         HirFnParamList {
             list: data,
             span: params.span,
+        }
+    }
+
+    pub fn lower_var_decl(&mut self, decl: &VarDecl) -> HirVarDecl {
+        HirVarDecl {
+            id: self.next_id(),
+            ident: self.lower_raw_ident(&decl.ident),
+            ty: decl.ty.as_ref().map(|ty| Box::new(self.lower_ty(ty))),
+            val: decl.val.as_ref().map(|val| Box::new(self.lower_expr(val))),
+            span: decl.span(),
+        }
+    }
+
+    fn lower_block(&mut self, block: &Block) -> HirBlock {
+        HirBlock {
+            id: self.next_id(),
+            stmts: block
+                .stmts
+                .iter()
+                .map(|stmt| self.lower_stmt(stmt))
+                .collect(),
+            span: block.span,
+        }
+    }
+
+    fn lower_stmt(&mut self, stmt: &Stmt) -> HirStmt {
+        let kind = match &stmt.kind {
+            StmtKind::Expr(expr) => HirStmtKind::Expr(Box::new(self.lower_expr(expr))),
+            StmtKind::Item(item) => HirStmtKind::Item(Box::new(self.lower_item(item))),
+        };
+
+        HirStmt {
+            id: self.next_id(),
+            kind,
+            span: stmt.span,
         }
     }
 

@@ -1,11 +1,11 @@
 use hycc_span::Span;
 
-use crate::{HirId, path::HirRawIdent, ty::HirTy};
+use crate::{HirId, block::HirBlock, expr::HirExpr, path::HirRawIdent, ty::HirTy};
 
 #[derive(Debug, Clone)]
 pub enum HirItemKind {
     Fn(Box<HirFn>),
-    Var,
+    VarDecl(Box<HirVarDecl>),
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +20,7 @@ pub struct HirFn {
     pub ident: HirRawIdent,
     pub params: HirFnParamList,
     pub ret_ty: Option<HirTy>,
+    pub body: HirBlock,
     pub span: Span,
 }
 
@@ -32,6 +33,15 @@ pub struct HirFnParamList {
 #[derive(Debug, Clone)]
 pub struct HirFnParam {
     pub ident: HirRawIdent,
-    // TODO: pub ty: HirTy,
+    pub ty: Box<HirTy>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirVarDecl {
+    pub id: HirId,
+    pub ident: HirRawIdent,
+    pub ty: Option<Box<HirTy>>,
+    pub val: Option<Box<HirExpr>>,
     pub span: Span,
 }

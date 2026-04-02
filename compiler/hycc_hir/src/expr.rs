@@ -1,4 +1,4 @@
-use crate::path::HirPath;
+use crate::{HirId, path::HirPath};
 
 use hycc_ast::expr::ExprEvaluatability;
 use hycc_span::Span;
@@ -17,6 +17,7 @@ type HirExprEvaluatability = ExprEvaluatability;
 
 #[derive(Debug, Clone)]
 pub struct HirExpr {
+    pub id: HirId,
     pub kind: HirExprKind,
     pub span: Span,
     pub eval: HirExprEvaluatability,

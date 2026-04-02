@@ -1,5 +1,4 @@
 use hycc_ast::Program;
-use hycc_collection::collector::Collector;
 use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
@@ -10,10 +9,7 @@ use hycc_parser::{
     parser::{Parser, diag_ctx::ParserDiagCtx},
 };
 use hycc_source::Source;
-use hycc_symbol::SymbolInterner;
 use hycc_util::ternary;
-
-// use hycc_collection::collector::SymCollector;
 
 use crate::session::Session;
 

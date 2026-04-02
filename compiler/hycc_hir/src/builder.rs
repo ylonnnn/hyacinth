@@ -10,6 +10,7 @@ use hycc_source::Source;
 use hycc_symbol::{Symbol, SymbolInterner};
 
 use crate::{
+    HirId,
     expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
     item::{HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind},
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
@@ -21,6 +22,8 @@ use crate::{
 pub struct HirBuilder<'s> {
     interner: SymbolInterner,
     source: &'s Source,
+
+    counter: usize,
 }
 
 impl<'s> HirBuilder<'s> {
@@ -28,6 +31,7 @@ impl<'s> HirBuilder<'s> {
         Self {
             interner: SymbolInterner::new(),
             source,
+            counter: 0,
         }
     }
 
@@ -35,8 +39,15 @@ impl<'s> HirBuilder<'s> {
         self.interner.intern(token.view(&self.source.data))
     }
 
+    fn next_id(&mut self) -> HirId {
+        HirId((self.counter, self.counter += 1).0)
+    }
+
     pub fn lower(&mut self, tree: Program) -> HirProgram {
-        let mut hir_tree = HirProgram { items: Vec::new() };
+        let mut hir_tree = HirProgram {
+            id: self.next_id(),
+            items: Vec::new(),
+        };
 
         for item in tree.items {
             hir_tree.items.push(self.lower_item(&item));
@@ -52,6 +63,7 @@ impl<'s> HirBuilder<'s> {
         };
 
         HirItem {
+            id: self.next_id(),
             kind,
             span: item.span,
         }
@@ -67,7 +79,7 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_fn_params(&mut self, params: &FnParamList) -> HirFnParamList {
+    fn lower_fn_params(&mut self, params: &FnParamList) -> HirFnParamList {
         let mut data = Vec::new();
 
         for param in &params.list {
@@ -84,7 +96,7 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_expr(&mut self, expr: &Expr) -> HirExpr {
+    fn lower_expr(&mut self, expr: &Expr) -> HirExpr {
         let kind = match &expr.kind {
             ExprKind::Path(path) => HirExprKind::Path(Box::new(self.lower_path(&path))),
             ExprKind::Literal(lit) => HirExprKind::Literal(Box::new(self.lower_literal(lit))),
@@ -104,17 +116,33 @@ impl<'s> HirBuilder<'s> {
         };
 
         HirExpr {
+            id: self.next_id(),
             kind,
             span: expr.span,
             eval: expr.eval,
         }
     }
 
-    pub fn lower_literal(&mut self, lit: &Token) -> HirLiteral {
-        todo!()
+    fn lower_literal(&mut self, lit: &Token) -> HirLiteral {
+        let view = lit.view(&self.source.data);
+
+        match &lit.kind {
+            TokenKind::Int { base } | TokenKind::Float { base } => {
+                todo!("{view} of base {base}")
+            }
+
+            TokenKind::Bool => HirLiteral::Bool(view == "true"),
+            TokenKind::Char { .. } => HirLiteral::Char(view.as_bytes()[0]), // TODO: maybe
+            // add support to
+            // larger sized
+            // characters
+            TokenKind::String { .. } => HirLiteral::String(String::from(view)),
+
+            _ => unreachable!(),
+        }
     }
 
-    pub fn lower_binary(
+    fn lower_binary(
         &mut self,
         op: &Token,
         left: &Box<Expr>,
@@ -152,7 +180,7 @@ impl<'s> HirBuilder<'s> {
         )
     }
 
-    pub fn lower_unary(&mut self, expr: &Unary) -> HirUnary {
+    fn lower_unary(&mut self, expr: &Unary) -> HirUnary {
         match expr {
             Unary::Pre(op, expr) => HirUnary::Pre(
                 match op.kind {
@@ -179,7 +207,7 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_ty(&mut self, ty: &Ty) -> HirTy {
+    fn lower_ty(&mut self, ty: &Ty) -> HirTy {
         let kind = match &ty.kind {
             TyKind::Path(path) => HirTyKind::Path(Box::new(self.lower_path(&path))),
             TyKind::Array(arr) => HirTyKind::Array(Box::new(self.lower_array(&arr))),
@@ -187,12 +215,13 @@ impl<'s> HirBuilder<'s> {
         };
 
         HirTy {
+            id: self.next_id(),
             kind,
             span: ty.span,
         }
     }
 
-    pub fn lower_array(&mut self, arr: &Array) -> HirArray {
+    fn lower_array(&mut self, arr: &Array) -> HirArray {
         HirArray {
             ty: Box::new(self.lower_ty(&arr.ty)),
             size: Box::new(self.lower_expr(&arr.size)),
@@ -200,8 +229,9 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_path(&mut self, path: &Path) -> HirPath {
+    fn lower_path(&mut self, path: &Path) -> HirPath {
         HirPath {
+            id: self.next_id(),
             segments: path
                 .segments
                 .iter()
@@ -211,8 +241,9 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_ident(&mut self, ident: &Identifier) -> HirIdent {
+    fn lower_ident(&mut self, ident: &Identifier) -> HirIdent {
         HirIdent {
+            id: self.next_id(),
             ident: self.lower_raw_ident(&ident.ident),
             arguments: ident
                 .arguments
@@ -222,7 +253,7 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_ident_args(&mut self, arguments: &IdentifierArguments) -> HirIdentArguments {
+    fn lower_ident_args(&mut self, arguments: &IdentifierArguments) -> HirIdentArguments {
         let mut data = Vec::new();
         for argument in &arguments.data {
             data.push(match argument {
@@ -239,8 +270,9 @@ impl<'s> HirBuilder<'s> {
         }
     }
 
-    pub fn lower_raw_ident(&mut self, token: &Token) -> HirRawIdent {
+    fn lower_raw_ident(&mut self, token: &Token) -> HirRawIdent {
         HirRawIdent {
+            id: self.next_id(),
             ident: self.intern_tok_str(token),
             span: token.span,
         }

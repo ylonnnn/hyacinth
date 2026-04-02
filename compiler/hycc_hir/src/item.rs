@@ -1,6 +1,6 @@
 use hycc_span::Span;
 
-use crate::{path::HirRawIdent, ty::HirTy};
+use crate::{HirId, path::HirRawIdent, ty::HirTy};
 
 #[derive(Debug, Clone)]
 pub enum HirItemKind {
@@ -10,6 +10,7 @@ pub enum HirItemKind {
 
 #[derive(Debug, Clone)]
 pub struct HirItem {
+    pub id: HirId,
     pub kind: HirItemKind,
     pub span: Span,
 }

@@ -23,7 +23,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct HirBuilder<'s> {
-    interner: SymbolInterner,
+    pub interner: SymbolInterner,
     source: &'s Source,
 
     counter: usize,

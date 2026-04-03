@@ -1,4 +1,5 @@
 use hycc_ast::Program;
+use hycc_collection::collector::Collector;
 use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
@@ -51,10 +52,7 @@ pub fn compile(session: &mut Session) {
     };
 
     let hir = lower_ast_to_hir(session, tree);
-    dbg!(hir);
+    let mut collector = Collector::new(&mut session.dctx);
 
-    // let mut interner = SymbolInterner::new();
-    // let mut collector = Collector::new(&mut interner, &session.source_registry.root());
-
-    // collector.collect(tree);
+    collector.collect(hir);
 }

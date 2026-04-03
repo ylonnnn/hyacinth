@@ -107,9 +107,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
             ..
         } = diagnostic;
 
-        let Some(source) = self.source_registry.get(span.src_id) else {
-            panic!("source identifier of span is invalid!");
-        };
+        let source = self.source_registry.get(span.src_id);
 
         let (start, end) = span.to_position_range(&source);
         let sev_color = self.color_from_severity(severity);

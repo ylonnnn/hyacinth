@@ -1,7 +1,7 @@
 use std::fs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SourceId(pub(crate) u16);
+pub struct SourceId(pub u16);
 
 impl SourceId {
     #[allow(non_snake_case)]

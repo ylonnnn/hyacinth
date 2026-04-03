@@ -1,20 +1,20 @@
 use crate::Position;
 
-use hycc_source::source::Source;
+use hycc_source::source::{Source, SourceId};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Span {
     pub offset: u32,
     pub len: u16,
-    pub src_id: u16,
+    pub src_id: SourceId,
 }
 
 impl Span {
-    pub fn new(offset: u32, len: u16, program_id: u16) -> Self {
+    pub fn new(offset: u32, len: u16, src_id: u16) -> Self {
         Self {
             offset,
             len,
-            src_id: program_id,
+            src_id: SourceId(src_id),
         }
     }
 
@@ -28,7 +28,7 @@ impl Span {
         Self::new(
             start,
             (self.end().max(other.end()) - start) as u16,
-            self.src_id,
+            self.src_id.0,
         )
     }
 
@@ -78,10 +78,6 @@ impl Default for Span {
 impl From<(u32, u16, u16)> for Span {
     fn from(value: (u32, u16, u16)) -> Self {
         let (offset, len, src_id) = value;
-        Self {
-            offset,
-            len,
-            src_id,
-        }
+        Self::new(offset, len, src_id)
     }
 }

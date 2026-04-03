@@ -1,4 +1,4 @@
-use crate::source::Source;
+use crate::source::{Source, SourceId};
 
 #[derive(Debug)]
 pub struct SourceRegistry {
@@ -28,15 +28,15 @@ impl SourceRegistry {
             Self::CAPACITY
         );
 
-        source.identifier.0 = self.sources.len() as u16;
+        source.identifier.0 = SourceId(self.sources.len() as u16);
         self.sources.push(source);
     }
 
-    pub fn get(&self, id: u16) -> Option<&Source> {
-        self.sources.get(id as usize)
+    pub fn get(&self, id: SourceId) -> &Source {
+        &self.sources[id.unwrap() as usize]
     }
 
-    pub fn get_mut(&mut self, id: u16) -> Option<&mut Source> {
-        self.sources.get_mut(id as usize)
+    pub fn get_mut(&mut self, id: SourceId) -> &mut Source {
+        &mut self.sources[id.unwrap() as usize]
     }
 }

@@ -56,9 +56,10 @@ impl<'s> Parser<'s> {
                 ItemKind::Fn(Box::new(self.parse_fn_with_recovery()?))
             }
 
-            // TokenKind::Ident(TokenIdentKind::Let) => {
-            //     ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
-            // }
+            TokenKind::Ident(TokenIdentKind::Let) => {
+                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
+            }
+
             _ => Err(None)?,
         };
 

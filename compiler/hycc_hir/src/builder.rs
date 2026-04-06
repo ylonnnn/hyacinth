@@ -22,17 +22,17 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct HirBuilder<'s> {
-    pub interner: SymbolInterner,
+pub struct HirBuilder<'i, 's> {
+    interner: &'i mut SymbolInterner,
     source: &'s Source,
 
     counter: usize,
 }
 
-impl<'s> HirBuilder<'s> {
-    pub fn new(source: &'s Source) -> Self {
+impl<'i, 's> HirBuilder<'i, 's> {
+    pub fn new(interner: &'i mut SymbolInterner, source: &'s Source) -> Self {
         Self {
-            interner: SymbolInterner::new(),
+            interner,
             source,
             counter: 0,
         }

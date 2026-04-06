@@ -5,7 +5,7 @@ use hycc_hir::{
 
 use crate::collector::{CollectResult, Collector};
 
-impl<'d> Collector<'d> {
+impl Collector {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         let definition = match &item.kind {
             HirItemKind::Fn(func) => {

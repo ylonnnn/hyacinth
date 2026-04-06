@@ -1,4 +1,4 @@
 pub mod collector;
-pub mod error;
+pub mod diag;
 
 pub mod item;

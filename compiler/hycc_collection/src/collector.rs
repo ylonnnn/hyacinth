@@ -1,27 +1,28 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefId, Definition, DefinitionTable},
-    program::HirProgram,
+    HirTable, def::{DefId, Definition, DefinitionTable}, program::HirProgram
 };
 use hycc_scope::ScopeCtx;
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
 #[derive(Debug)]
-pub struct Collector {
+pub struct Collector<'t, 'h> {
     pub(crate) definitions: DefinitionTable,
     pub(crate) scope_ctx: ScopeCtx,
     pub dctx: CollectorDiagCtx,
+    pub(crate) hir_table: &'t HirTable<'h>,
 }
 
 pub type CollectResult<T = (), E = Option<CollectorDiag>> = Result<T, E>;
 
-impl Collector {
-    pub fn new() -> Self {
+impl<'t, 'h> Collector<'t, 'h> {
+    pub fn new(hir_table: &'t HirTable<'h>) -> Self {
         Self {
             definitions: DefinitionTable::new(),
             scope_ctx: ScopeCtx::new(),
             dctx: CollectorDiagCtx::new(),
+            hir_table,
         }
     }
 

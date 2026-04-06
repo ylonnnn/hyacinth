@@ -48,10 +48,8 @@ impl DefinitionTable {
 pub struct DefId(usize);
 
 impl DefId {
-    #[allow(non_snake_case)]
-    pub fn Invalid() -> Self {
-        Self(usize::MAX)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(usize::MAX);
 
     pub fn unwrap(&self) -> usize {
         assert_ne!(self.0, usize::MAX, "definition id is not valid!");

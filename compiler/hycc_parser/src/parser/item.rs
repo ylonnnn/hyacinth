@@ -51,6 +51,7 @@ impl Parser {
             return Err(None);
         };
 
+        let span = tok.span;
         let kind = match tok.kind {
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 ItemKind::Fn(Box::new(self.parse_fn_with_recovery()?))
@@ -63,7 +64,10 @@ impl Parser {
             _ => Err(None)?,
         };
 
-        Ok(Item::new(kind))
+        let mut item = Item::new(kind);
+        item.span = span.merge(&item.span);
+
+        Ok(item)
     }
 
     pub fn parse_fn_with_recovery(&mut self) -> ParseResult<Fn> {

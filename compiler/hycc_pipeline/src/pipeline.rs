@@ -68,7 +68,7 @@ pub fn compile<'h>(session: &mut Session<'h>) {
     };
 
     let hir = lower_ast_to_hir(session, tree);
-    let mut collector = Collector::new();
+    let mut collector = Collector::new(&session.hir_table);
     collector.collect(hir);
 
     collector.dctx.emit(

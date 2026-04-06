@@ -24,7 +24,7 @@ pub enum ExprInfixBindingPower {
     Primary,
 }
 
-impl<'s> Parser<'s> {
+impl Parser {
     pub fn expr_infix_binding_power_of(kind: TokenKind) -> Option<(u8, u8)> {
         use ExprInfixBindingPower::*;
 

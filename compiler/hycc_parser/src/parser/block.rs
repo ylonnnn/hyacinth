@@ -7,7 +7,7 @@ use hycc_diagnostic::DiagnosticContext;
 
 use crate::parser::{Parser, parser::ParseResult};
 
-impl<'s> Parser<'s> {
+impl Parser {
     pub fn parse_block(&mut self) -> ParseResult<Block> {
         let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
             TokenGraph::Collection { data, .. } => data,

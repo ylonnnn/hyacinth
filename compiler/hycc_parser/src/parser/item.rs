@@ -11,7 +11,7 @@ use crate::parser::{
     parser::ParseResult,
 };
 
-impl<'s> Parser<'s> {
+impl Parser {
     pub fn parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.parse_item();
         if let Err(_) = item {

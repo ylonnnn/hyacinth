@@ -2,7 +2,7 @@ use hycc_ast::{Stmt, StmtKind, token::TokenKind};
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
-impl<'s> Parser<'s> {
+impl Parser {
     pub fn parse_stmt_with_recovery(&mut self) -> ParseResult<Stmt> {
         let stmt = self.parse_stmt();
         self.try_sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);

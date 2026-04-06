@@ -20,7 +20,7 @@ pub enum IdentLeadTyKind {
     // TODO: other identifier-lead types
 }
 
-impl<'s> Parser<'s> {
+impl Parser {
     pub fn parse_ty(&mut self) -> ParseResult<Ty> {
         let Some(tok) = self.peek_nonlf_token() else {
             return Err(None);

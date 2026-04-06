@@ -4,29 +4,26 @@ use hycc_ast::{
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_diagnostic::DiagnosticContext;
-use hycc_source::Source;
 
 use crate::parser::diag::{
     ParserDiag, ParserDiagCtx, ParserDiagErrorKind, UnexpectedTokenExpectation,
 };
 
 #[derive(Debug)]
-pub struct Parser<'s> {
+pub struct Parser {
     pub(super) stream: TokenStream,
     pub dctx: ParserDiagCtx,
-    pub(super) source: &'s Source,
 
     pub(super) generic_delimeter_encounters: usize,
 }
 
 pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
 
-impl<'s> Parser<'s> {
-    pub fn new(source: &'s Source, stream: TokenStream) -> Self {
+impl Parser {
+    pub fn new(stream: TokenStream) -> Self {
         Self {
             stream,
             dctx: ParserDiagCtx::new(),
-            source,
 
             generic_delimeter_encounters: 0,
         }

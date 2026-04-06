@@ -36,7 +36,7 @@ pub fn analyze_source(session: &mut Session) -> Option<Program> {
         return None;
     }
 
-    let mut parser = Parser::new(&session.source_registry.root(), tok_stream);
+    let mut parser = Parser::new(tok_stream);
     let program = parser.parse();
 
     parser.dctx.emit(

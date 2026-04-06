@@ -37,7 +37,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
         position_range: (Position, Position),
     ) -> String {
         let (start, end) = &position_range;
-        let digit_n = ((start.line as f32).log10().floor() as usize) + 1;
+        let digit_n = ((end.line as f32).log10().floor() as usize) + 1;
 
         source
             .data
@@ -47,10 +47,13 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .take((end.line.saturating_sub(start.line) + 1) as usize)
             .map(|(line, num)| {
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
+                let dig_n = ((num as f32).log10().floor() as usize) + 1;
+
                 let prefix = format!(
-                    "  {line_num}  {pipe}  {r}",
-                    line_num = num.to_string().style(bb),
-                    pipe = "|".style(b),
+                    "  {line_num}{padding}{pipe}  {r}",
+                    padding = " ".repeat((2 + digit_n) - dig_n),
+                    line_num = num.to_string().style(bb).style(b),
+                    pipe = "|",
                 );
 
                 let (ln_start, ln_end) = (
@@ -58,20 +61,19 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     ternary!(num == end.line, end.column - 1, line.len() as u32),
                 );
 
-                format!("{prefix}{line}")
-                    + &format!(
-                        "\n{ptr_prefix}{padding}{pointer}",
-                        ptr_prefix = format!(
-                            "  {space}  {pipe}  {r}",
-                            space = " ".repeat(digit_n as usize),
-                            pipe = "|".style(b),
-                        ),
-                        padding = " ".repeat(ln_start as usize),
-                        pointer = "^"
-                            .repeat((ln_end - ln_start) as usize)
-                            .style(severity_color)
-                            .bold()
-                    )
+                format!(
+                    "{prefix}{line}\n{ptr_prefix}{padding}{pointer}",
+                    ptr_prefix = format!(
+                        "  {space}  {pipe}  {r}",
+                        space = " ".repeat(digit_n as usize),
+                        pipe = "|".style(bb).style(b),
+                    ),
+                    padding = " ".repeat(ln_start as usize),
+                    pointer = "^"
+                        .repeat(((ln_end - ln_start) as usize).clamp(1, usize::MAX))
+                        .style(severity_color)
+                        .bold()
+                )
             })
             .collect::<Vec<String>>()
             .join("\n")

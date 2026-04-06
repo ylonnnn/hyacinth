@@ -11,7 +11,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_util::{digit_value, ternary};
 
 use crate::{
-    HirId,
+    HirNode, HirTable,
     block::HirBlock,
     expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
     item::{HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirVarDecl},
@@ -22,19 +22,25 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct HirBuilder<'i, 's> {
+pub struct HirBuilder<'i, 's, 't, 'h>
+where
+    'h: 't,
+{
     interner: &'i mut SymbolInterner,
     source: &'s Source,
-
-    counter: usize,
+    hir_table: &'t HirTable<'h>,
 }
 
-impl<'i, 's> HirBuilder<'i, 's> {
-    pub fn new(interner: &'i mut SymbolInterner, source: &'s Source) -> Self {
+impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
+    pub fn new(
+        interner: &'i mut SymbolInterner,
+        source: &'s Source,
+        hir_table: &'t HirTable<'h>,
+    ) -> Self {
         Self {
             interner,
             source,
-            counter: 0,
+            hir_table,
         }
     }
 
@@ -42,37 +48,36 @@ impl<'i, 's> HirBuilder<'i, 's> {
         self.interner.intern(token.view(&self.source.data))
     }
 
-    fn next_id(&mut self) -> HirId {
-        HirId((self.counter, self.counter += 1).0)
-    }
-
-    pub fn lower(&mut self, tree: Program) -> HirProgram {
-        let mut hir_tree = HirProgram {
-            id: self.next_id(),
-            items: Vec::new(),
+    pub fn lower(&mut self, tree: Program) -> &'h HirProgram<'h> {
+        let HirNode::Program(hir_tree) = self.hir_table.add(HirNode::Program(HirProgram::new(
+            tree.items
+                .iter()
+                .map(|item| self.lower_item(&item))
+                .collect(),
+        ))) else {
+            unreachable!()
         };
-
-        for item in tree.items {
-            hir_tree.items.push(self.lower_item(&item));
-        }
 
         hir_tree
     }
 
-    fn lower_item(&mut self, item: &Item) -> HirItem {
+    fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
             ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
         };
 
-        HirItem {
-            id: self.next_id(),
-            kind,
-            span: item.span,
+        if let HirNode::Item(item) = self
+            .hir_table
+            .add(HirNode::Item(HirItem::new(kind, item.span)))
+        {
+            item
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_fn(&mut self, func: &Fn) -> HirFn {
+    fn lower_fn(&mut self, func: &Fn) -> HirFn<'h> {
         HirFn {
             ident: self.lower_raw_ident(&func.ident),
             params: self.lower_fn_params(&func.params),
@@ -82,13 +87,13 @@ impl<'i, 's> HirBuilder<'i, 's> {
         }
     }
 
-    fn lower_fn_params(&mut self, params: &FnParamList) -> HirFnParamList {
+    fn lower_fn_params(&mut self, params: &FnParamList) -> HirFnParamList<'h> {
         let mut data = Vec::new();
 
         for param in &params.list {
-            data.push(HirFnParam {
+            data.push(HirFnParam::<'h> {
                 ident: self.lower_raw_ident(&param.ident),
-                ty: Box::new(self.lower_ty(&param.ty)),
+                ty: self.lower_ty(&param.ty),
                 span: param.span(),
             })
         }
@@ -99,44 +104,49 @@ impl<'i, 's> HirBuilder<'i, 's> {
         }
     }
 
-    pub fn lower_var_decl(&mut self, decl: &VarDecl) -> HirVarDecl {
+    pub fn lower_var_decl(&mut self, decl: &VarDecl) -> HirVarDecl<'h> {
         HirVarDecl {
-            id: self.next_id(),
             ident: self.lower_raw_ident(&decl.ident),
-            ty: decl.ty.as_ref().map(|ty| Box::new(self.lower_ty(ty))),
-            val: decl.val.as_ref().map(|val| Box::new(self.lower_expr(val))),
+            ty: decl.ty.as_ref().map(|ty| self.lower_ty(ty)),
+            val: decl.val.as_ref().map(|val| self.lower_expr(val)),
             span: decl.span(),
         }
     }
 
-    fn lower_block(&mut self, block: &Block) -> HirBlock {
-        HirBlock {
-            id: self.next_id(),
-            stmts: block
+    fn lower_block(&mut self, block: &Block) -> &'h HirBlock<'h> {
+        if let HirNode::Block(block) = self.hir_table.add(HirNode::Block(HirBlock::new(
+            block
                 .stmts
                 .iter()
                 .map(|stmt| self.lower_stmt(stmt))
                 .collect(),
-            span: block.span,
+            block.span,
+        ))) {
+            block
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt) -> HirStmt {
+    fn lower_stmt(&mut self, stmt: &Stmt) -> &'h HirStmt<'h> {
         let kind = match &stmt.kind {
-            StmtKind::Expr(expr) => HirStmtKind::Expr(Box::new(self.lower_expr(expr))),
-            StmtKind::Item(item) => HirStmtKind::Item(Box::new(self.lower_item(item))),
+            StmtKind::Expr(expr) => HirStmtKind::Expr(self.lower_expr(expr)),
+            StmtKind::Item(item) => HirStmtKind::Item(self.lower_item(item)),
         };
 
-        HirStmt {
-            id: self.next_id(),
-            kind,
-            span: stmt.span,
+        if let HirNode::Stmt(stmt) = self
+            .hir_table
+            .add(HirNode::Stmt(HirStmt::new(kind, stmt.span)))
+        {
+            stmt
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_expr(&mut self, expr: &Expr) -> HirExpr {
+    fn lower_expr(&mut self, expr: &Expr) -> &'h HirExpr<'h> {
         let kind = match &expr.kind {
-            ExprKind::Path(path) => HirExprKind::Path(Box::new(self.lower_path(&path))),
+            ExprKind::Path(path) => HirExprKind::Path(self.lower_path(&path)),
             ExprKind::Literal(lit) => HirExprKind::Literal(Box::new(self.lower_literal(lit))),
             ExprKind::Binary(op, left, right) => {
                 let (op, left, right) = self.lower_binary(op, left, right);
@@ -144,20 +154,21 @@ impl<'i, 's> HirBuilder<'i, 's> {
             }
 
             ExprKind::Unary(unary) => HirExprKind::Unary(Box::new(self.lower_unary(unary))),
-            ExprKind::Assign(assignee, expr) => HirExprKind::Assign(
-                Box::new(self.lower_expr(assignee)),
-                Box::new(self.lower_expr(expr)),
-            ),
+            ExprKind::Assign(assignee, expr) => {
+                HirExprKind::Assign(self.lower_expr(assignee), self.lower_expr(expr))
+            }
 
             #[allow(unreachable_patterns)]
             _ => todo!(),
         };
 
-        HirExpr {
-            id: self.next_id(),
-            kind,
-            span: expr.span,
-            eval: expr.eval,
+        if let HirNode::Expr(expr) = self
+            .hir_table
+            .add(HirNode::Expr(HirExpr::new(kind, expr.span, expr.eval)))
+        {
+            expr
+        } else {
+            unreachable!()
         }
     }
 
@@ -209,7 +220,7 @@ impl<'i, 's> HirBuilder<'i, 's> {
         op: &Token,
         left: &Box<Expr>,
         right: &Box<Expr>,
-    ) -> (BinaryOp, Box<HirExpr>, Box<HirExpr>) {
+    ) -> (BinaryOp, &'h HirExpr<'h>, &'h HirExpr<'h>) {
         (
             match &op.kind {
                 TokenKind::Plus => BinaryOp::Add,
@@ -237,12 +248,12 @@ impl<'i, 's> HirBuilder<'i, 's> {
 
                 _ => BinaryOp::Nop,
             },
-            Box::new(self.lower_expr(left)),
-            Box::new(self.lower_expr(right)),
+            self.lower_expr(left),
+            self.lower_expr(right),
         )
     }
 
-    fn lower_unary(&mut self, expr: &Unary) -> HirUnary {
+    fn lower_unary(&mut self, expr: &Unary) -> HirUnary<'h> {
         match expr {
             Unary::Pre(op, expr) => HirUnary::Pre(
                 match op.kind {
@@ -255,7 +266,7 @@ impl<'i, 's> HirBuilder<'i, 's> {
 
                     _ => UnaryOp::Nop,
                 },
-                Box::new(self.lower_expr(&expr)),
+                self.lower_expr(&expr),
             ),
             Unary::Post(op, expr) => HirUnary::Post(
                 match op.kind {
@@ -264,65 +275,70 @@ impl<'i, 's> HirBuilder<'i, 's> {
 
                     _ => UnaryOp::Nop,
                 },
-                Box::new(self.lower_expr(&expr)),
+                self.lower_expr(&expr),
             ),
         }
     }
 
-    fn lower_ty(&mut self, ty: &Ty) -> HirTy {
+    fn lower_ty(&mut self, ty: &Ty) -> &'h HirTy<'h> {
         let kind = match &ty.kind {
-            TyKind::Path(path) => HirTyKind::Path(Box::new(self.lower_path(&path))),
+            TyKind::Path(path) => HirTyKind::Path(self.lower_path(&path)),
             TyKind::Array(arr) => HirTyKind::Array(Box::new(self.lower_array(&arr))),
             TyKind::Unit(span) => HirTyKind::Unit(*span),
         };
 
-        HirTy {
-            id: self.next_id(),
-            kind,
-            span: ty.span,
+        if let HirNode::Ty(ty) = self.hir_table.add(HirNode::Ty(HirTy::new(kind, ty.span))) {
+            ty
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_array(&mut self, arr: &Array) -> HirArray {
+    fn lower_array(&mut self, arr: &Array) -> HirArray<'h> {
         HirArray {
-            ty: Box::new(self.lower_ty(&arr.ty)),
-            size: Box::new(self.lower_expr(&arr.size)),
+            ty: self.lower_ty(&arr.ty),
+            size: self.lower_expr(&arr.size),
             span: arr.span,
         }
     }
 
-    fn lower_path(&mut self, path: &Path) -> HirPath {
-        HirPath {
-            id: self.next_id(),
-            segments: path
-                .segments
+    fn lower_path(&mut self, path: &Path) -> &'h HirPath<'h> {
+        if let HirNode::Path(path) = self.hir_table.add(HirNode::Path(HirPath::new(
+            path.segments
                 .iter()
                 .map(|segment| self.lower_ident(segment))
                 .collect(),
-            span: path.span,
+            path.span,
+        ))) {
+            path
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_ident(&mut self, ident: &Identifier) -> HirIdent {
-        HirIdent {
-            id: self.next_id(),
-            ident: self.lower_raw_ident(&ident.ident),
-            arguments: ident
+    fn lower_ident(&mut self, ident: &Identifier) -> &'h HirIdent<'h> {
+        let ident = HirNode::Ident(HirIdent::new(
+            self.lower_raw_ident(&ident.ident),
+            ident
                 .arguments
                 .as_ref()
                 .map(|args| self.lower_ident_args(&args)),
-            span: ident.span,
+            ident.span,
+        ));
+
+        if let HirNode::Ident(ident) = self.hir_table.add(ident) {
+            ident
+        } else {
+            unreachable!()
         }
     }
 
-    fn lower_ident_args(&mut self, arguments: &IdentifierArguments) -> HirIdentArguments {
+    fn lower_ident_args(&mut self, arguments: &IdentifierArguments) -> HirIdentArguments<'h> {
         let mut data = Vec::new();
         for argument in &arguments.data {
             data.push(match argument {
-                IdentifierArgument::Expr(expr) => {
-                    HirIdentArgument::Expr(Box::new(self.lower_expr(&expr)))
-                }
-                IdentifierArgument::Ty(ty) => HirIdentArgument::Ty(Box::new(self.lower_ty(&ty))),
+                IdentifierArgument::Expr(expr) => HirIdentArgument::Expr(self.lower_expr(&expr)),
+                IdentifierArgument::Ty(ty) => HirIdentArgument::Ty(self.lower_ty(&ty)),
             })
         }
 
@@ -332,11 +348,13 @@ impl<'i, 's> HirBuilder<'i, 's> {
         }
     }
 
-    fn lower_raw_ident(&mut self, token: &Token) -> HirRawIdent {
-        HirRawIdent {
-            id: self.next_id(),
-            ident: self.intern_tok_str(token),
-            span: token.span,
+    fn lower_raw_ident(&mut self, token: &Token) -> &'h HirRawIdent {
+        let ident = HirNode::RawIdent(HirRawIdent::new(self.intern_tok_str(token), token.span));
+
+        if let HirNode::RawIdent(raw) = self.hir_table.add(ident) {
+            raw
+        } else {
+            unreachable!()
         }
     }
 }

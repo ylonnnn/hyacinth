@@ -3,22 +3,32 @@ use hycc_span::Span;
 use crate::{HirId, expr::HirExpr, path::HirPath};
 
 #[derive(Debug, Clone)]
-pub enum HirTyKind {
-    Path(Box<HirPath>),
-    Array(Box<HirArray>),
+pub enum HirTyKind<'h> {
+    Path(&'h HirPath<'h>),
+    Array(Box<HirArray<'h>>),
     Unit(Span),
 }
 
 #[derive(Debug, Clone)]
-pub struct HirTy {
+pub struct HirTy<'h> {
     pub id: HirId,
-    pub kind: HirTyKind,
+    pub kind: HirTyKind<'h>,
     pub span: Span,
 }
 
+impl<'h> HirTy<'h> {
+    pub fn new(kind: HirTyKind<'h>, span: Span) -> Self {
+        Self {
+            id: HirId::Invalid,
+            kind,
+            span,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct HirArray {
-    pub size: Box<HirExpr>,
-    pub ty: Box<HirTy>,
+pub struct HirArray<'h> {
+    pub size: &'h HirExpr<'h>,
+    pub ty: &'h HirTy<'h>,
     pub span: Span,
 }

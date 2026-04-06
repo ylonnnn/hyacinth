@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+hycc_arena = { path = "../hycc_arena" }
 hycc_ast = { path = "../hycc_ast" }
 hycc_source = { path = "../hycc_source" }
 hycc_span = { path = "../hycc_span" }

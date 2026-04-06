@@ -10,6 +10,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "hycc_arena"
+version = "0.1.0"
+
+[[package]]
 name = "hycc_ast"
 version = "0.1.0"
 dependencies = [
@@ -42,6 +46,7 @@ dependencies = [
 name = "hycc_hir"
 version = "0.1.0"
 dependencies = [
+ "hycc_arena",
  "hycc_ast",
  "hycc_source",
  "hycc_span",

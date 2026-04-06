@@ -23,7 +23,7 @@ pub fn invoke(root_path: &str) {
 }
 
 // TODO: analyze all sources starting from the root
-pub fn analyze_source(session: &mut Session) -> Option<Program> {
+pub fn analyze_source<'h>(session: &mut Session<'h>) -> Option<Program> {
     let mut lexer = Lexer::new(session.source_registry.root());
     let tok_stream = lexer.tokenize();
 
@@ -52,12 +52,17 @@ pub fn analyze_source(session: &mut Session) -> Option<Program> {
 }
 
 // TODO: lower the trees of other sources other than the root
-pub fn lower_ast_to_hir(session: &mut Session, tree: Program) -> HirProgram {
-    let mut hir_builder = HirBuilder::new(&mut session.interner, session.source_registry.root());
+pub fn lower_ast_to_hir<'h>(session: &mut Session<'h>, tree: Program) -> &'h HirProgram<'h> {
+    let mut hir_builder = HirBuilder::new(
+        &mut session.interner,
+        session.source_registry.root(),
+        &session.hir_table,
+    );
+
     hir_builder.lower(tree)
 }
 
-pub fn compile(session: &mut Session) {
+pub fn compile<'h>(session: &mut Session<'h>) {
     let Some(tree) = analyze_source(session) else {
         return;
     };

@@ -5,22 +5,33 @@ use hycc_span::Span;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum HirExprKind {
-    Path(Box<HirPath>),
+pub enum HirExprKind<'h> {
+    Path(&'h HirPath<'h>),
     Literal(Box<HirLiteral>),
-    Binary(BinaryOp, Box<HirExpr>, Box<HirExpr>),
-    Unary(Box<HirUnary>),
-    Assign(Box<HirExpr>, Box<HirExpr>),
+    Binary(BinaryOp, &'h HirExpr<'h>, &'h HirExpr<'h>),
+    Unary(Box<HirUnary<'h>>),
+    Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
 }
 
 type HirExprEvaluatability = ExprEvaluatability;
 
 #[derive(Debug, Clone)]
-pub struct HirExpr {
+pub struct HirExpr<'h> {
     pub id: HirId,
-    pub kind: HirExprKind,
+    pub kind: HirExprKind<'h>,
     pub span: Span,
     pub eval: HirExprEvaluatability,
+}
+
+impl<'h> HirExpr<'h> {
+    pub fn new(kind: HirExprKind<'h>, span: Span, eval: HirExprEvaluatability) -> Self {
+        Self {
+            id: HirId::Invalid,
+            kind,
+            span,
+            eval,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -33,9 +44,9 @@ pub enum HirLiteral {
 }
 
 #[derive(Debug, Clone)]
-pub enum HirUnary {
-    Pre(UnaryOp, Box<HirExpr>),
-    Post(UnaryOp, Box<HirExpr>),
+pub enum HirUnary<'h> {
+    Pre(UnaryOp, &'h HirExpr<'h>),
+    Post(UnaryOp, &'h HirExpr<'h>),
 }
 
 #[derive(Debug, Default, Clone, Copy)]

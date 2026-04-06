@@ -1,4 +1,4 @@
-use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
+use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefId, Definition, DefinitionTable},
     program::HirProgram,
@@ -45,7 +45,7 @@ impl Collector {
         }
     }
 
-    pub fn collect(&mut self, tree: HirProgram) {
+    pub fn collect(&mut self, tree: &HirProgram) {
         for item in &tree.items {
             if let Err(Some(err)) = self.collect_item(item) {
                 self.dctx.add(err);

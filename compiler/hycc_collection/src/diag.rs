@@ -26,7 +26,7 @@ impl CollectorDiagCtx {
     const COLLECTOR_NOTE_OFFSET: u16 = 200;
     #[allow(unused)]
     const COLLECTOR_WARNING_OFFSET: u16 = 300;
-    const COLLECTOR_ERROR_OFFSET: u16 = 400;
+    const COLLECTOR_ERROR_OFFSET: u16 = 440;
 
     pub fn new() -> Self {
         Self(Vec::new(), false)

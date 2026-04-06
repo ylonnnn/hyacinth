@@ -3,6 +3,7 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
+use hycc_diagnostic::DiagnosticContext;
 use hycc_source::Source;
 
 use crate::parser::diag::{
@@ -233,8 +234,13 @@ impl<'s> Parser<'s> {
         let mut program = Program::new(Vec::new());
 
         while !self.stream.at_eof() {
-            if let Ok(item) = self.parse_item_with_recovery() {
-                program.items.push(item);
+            match self.parse_item_with_recovery() {
+                Ok(item) => program.items.push(item),
+                Err(err) => {
+                    if let Some(err) = err {
+                        self.dctx.add(err);
+                    }
+                }
             }
         }
 

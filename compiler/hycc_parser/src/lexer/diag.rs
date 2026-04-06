@@ -10,6 +10,12 @@ pub struct LexerDiagDataCtx<'s> {
     pub registry: &'s SourceRegistry,
 }
 
+impl<'s> LexerDiagDataCtx<'s> {
+    pub fn new(registry: &'s SourceRegistry) -> Self {
+        Self { registry }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LexerDiagCtx(Vec<LexerDiag>, bool);
 

@@ -12,6 +12,12 @@ pub struct ParserDiagDataCtx<'s> {
     pub registry: &'s SourceRegistry,
 }
 
+impl<'s> ParserDiagDataCtx<'s> {
+    pub fn new(registry: &'s SourceRegistry) -> Self {
+        Self { registry }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ParserDiagCtx {
     data: Vec<ParserDiag>,

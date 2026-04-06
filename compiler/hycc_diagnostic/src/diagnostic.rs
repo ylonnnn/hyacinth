@@ -34,7 +34,7 @@ impl IntoDiagnostic for Span {
 }
 
 pub trait Diag<Ctx> {
-    fn emit(&self, ctx: Ctx) -> Diagnostic;
+    fn emit(&self, ctx: &Ctx) -> Diagnostic;
 }
 
 #[derive(Debug, Clone)]

@@ -6,10 +6,17 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 
 #[derive(Debug, Clone)]
+pub struct LexerDiagDataCtx<'s> {
+    pub registry: &'s SourceRegistry,
+}
+
+#[derive(Debug, Clone)]
 pub struct LexerDiagCtx(Vec<LexerDiag>, bool);
 
 impl LexerDiagCtx {
+    #[allow(unused)]
     const LEXER_NOTE_OFFSET: u16 = 200;
+    #[allow(unused)]
     const LEXER_WARNING_OFFSET: u16 = 300;
     const LEXER_ERROR_OFFSET: u16 = 400;
 
@@ -32,7 +39,7 @@ impl LexerDiagCtx {
     }
 }
 
-impl DiagnosticContext<&SourceRegistry, LexerDiag> for LexerDiagCtx {
+impl<'s> DiagnosticContext<LexerDiagDataCtx<'s>, LexerDiag> for LexerDiagCtx {
     fn data(&self) -> &Vec<LexerDiag> {
         &self.0
     }
@@ -45,9 +52,9 @@ impl DiagnosticContext<&SourceRegistry, LexerDiag> for LexerDiagCtx {
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: &SourceRegistry) {
+    fn emit(&self, target: &mut DiagnosticCtx, ctx: LexerDiagDataCtx<'s>) {
         for diag in self.data() {
-            target.add(diag.emit(ctx));
+            target.add(diag.emit(&ctx));
         }
     }
 }
@@ -81,12 +88,12 @@ pub struct LexerDiag {
     pub span: Span,
 }
 
-impl Diag<&SourceRegistry> for LexerDiag {
-    fn emit(&self, ctx: &SourceRegistry) -> Diagnostic {
+impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
+    fn emit(&self, ctx: &LexerDiagDataCtx<'s>) -> Diagnostic {
         use LexerDiagErrorKind as Err;
         use LexerDiagKind::*;
 
-        let registry = ctx;
+        let LexerDiagDataCtx::<'s> { registry } = *ctx;
         let source = registry.get(self.span.src_id);
         let code = (unsafe { *(&self.kind as *const LexerDiagKind as *const u8) }) as u16
             + LexerDiagCtx::LEXER_ERROR_OFFSET;

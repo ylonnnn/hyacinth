@@ -7,7 +7,12 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_util::ternary;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct ParserDiagDataCtx<'s> {
+    pub registry: &'s SourceRegistry,
+}
+
+#[derive(Debug, Clone)]
 pub struct ParserDiagCtx {
     data: Vec<ParserDiag>,
     state: ParserDiagCtxState,
@@ -63,7 +68,7 @@ impl ParserDiagCtx {
     }
 }
 
-impl DiagnosticContext<&SourceRegistry, ParserDiag> for ParserDiagCtx {
+impl<'s> DiagnosticContext<ParserDiagDataCtx<'s>, ParserDiag> for ParserDiagCtx {
     fn data(&self) -> &Vec<ParserDiag> {
         &self.data
     }
@@ -93,9 +98,9 @@ impl DiagnosticContext<&SourceRegistry, ParserDiag> for ParserDiagCtx {
         data.last_mut()
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: &SourceRegistry) {
+    fn emit(&self, target: &mut DiagnosticCtx, ctx: ParserDiagDataCtx<'s>) {
         for diag in self.data() {
-            target.add(diag.emit(ctx));
+            target.add(diag.emit(&ctx));
         }
     }
 }
@@ -198,12 +203,12 @@ impl ParserDiag {
     }
 }
 
-impl Diag<&SourceRegistry> for ParserDiag {
-    fn emit(&self, ctx: &SourceRegistry) -> Diagnostic {
+impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
+    fn emit(&self, ctx: &ParserDiagDataCtx<'s>) -> Diagnostic {
         use ParserDiagErrorKind as Err;
         use ParserDiagKind::*;
 
-        let registry = ctx;
+        let ParserDiagDataCtx::<'s> { registry } = *ctx;
         let source = registry.get(self.span.src_id);
         let code = (unsafe { *(&self.kind as *const ParserDiagKind as *const u8) }) as u16
             + ParserDiagCtx::PARSER_ERROR_OFFSET;

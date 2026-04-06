@@ -3,27 +3,28 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
-use hycc_diagnostic::DiagnosticContext;
 use hycc_source::Source;
 
-use crate::{errors, parser::diag_ctx::ParserDiagCtx};
+use crate::parser::diag::{
+    ParserDiag, ParserDiagCtx, ParserDiagErrorKind, UnexpectedTokenExpectation,
+};
 
 #[derive(Debug)]
-pub struct Parser<'d, 's> {
+pub struct Parser<'s> {
     pub(super) stream: TokenStream,
-    pub dctx: ParserDiagCtx<'d>,
+    pub dctx: ParserDiagCtx,
     pub(super) source: &'s Source,
 
     pub(super) generic_delimeter_encounters: usize,
 }
 
-pub type ParseResult<T, E = bool> = Result<T, E>;
+pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
 
-impl<'d, 's> Parser<'d, 's> {
-    pub fn new(source: &'s Source, dctx: ParserDiagCtx<'d>, stream: TokenStream) -> Self {
+impl<'s> Parser<'s> {
+    pub fn new(source: &'s Source, stream: TokenStream) -> Self {
         Self {
             stream,
-            dctx,
+            dctx: ParserDiagCtx::new(),
             source,
 
             generic_delimeter_encounters: 0,
@@ -136,18 +137,23 @@ impl<'d, 's> Parser<'d, 's> {
         consumption: TokenConsumptionKind,
         exclude: Vec<TokenKind>,
         expectation: TokenMatchExpectation,
-    ) -> Option<TokenGraph> {
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         let (matched, tg) = self.stream.expect(kind, consumption, exclude, expectation);
-        let Some(tg) = tg else { return None };
+        let Some(tg) = tg else { return Err(None) };
 
         if !matched {
-            if let Some(tok) = tg.underlying() {
-                self.dctx
-                    .add(errors::token_kind_mismatch(self.source, tok, Some(kind)));
+            match tg.underlying() {
+                None => Err(None),
+                Some(tok) => Err(Some(ParserDiag::error(
+                    tok.span,
+                    ParserDiagErrorKind::UnexpectedToken {
+                        token: tok.clone(),
+                        expected: Some(UnexpectedTokenExpectation::TokenKind(kind)),
+                    },
+                ))),
             }
-            None
         } else {
-            Some(tg)
+            Ok(tg)
         }
     }
 
@@ -156,11 +162,14 @@ impl<'d, 's> Parser<'d, 's> {
         kind: TokenKind,
         consumption: TokenConsumptionKind,
         expectation: TokenMatchExpectation,
-    ) -> Option<TokenGraph> {
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require(kind, consumption, vec![TokenKind::LnFeed], expectation)
     }
 
-    pub fn require_exact_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+    pub fn require_exact_nonlf(
+        &mut self,
+        kind: TokenKind,
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require_nonlf(
             kind,
             TokenConsumptionKind::UponSuccess,
@@ -168,7 +177,10 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
-    pub fn require_similar_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+    pub fn require_similar_nonlf(
+        &mut self,
+        kind: TokenKind,
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require_nonlf(
             kind,
             TokenConsumptionKind::UponSuccess,
@@ -176,7 +188,10 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
-    pub fn require_abs_exact_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+    pub fn require_abs_exact_nonlf(
+        &mut self,
+        kind: TokenKind,
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require_nonlf(
             kind,
             TokenConsumptionKind::Absolute,
@@ -184,7 +199,10 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
-    pub fn require_abs_similar_nonlf(&mut self, kind: TokenKind) -> Option<TokenGraph> {
+    pub fn require_abs_similar_nonlf(
+        &mut self,
+        kind: TokenKind,
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require_nonlf(
             kind,
             TokenConsumptionKind::Absolute,
@@ -192,7 +210,7 @@ impl<'d, 's> Parser<'d, 's> {
         )
     }
 
-    pub fn require_terminator(&mut self) -> Option<TokenGraph> {
+    pub fn require_terminator(&mut self) -> Result<TokenGraph, Option<ParserDiag>> {
         self.require(
             TokenKind::LnFeed,
             TokenConsumptionKind::UponSuccess,

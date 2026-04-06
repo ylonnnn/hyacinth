@@ -1,5 +1,6 @@
 use crate::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx, DiagnosticSeverity,
+    Diagnostic, DiagnosticContext, DiagnosticCtx,
+    diagnostic::DiagnosticKind,
     reporter::{DiagnosticReportStatus, DiagnosticReporter},
 };
 
@@ -21,11 +22,11 @@ impl<'d, 's> CLIReporter<'d, 's> {
         }
     }
 
-    pub fn color_from_severity(&self, severity: &DiagnosticSeverity) -> &'static str {
-        match severity {
-            DiagnosticSeverity::Info => color::BRIGHT_BLUE,
-            DiagnosticSeverity::Warning => color::YELLOW,
-            DiagnosticSeverity::Error => color::RED,
+    pub fn color(&self, kind: &DiagnosticKind) -> &'static str {
+        match kind {
+            DiagnosticKind::Note(..) => color::BRIGHT_BLUE,
+            DiagnosticKind::Warning(..) => color::YELLOW,
+            DiagnosticKind::Error(..) => color::RED,
         }
     }
 
@@ -99,25 +100,20 @@ impl<'d, 's> CLIReporter<'d, 's> {
 
 impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
     fn format_diagnostic(&self, diagnostic: &Diagnostic) -> String {
-        let Diagnostic {
-            span,
-            severity,
-            code,
-            message,
-            ..
-        } = diagnostic;
+        let Diagnostic { span, kind, .. } = diagnostic;
 
         let source = self.source_registry.get(span.src_id);
+        let (s_kind, code, args) = kind.data();
 
         let (start, end) = span.to_position_range(&source);
-        let sev_color = self.color_from_severity(severity);
+        let sev_color = self.color(&kind);
 
         format!(
             "{}<{}> -> {}{}\n{} {}:{}\n{}\n{}",
-            severity.to_string().style(&sev_color).bold(),
+            s_kind.to_string().style(&sev_color).bold(),
             code.to_string().style(&sev_color),
             style::RESET,
-            self.highlight(message, sev_color),
+            self.highlight(&format!("{}", args), sev_color),
             "----->".bright_black(),
             source.identifier.1,
             start.clone(),
@@ -127,11 +123,11 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
     }
 
     fn report(&self) -> DiagnosticReportStatus {
-        let mut status: DiagnosticReportStatus = [0; 3];
+        let status: DiagnosticReportStatus = [0; 3];
 
         for diagnostic in self.dctx.data() {
             let formatted = self.format_diagnostic(diagnostic);
-            status[diagnostic.severity as usize] += 1;
+            // status[diagnostic.severity as usize] += 1;
 
             println!("{formatted}");
         }

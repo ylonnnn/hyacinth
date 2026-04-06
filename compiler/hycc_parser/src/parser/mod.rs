@@ -1,4 +1,4 @@
-pub mod diag_ctx;
+pub mod diag;
 pub mod parser;
 
 pub mod block;

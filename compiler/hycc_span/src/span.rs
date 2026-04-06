@@ -81,3 +81,14 @@ impl From<(u32, u16, u16)> for Span {
         Self::new(offset, len, src_id)
     }
 }
+
+impl From<(u32, u16, SourceId)> for Span {
+    fn from(value: (u32, u16, SourceId)) -> Self {
+        let (offset, len, src_id) = value;
+        Self {
+            offset,
+            len,
+            src_id,
+        }
+    }
+}

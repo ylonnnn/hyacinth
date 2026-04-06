@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-hycc_source = { path = "../hycc_source" }
-hycc_diagnostic = { path = "../hycc_diagnostic" }
-
 hycc_ast = { path = "../hycc_ast" }
+hycc_diagnostic = { path = "../hycc_diagnostic" }
+hycc_source = { path = "../hycc_source" }
 hycc_span = { path = "../hycc_span" }
-
 hycc_util = { path = "../hycc_util" }

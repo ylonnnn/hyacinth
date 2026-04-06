@@ -3,13 +3,9 @@ use hycc_ast::{
     token::TokenKind,
     token_stream::{TokenConsumptionKind, TokenMatchExpectation},
 };
-use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;
 
-use crate::{
-    errors,
-    parser::{Parser, parser::ParseResult},
-};
+use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +24,7 @@ pub enum ExprInfixBindingPower {
     Primary,
 }
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn expr_infix_binding_power_of(kind: TokenKind) -> Option<(u8, u8)> {
         use ExprInfixBindingPower::*;
 
@@ -65,25 +61,24 @@ impl<'d, 's> Parser<'d, 's> {
             )
             .0;
 
-        ternary!(is_lf, Ok(expr), Err(false))
+        ternary!(is_lf, Ok(expr), Err(None))
     }
 
     pub fn parse_expr_stmt(&mut self) -> ParseResult<Expr> {
         let expr = self.parse_expr(0)?;
-        match self.require_terminator() {
-            Some(_) => Ok(expr),
-            None => Err(true),
-        }
+        self.require_terminator()?;
+
+        Ok(expr)
     }
 
     pub fn parse_expr(&mut self, min_bp: u8) -> ParseResult<Expr> {
         let Ok(mut prefix) = self.parse_prefix_expr() else {
-            return Err(false);
+            return Err(None);
         };
 
         while !self.stream.at_eof() {
             let Some(tok) = self.peek_nonlf_token() else {
-                return Err(false);
+                return Err(None);
             };
 
             let rbp = match Self::expr_infix_binding_power_of(tok.kind) {
@@ -105,7 +100,7 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_prefix_expr(&mut self) -> ParseResult<Expr> {
         let Some(token) = self.peek_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
         match token.kind {
@@ -119,21 +114,20 @@ impl<'d, 's> Parser<'d, 's> {
 
             TokenKind::Ident(..) => Ok(Expr::new(ExprKind::Path(Box::new(self.parse_path()?)))),
 
-            _ => {
-                self.dctx.add(errors::unexpected_token(
-                    self.source,
-                    &token,
-                    Some("expected expr prefix"),
-                ));
-
-                Err(true)
-            }
+            _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                token.clone(),
+                "expr prefix",
+            ))),
         }
     }
 
-    pub fn parse_infix_expr(&mut self, left: Expr, min_bp: u8) -> ParseResult<Expr, (Expr, bool)> {
+    pub fn parse_infix_expr(
+        &mut self,
+        left: Expr,
+        min_bp: u8,
+    ) -> ParseResult<Expr, (Expr, Option<ParserDiag>)> {
         let Some(token) = self.peek_nonlf_token() else {
-            return Err((left, false));
+            return Err((left, None));
         };
 
         match token.kind {
@@ -142,7 +136,7 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Bool
             | TokenKind::Char { .. }
             | TokenKind::String { .. }
-            | TokenKind::Ident(..) => Err((left, false)),
+            | TokenKind::Ident(..) => Err((left, None)),
 
             TokenKind::Plus
             | TokenKind::Minus
@@ -165,7 +159,7 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::Tilde
             | TokenKind::Caret => {
                 let Some(token) = self.next_nonlf_token() else {
-                    return Err((left, false));
+                    return Err((left, None));
                 };
 
                 let right = match self.parse_expr(min_bp) {
@@ -187,26 +181,24 @@ impl<'d, 's> Parser<'d, 's> {
             | TokenKind::SlashEq
             | TokenKind::PercentEq => {
                 if self.next_nonlf_token().is_none() {
-                    return Err((left, false));
+                    return Err((left, None));
                 };
 
                 let right = match self.parse_expr(min_bp) {
                     Ok(right) => right,
-                    Err(matched) => return Err((left, matched)),
+                    Err(diag) => return Err((left, diag)),
                 };
 
                 Ok(Expr::new(ExprKind::Assign(Box::new(left), Box::new(right))))
             }
 
-            _ => {
-                self.dctx.add(errors::unexpected_token(
-                    self.source,
-                    &token,
-                    Some("expected expr infix operation"),
-                ));
-
-                Err((left, true))
-            }
+            _ => Err((
+                left,
+                Some(ParserDiag::unexpected_token_expected_arbitrary(
+                    token.clone(),
+                    "expr infix operation",
+                )),
+            )),
         }
     }
 }

@@ -5,25 +5,29 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx, code::DiagnosticErrorKind};
 use hycc_source::source::Source;
 use hycc_span::Span;
 use hycc_util::{hashmap, is_ascii_digit, ternary};
 
+use crate::lexer::diag::{LexerDiagCtx, LexerDiagErrorKind};
+
 #[derive(Debug)]
-pub struct Lexer<'s, 'd> {
+pub struct Lexer<'s> {
     pub source: &'s Source,
-    pub dctx: &'d mut DiagnosticCtx,
+    // pub dctx: &'d mut DiagnosticCtx,
+
+    // pub diagnostics: Vec<LexerDiag>,
+    pub dctx: LexerDiagCtx,
 
     offset: u32,
     reserved: HashMap<&'static str, TokenKind>,
 }
 
-impl<'s, 'd> Lexer<'s, 'd> {
-    pub fn new(source: &'s Source, dctx: &'d mut DiagnosticCtx) -> Self {
+impl<'s> Lexer<'s> {
+    pub fn new(source: &'s Source) -> Self {
         Self {
             source,
-            dctx,
+            dctx: LexerDiagCtx::new(),
             offset: 0,
             reserved: hashmap! {
                 "fn" => TokenKind::Ident(TokenIdentKind::Fn),
@@ -146,13 +150,21 @@ impl<'s, 'd> Lexer<'s, 'd> {
 
             if !is_ascii_digit(c, base) {
                 s.dctx.error(
-                    DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
-                    &format!(
-                        "invalid numeric digit `{}` for numeric literals with base `{}`",
-                        c as char, base
-                    ),
-                    (s.offset, 1, self.source.identifier.0).into(),
+                    (s.offset, 1, s.source.identifier.0).into(),
+                    LexerDiagErrorKind::InvalidNumericLiteralDigit {
+                        digit: c,
+                        base: base as u8,
+                    },
                 );
+
+                // s.dctx.error(
+                //     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
+                //     &format!(
+                //         "invalid numeric digit `{}` for numeric literals with base `{}`",
+                //         c as char, base
+                //     ),
+                //     (s.offset, 1, self.source.identifier.0).into(),
+                // );
             }
 
             false
@@ -195,16 +207,20 @@ impl<'s, 'd> Lexer<'s, 'd> {
             self.adjustn(n);
         }
 
-        let source = &self.source.data[..];
         if base == u8::MAX {
             self.dctx.error(
-                DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
-                &format!(
-                    "invalid numeric literal prefix `{}`.",
-                    &source[(start as usize)..=(self.offset as usize)]
-                ),
                 (start, 2, src_id).into(),
+                LexerDiagErrorKind::InvalidNumericLiteralPrefix,
             );
+
+            // self.dctx.error(
+            //     DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+            //     &format!(
+            //         "invalid numeric literal prefix `{}`.",
+            //         &source[(start as usize)..=(self.offset as usize)]
+            //     ),
+            //     (start, 2, src_id).into(),
+            // );
 
             return None;
         }
@@ -216,13 +232,18 @@ impl<'s, 'd> Lexer<'s, 'd> {
         // decimal (base != 10), there could be a dangling numeric literal prefix
         if _start == self.offset && base != 10 {
             self.dctx.error(
-                DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
-                &format!(
-                    "dangling numeric literal prefix `{}`.",
-                    &source[(start as usize)..(self.offset as usize)]
-                ),
                 (start, (_start - start) as u16, src_id).into(),
+                LexerDiagErrorKind::DanglingNumericLiteralPrefix,
             );
+
+            // self.dctx.error(
+            //     DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+            //     &format!(
+            //         "dangling numeric literal prefix `{}`.",
+            //         &source[(start as usize)..(self.offset as usize)]
+            //     ),
+            //     (start, (_start - start) as u16, src_id).into(),
+            // );
         }
 
         Some(if self.expect(b'.') {
@@ -260,7 +281,6 @@ impl<'s, 'd> Lexer<'s, 'd> {
             cmp
         });
 
-        let diagnostics = &mut self.dctx;
         let span: Span = (
             start,
             (self.offset - start) as u16,
@@ -269,11 +289,14 @@ impl<'s, 'd> Lexer<'s, 'd> {
             .into();
 
         if !terminated {
-            diagnostics.error(
-                DiagnosticErrorKind::UnterminatedCharacterSequence.into(),
-                "unterminated character sequence.",
-                span,
-            );
+            self.dctx
+                .error(span, LexerDiagErrorKind::UnterminatedCharSeq);
+
+            // diagnostics.error(
+            //     DiagnosticErrorKind::UnterminatedCharacterSequence.into(),
+            //     "unterminated character sequence.",
+            //     span,
+            // );
 
             return None;
         }
@@ -285,15 +308,23 @@ impl<'s, 'd> Lexer<'s, 'd> {
         // Char
         else {
             if seq_len != 1 {
-                diagnostics.error(
-                    DiagnosticErrorKind::InvalidCharacterSequence.into(),
-                    &format!(
-                        "character sequence within `'` must contain exactly `{}` character, contains `{}`.",
-                        1,
-                        seq_len,
-                    ),
-                    span.clone(),
+                self.dctx.error(
+                    span,
+                    LexerDiagErrorKind::InvalidCharSeq {
+                        enclosing: b'\'',
+                        len: (1, seq_len),
+                    },
                 );
+
+                // diagnostics.error(
+                //     DiagnosticErrorKind::InvalidCharacterSequence.into(),
+                //     &format!(
+                //         "character sequence within `'` must contain exactly `{}` character, contains `{}`.",
+                //         1,
+                //         seq_len,
+                //     ),
+                //     span.clone(),
+                // );
             }
 
             Some(token!(TokenKind::Char { terminated }, span))
@@ -342,10 +373,15 @@ impl<'s, 'd> Lexer<'s, 'd> {
                 };
 
                 self.dctx.error(
-                    DiagnosticErrorKind::UnclosedDelimeterCollection.into(),
-                    &format!("missing closing `{}` for `{}`.", cl as char, op as char,),
-                    op_tok.span.clone(),
+                    op_tok.span,
+                    LexerDiagErrorKind::UnclosedDelimeterCollection { op, cl },
                 );
+
+                // self.dctx.error(
+                //     DiagnosticErrorKind::UnclosedDelimeterCollection.into(),
+                //     &format!("missing closing `{}` for `{}`.", cl as char, op as char,),
+                //     op_tok.span.clone(),
+                // );
             }
 
             token_graph
@@ -359,7 +395,7 @@ impl<'s, 'd> Lexer<'s, 'd> {
         if self.eof() {
             return Some(TokenGraph::Node(token!(
                 TokenKind::Eof,
-                Span::new(self.offset, 1_u16, src_id)
+                Span::new(self.offset, 1_u16, src_id.0)
             )));
         }
 
@@ -494,11 +530,14 @@ impl<'s, 'd> Lexer<'s, 'd> {
                     b']' => Some(token!(TokenKind::RightBracket, span)),
 
                     inv => {
-                        self.dctx.error(
-                            DiagnosticErrorKind::UnknownCharacter.into(),
-                            &format!("unknown character `{}`.", inv as char),
-                            span.clone(),
-                        );
+                        self.dctx
+                            .error(span, LexerDiagErrorKind::UnknownChar { c: inv });
+
+                        // self.dctx.error(
+                        //     DiagnosticErrorKind::UnknownCharacter.into(),
+                        //     &format!("unknown character `{}`.", inv as char),
+                        //     span.clone(),
+                        // );
 
                         Some(Token::Invalid(span))
                     }

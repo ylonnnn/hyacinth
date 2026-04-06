@@ -7,12 +7,11 @@ use hycc_util::ternary;
 
 use crate::parser::{Parser, parser::ParseResult};
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn parse_block(&mut self) -> ParseResult<Block> {
-        let Some(TokenGraph::Collection { data, .. }) =
-            self.require_exact_nonlf(TokenKind::LeftBrace)
-        else {
-            return Err(true);
+        let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
+            TokenGraph::Collection { data, .. } => data,
+            _ => Err(None)?,
         };
 
         let n = data.len();
@@ -39,7 +38,7 @@ impl<'d, 's> Parser<'d, 's> {
                 while !s.stream.at_eof() {
                     match s.parse_stmt_with_recovery() {
                         Ok(stmt) => data.stmts.push(stmt),
-                        Err(matched) => ternary!(matched, continue, break),
+                        Err(diag) => ternary!(diag.is_some(), continue, break),
                     }
                 }
 

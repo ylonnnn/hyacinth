@@ -1,12 +1,12 @@
 use hycc_ast::{Stmt, StmtKind, token::TokenKind};
-use hycc_diagnostic::DiagnosticContext;
 
-use crate::{
-    errors,
-    parser::{Parser, parser::ParseResult},
+use crate::parser::{
+    Parser,
+    diag::{ParserDiag, ParserDiagErrorKind, UnexpectedTokenExpectation},
+    parser::ParseResult,
 };
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn parse_stmt_with_recovery(&mut self) -> ParseResult<Stmt> {
         let stmt = self.parse_stmt();
         self.try_sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
@@ -16,29 +16,28 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_stmt(&mut self) -> ParseResult<Stmt> {
         let Some(tok) = self.peek_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
         let tok = tok.clone();
         let stmt = self.try_parse_stmt();
 
-        if let Err(matched) = stmt
-            && !matched
-        {
-            self.dctx.add(errors::unexpected_token(
-                self.source,
-                &tok,
-                Some("expected a statement"),
-            ));
+        match stmt {
+            Err(None) => Err(Some(ParserDiag::error(
+                tok.span,
+                ParserDiagErrorKind::UnexpectedToken {
+                    token: tok,
+                    expected: Some(UnexpectedTokenExpectation::Arbitrary("an item")),
+                },
+            ))),
+            _ => stmt,
         }
-
-        stmt
     }
 
     pub fn try_parse_stmt(&mut self) -> ParseResult<Stmt> {
         self.stream.save_offset();
         let Some(tok) = self.next_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
         match tok.kind {
@@ -49,19 +48,22 @@ impl<'d, 's> Parser<'d, 's> {
                 self.stream.save_offset();
 
                 match self.try_parse_item_with_recovery() {
-                    Ok(item) => return Ok(Stmt::new(StmtKind::Item(Box::new(item)))),
-                    Err(true) => Err(true)?,
-                    Err(false) => {
-                        self.stream.revert();
-                        match self.try_parse_expr_stmt() {
-                            Ok(expr) => Ok(Stmt::new(StmtKind::Expr(Box::new(expr)))),
+                    Ok(item) => Ok(Stmt::new(StmtKind::Item(Box::new(item)))),
+                    Err(err) => {
+                        if err.is_some() {
+                            Err(err)
+                        } else {
+                            self.stream.revert();
+                            match self.try_parse_expr_stmt() {
+                                Ok(expr) => Ok(Stmt::new(StmtKind::Expr(Box::new(expr)))),
+                                Err(err) => {
+                                    if err.is_some() {
+                                        self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+                                    }
 
-                            Err(true) => {
-                                self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
-                                Err(true)
+                                    Err(err)
+                                }
                             }
-
-                            Err(false) => Err(false),
                         }
                     }
                 }

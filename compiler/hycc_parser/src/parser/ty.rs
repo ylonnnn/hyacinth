@@ -3,12 +3,8 @@ use hycc_ast::{
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_diagnostic::DiagnosticContext;
 
-use crate::{
-    errors,
-    parser::{Parser, parser::ParseResult},
-};
+use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,10 +20,10 @@ pub enum IdentLeadTyKind {
     // TODO: other identifier-lead types
 }
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn parse_ty(&mut self) -> ParseResult<Ty> {
         let Some(tok) = self.peek_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
         let ty = match tok.kind {
@@ -71,13 +67,13 @@ impl<'d, 's> Parser<'d, 's> {
             }
 
             _ => {
-                self.dctx.add(errors::unexpected_token(
-                    self.source,
-                    &tok,
-                    Some("expected type"),
-                ));
+                // self.dctx.add(errors::unexpected_token(
+                //     self.source,
+                //     &tok,
+                //     Some("expected type"),
+                // ));
 
-                Err(false)
+                Err(None)
             }
         }?;
 
@@ -89,22 +85,24 @@ impl<'d, 's> Parser<'d, 's> {
             TokenKind::Eq | TokenKind::Comma | TokenKind::LeftBrace => return Ok(ty),
 
             _ => {
-                self.dctx.add(errors::unexpected_token(
-                    self.source,
-                    &tok,
-                    Some("expected type suffix"),
-                ));
+                // self.dctx.add(errors::unexpected_token(
+                //     self.source,
+                //     &tok,
+                //     Some("expected type suffix"),
+                // ));
 
-                Err(true)
+                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                    tok.clone(),
+                    "type suffix",
+                )))
             }
         }
     }
 
     pub fn parse_grouped_ty(&mut self) -> ParseResult<Ty> {
-        let Some(TokenGraph::Collection { data, .. }) =
-            self.require_abs_exact_nonlf(TokenKind::LeftParen)
-        else {
-            return Err(true);
+        let data = match self.require_abs_exact_nonlf(TokenKind::LeftParen)? {
+            TokenGraph::Collection { data, .. } => data,
+            _ => Err(None)?,
         };
 
         let n = data.len();
@@ -126,10 +124,10 @@ impl<'d, 's> Parser<'d, 's> {
                 let inner = s.parse_ty();
                 if !s.stream.abs_eof() {
                     let Some(tok) = s.peek_nonlf_token() else {
-                        return Err(false);
+                        return Err(None);
                     };
 
-                    s.dctx.add(errors::unexpected_token(self.source, tok, None));
+                    return Err(Some(ParserDiag::unexpected_token(tok.clone())));
                 }
 
                 inner
@@ -144,7 +142,7 @@ impl<'d, 's> Parser<'d, 's> {
 
     // pub fn parse_ty(&mut self, min_bp: u8) -> ParseResult<Ty> {
     //     let Ok(mut prefix) = self.parse_prefix_ty() else {
-    //         return Err(false);
+    //         return Err(None);
     //     };
 
     //     while !self.stream.abs_eof() {
@@ -171,7 +169,7 @@ impl<'d, 's> Parser<'d, 's> {
 
     // pub fn parse_prefix_ty(&mut self) -> ParseResult<Ty> {
     //     let Some(token) = self.peek_nonlf_token() else {
-    //         return Err(false);
+    //         return Err(None);
     //     };
 
     //     match token.kind {
@@ -187,14 +185,14 @@ impl<'d, 's> Parser<'d, 's> {
     //                 Some("expected type prefix token"),
     //             ));
 
-    //             Err(false)
+    //            Err(None)
     //         }
     //     }
     // }
 
     // pub fn parse_infix_ty(&mut self, _left: &Ty, _min_bp: u8) -> ParseResult<Ty> {
     //     let Some(token) = self.peek_nonlf_token() else {
-    //         return Err(false);
+    //         return Err(None);
     //     };
 
     //     match token.kind {

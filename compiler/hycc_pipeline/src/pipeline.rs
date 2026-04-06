@@ -5,10 +5,7 @@ use hycc_diagnostic::{
     reporter::{CLIReporter, DiagnosticReporter},
 };
 use hycc_hir::{builder::HirBuilder, program::HirProgram};
-use hycc_parser::{
-    lexer::Lexer,
-    parser::{Parser, diag_ctx::ParserDiagCtx},
-};
+use hycc_parser::{lexer::Lexer, parser::Parser};
 use hycc_source::Source;
 use hycc_util::ternary;
 
@@ -24,17 +21,18 @@ pub fn start(root_path: &str) {
 
 // TODO: analyze all sources starting from the root
 pub fn analyze_source(session: &mut Session) -> Option<Program> {
-    let mut lexer = Lexer::new(session.source_registry.root(), &mut session.dctx);
+    let mut lexer = Lexer::new(session.source_registry.root());
     let tok_stream = lexer.tokenize();
+
+    lexer.dctx.emit(&mut session.dctx, &session.source_registry);
     if session.dctx.error_occurred() {
         return None;
     }
 
-    let mut parser = Parser::new(
-        &session.source_registry.root(),
-        ParserDiagCtx::new(session.dctx.data_mut()),
-        tok_stream,
-    );
+    let mut parser = Parser::new(&session.source_registry.root(), tok_stream);
+    parser
+        .dctx
+        .emit(&mut session.dctx, &session.source_registry);
 
     let program = parser.parse();
     ternary!(parser.dctx.error_occurred(), None, Some(program))

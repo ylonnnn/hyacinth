@@ -6,15 +6,11 @@ use hycc_ast::{
 
 use crate::parser::{Parser, parser::ParseResult};
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn parse_raw_ident(&mut self) -> ParseResult<Token> {
-        let Some(tg) = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))
-        else {
-            return Err(true);
-        };
-
+        let tg = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))?;
         let Some(tok) = tg.underlying() else {
-            return Err(false);
+            return Err(None);
         };
 
         Ok(tok.clone())
@@ -88,7 +84,7 @@ impl<'d, 's> Parser<'d, 's> {
 
             // If not misinterpreted, simply emit an error
             // requiring a closing delimeter
-            self.require_exact_nonlf(TokenKind::Greater);
+            self.require_exact_nonlf(TokenKind::Greater)?;
         }
 
         Ok(Identifier::new(raw_ident?, args))

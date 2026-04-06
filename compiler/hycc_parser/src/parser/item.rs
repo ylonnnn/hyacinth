@@ -4,14 +4,14 @@ use hycc_ast::{
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_diagnostic::DiagnosticContext;
 
-use crate::{
-    errors,
-    parser::{Parser, parser::ParseResult},
+use crate::parser::{
+    Parser,
+    diag::{ParserDiag, ParserDiagErrorKind, UnexpectedTokenExpectation},
+    parser::ParseResult,
 };
 
-impl<'d, 's> Parser<'d, 's> {
+impl<'s> Parser<'s> {
     pub fn parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.parse_item();
         if let Err(_) = item {
@@ -32,45 +32,42 @@ impl<'d, 's> Parser<'d, 's> {
 
     pub fn parse_item(&mut self) -> ParseResult<Item> {
         let Some(tok) = self.peek_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
         let tok = tok.clone();
         let item = self.try_parse_item();
 
-        if let Err(matched) = item
-            && !matched
-        {
-            self.dctx.add(errors::unexpected_token(
-                self.source,
-                &tok,
-                Some("expected an item"),
-            ));
+        match item {
+            Err(None) => Err(Some(ParserDiag::error(
+                tok.span,
+                ParserDiagErrorKind::UnexpectedToken {
+                    token: tok,
+                    expected: Some(UnexpectedTokenExpectation::Arbitrary("an item")),
+                },
+            ))),
+            _ => item,
         }
-
-        item
     }
 
     pub fn try_parse_item(&mut self) -> ParseResult<Item> {
         let Some(tok) = self.next_nonlf_token() else {
-            return Err(false);
+            return Err(None);
         };
 
-        let item_kind = match tok.kind {
-            TokenKind::Ident(TokenIdentKind::Fn) => match self.parse_fn_with_recovery() {
-                Ok(item) => Ok(ItemKind::Fn(Box::new(item))),
-                Err(_) => Err(true)?,
-            },
+        let kind = match tok.kind {
+            TokenKind::Ident(TokenIdentKind::Fn) => {
+                ItemKind::Fn(Box::new(self.parse_fn_with_recovery()?))
+            }
 
-            TokenKind::Ident(TokenIdentKind::Let) => match self.parse_var_decl_with_recovery() {
-                Ok(item) => Ok(ItemKind::VarDecl(Box::new(item))),
-                Err(_) => Err(true)?,
-            },
+            TokenKind::Ident(TokenIdentKind::Let) => {
+                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
+            }
 
-            _ => Err(false),
-        }?;
+            _ => Err(None)?,
+        };
 
-        Ok(Item::new(item_kind))
+        Ok(Item::new(kind))
     }
 
     pub fn parse_fn_with_recovery(&mut self) -> ParseResult<Fn> {
@@ -109,10 +106,10 @@ impl<'d, 's> Parser<'d, 's> {
 
     // (PARAM (, PARAM)*)
     pub fn parse_fn_param_list(&mut self) -> ParseResult<FnParamList> {
-        let Some(TokenGraph::Collection { data, .. }) =
-            self.require_exact_nonlf(TokenKind::LeftParen)
-        else {
-            return Err(true);
+        let data = match self.require_exact_nonlf(TokenKind::LeftParen) {
+            Ok(TokenGraph::Collection { data, .. }) => data,
+            Ok(_) => Err(None)?,
+            Err(err) => Err(err)?,
         };
 
         let n = data.len();
@@ -154,7 +151,7 @@ impl<'d, 's> Parser<'d, 's> {
         let ident = self.parse_raw_ident()?;
 
         // :
-        self.require_abs_exact_nonlf(TokenKind::Colon);
+        self.require_abs_exact_nonlf(TokenKind::Colon)?;
 
         // TY
         let ty = self.parse_ty()?;
@@ -176,7 +173,7 @@ impl<'d, 's> Parser<'d, 's> {
     // let IDENT (: TY)? (= EXPR)? (TERM ::= '\n')
     pub fn parse_var_decl(&mut self) -> ParseResult<VarDecl> {
         // IDENT
-        let ident = self.parse_raw_ident();
+        let ident = self.parse_raw_ident()?;
 
         // :
         let mut ty = Option::<Ty>::None;
@@ -187,22 +184,24 @@ impl<'d, 's> Parser<'d, 's> {
 
         // =
         let mut val = Option::<Expr>::None;
-        if self.peek_nonlf().is_some() && self.require_abs_exact_nonlf(TokenKind::Eq).is_some() {
+        if self.peek_nonlf().is_some() {
             // EXPR
-            val = Some(self.parse_expr(0)?)
+            self.require_abs_exact_nonlf(TokenKind::Eq)?;
+            val = Some(self.parse_expr(0)?);
         }
 
-        self.require_terminator();
+        self.require_terminator()?;
 
         // Validate variable declaration composition
         if ty.is_none() && val.is_none() {
-            self.dctx
-                .add(errors::invalid_var_decl(&self.source, &ident?));
-            return Err(true);
+            return Err(Some(ParserDiag::error(
+                ident.span,
+                ParserDiagErrorKind::InvalidVarDecl { ident },
+            )));
         }
 
         Ok(VarDecl {
-            ident: ident?,
+            ident,
             ty: ty.map(Box::new),
             val: val.map(Box::new),
         })

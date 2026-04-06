@@ -1,10 +1,6 @@
 use hycc_ast::{Stmt, StmtKind, token::TokenKind};
 
-use crate::parser::{
-    Parser,
-    diag::{ParserDiag, ParserDiagErrorKind, UnexpectedTokenExpectation},
-    parser::ParseResult,
-};
+use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
 impl<'s> Parser<'s> {
     pub fn parse_stmt_with_recovery(&mut self) -> ParseResult<Stmt> {
@@ -23,12 +19,9 @@ impl<'s> Parser<'s> {
         let stmt = self.try_parse_stmt();
 
         match stmt {
-            Err(None) => Err(Some(ParserDiag::error(
-                tok.span,
-                ParserDiagErrorKind::UnexpectedToken {
-                    token: tok,
-                    expected: Some(UnexpectedTokenExpectation::Arbitrary("an item")),
-                },
+            Err(None) => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                tok,
+                "a statement",
             ))),
             _ => stmt,
         }
@@ -54,13 +47,10 @@ impl<'s> Parser<'s> {
                             Err(err)
                         } else {
                             self.stream.revert();
-                            match self.try_parse_expr_stmt() {
+                            match self.parse_expr_stmt() {
                                 Ok(expr) => Ok(Stmt::new(StmtKind::Expr(Box::new(expr)))),
                                 Err(err) => {
-                                    if err.is_some() {
-                                        self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
-                                    }
-
+                                    self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
                                     Err(err)
                                 }
                             }

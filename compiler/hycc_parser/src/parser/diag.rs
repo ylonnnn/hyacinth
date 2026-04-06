@@ -236,7 +236,7 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                             token.view(&source.data),
                             ternary!(
                                 expected.is_some(),
-                                format!(", expected {}", expected.as_ref().unwrap().to_string()),
+                                format!(", expected `{}`", expected.as_ref().unwrap().to_string()),
                                 "".into()
                             )
                         )

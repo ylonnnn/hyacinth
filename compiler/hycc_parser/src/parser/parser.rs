@@ -63,8 +63,12 @@ impl<'s> Parser<'s> {
 
     pub fn next_nonlf(&mut self) -> Option<TokenGraph> {
         let offset = self.stream.first_not_offset(vec![TokenKind::LnFeed]) + 1;
+        let peek = self.stream.peekn(offset - 1).cloned();
+
         self.stream.adjustn(offset);
-        Some(self.stream.current().clone())
+        let tok = peek?.clone();
+
+        Some(tok)
     }
 
     pub fn next_nonlf_token(&mut self) -> Option<Token> {

@@ -7,7 +7,7 @@ use hycc_ast::{
 
 use crate::parser::{
     Parser,
-    diag::{ParserDiag, ParserDiagErrorKind, UnexpectedTokenExpectation},
+    diag::{ParserDiag, ParserDiagErrorKind},
     parser::ParseResult,
 };
 
@@ -39,12 +39,8 @@ impl<'s> Parser<'s> {
         let item = self.try_parse_item();
 
         match item {
-            Err(None) => Err(Some(ParserDiag::error(
-                tok.span,
-                ParserDiagErrorKind::UnexpectedToken {
-                    token: tok,
-                    expected: Some(UnexpectedTokenExpectation::Arbitrary("an item")),
-                },
+            Err(None) => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                tok, "an item",
             ))),
             _ => item,
         }
@@ -60,10 +56,9 @@ impl<'s> Parser<'s> {
                 ItemKind::Fn(Box::new(self.parse_fn_with_recovery()?))
             }
 
-            TokenKind::Ident(TokenIdentKind::Let) => {
-                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
-            }
-
+            // TokenKind::Ident(TokenIdentKind::Let) => {
+            //     ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
+            // }
             _ => Err(None)?,
         };
 

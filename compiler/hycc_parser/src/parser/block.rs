@@ -3,7 +3,7 @@ use hycc_ast::{
     token::{TokenGraph, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_util::ternary;
+use hycc_diagnostic::DiagnosticContext;
 
 use crate::parser::{Parser, parser::ParseResult};
 
@@ -38,7 +38,11 @@ impl<'s> Parser<'s> {
                 while !s.stream.at_eof() {
                     match s.parse_stmt_with_recovery() {
                         Ok(stmt) => data.stmts.push(stmt),
-                        Err(diag) => ternary!(diag.is_some(), continue, break),
+                        Err(diag) => {
+                            if let Some(diag) = diag {
+                                s.dctx.add(diag);
+                            }
+                        }
                     }
                 }
 

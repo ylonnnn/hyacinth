@@ -50,7 +50,11 @@ impl<'s> Parser<'s> {
     }
 
     pub fn try_parse_expr_stmt(&mut self) -> ParseResult<Expr> {
-        let expr = self.parse_expr(0)?;
+        let expr = match self.parse_expr(0) {
+            Ok(expr) => expr,
+            Err(_) => Err(None)?,
+        };
+
         let is_lf = self
             .stream
             .expect(

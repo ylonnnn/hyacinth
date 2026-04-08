@@ -111,7 +111,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         } = diagnostic;
 
         let source = self.source_registry.get(span.src_id);
-        let (s_kind, code, args) = kind.data();
+        let (s_kind, code, message) = kind.data();
 
         let (start, end) = span.to_position_range(&source);
         let sev_color = self.color(&kind);
@@ -121,10 +121,13 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let indent = " ".repeat(indentation);
 
         format!(
-            " {s_kind_indent}> {}<{}> -> {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
+            " {s_kind_indent}> {}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
             s_kind.to_string().style(&sev_color).bold(),
-            code.to_string().style(&sev_color),
-            self.highlight(&format!("{}", args), sev_color),
+            code.map_or_else(
+                || ":".into(),
+                |code| format!("<{}>", code.to_string().style(&sev_color))
+            ),
+            self.highlight(message, sev_color),
             "----->".bright_black(),
             source.identifier.1,
             start.clone(),

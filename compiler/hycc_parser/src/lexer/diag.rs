@@ -105,12 +105,9 @@ impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
             + LexerDiagCtx::LEXER_ERROR_OFFSET;
 
         let kind = match &self.kind {
-            Warning(kind) => DiagnosticKind::Warning(
-                code,
-                match kind {
-                    _ => "".into(),
-                },
-            ),
+            Warning(kind) => DiagnosticKind::Warning(match kind {
+                _ => "".into(),
+            }),
 
             Error(kind) => DiagnosticKind::Error(
                 code,

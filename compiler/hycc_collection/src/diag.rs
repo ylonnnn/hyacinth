@@ -1,20 +1,36 @@
 use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
-    diagnostic::{Diag, DiagnosticKind},
+    diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
-use hycc_hir::def::DefId;
+use hycc_hir::{
+    HirTable,
+    def::{DefId, DefinitionTable},
+};
+use hycc_scope::ScopeCtx;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 
-#[derive(Debug, Clone)]
-pub struct CollectorDiagDataCtx<'i> {
+#[derive(Debug)]
+pub struct CollectorDiagDataCtx<'i, 't, 'h, 'd, 's> {
     pub interner: &'i SymbolInterner,
-    // pub definitions: &
+    pub hir_table: &'t HirTable<'h>,
+    pub definitions: &'d DefinitionTable,
+    pub scope_ctx: &'s ScopeCtx,
 }
 
-impl<'i> CollectorDiagDataCtx<'i> {
-    pub fn new(interner: &'i SymbolInterner) -> Self {
-        Self { interner }
+impl<'i, 't, 'h, 'd, 's> CollectorDiagDataCtx<'i, 't, 'h, 'd, 's> {
+    pub fn new(
+        interner: &'i SymbolInterner,
+        hir_table: &'t HirTable<'h>,
+        definitions: &'d DefinitionTable,
+        scope_ctx: &'s ScopeCtx,
+    ) -> Self {
+        Self {
+            interner,
+            hir_table,
+            definitions,
+            scope_ctx,
+        }
     }
 }
 
@@ -47,7 +63,9 @@ impl CollectorDiagCtx {
     }
 }
 
-impl<'i> DiagnosticContext<CollectorDiagDataCtx<'i>, CollectorDiag> for CollectorDiagCtx {
+impl<'i, 't, 'h, 'd, 's> DiagnosticContext<CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>, CollectorDiag>
+    for CollectorDiagCtx
+{
     fn data(&self) -> &Vec<CollectorDiag> {
         &self.0
     }
@@ -60,7 +78,7 @@ impl<'i> DiagnosticContext<CollectorDiagDataCtx<'i>, CollectorDiag> for Collecto
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: CollectorDiagDataCtx<'i>) {
+    fn emit(&self, target: &mut DiagnosticCtx, ctx: CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) {
         for diag in self.data() {
             target.add(diag.emit(&ctx));
         }
@@ -69,6 +87,7 @@ impl<'i> DiagnosticContext<CollectorDiagDataCtx<'i>, CollectorDiag> for Collecto
 
 #[derive(Debug, Clone)]
 pub enum CollectorDiagKind {
+    Note(DiagNoteKind),
     Warning(CollectorDiagWarningKind),
     Error(CollectorDiagErrorKind),
 }
@@ -103,39 +122,75 @@ impl CollectorDiag {
     }
 }
 
-impl<'i> Diag<CollectorDiagDataCtx<'i>> for CollectorDiag {
-    fn emit(&self, ctx: &CollectorDiagDataCtx<'i>) -> Diagnostic {
+impl<'i, 't, 'h, 'd, 's> Diag<CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>> for CollectorDiag {
+    fn emit(&self, ctx: &CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) -> Diagnostic {
         use CollectorDiagErrorKind as Err;
         use CollectorDiagKind::*;
 
-        let CollectorDiagDataCtx { interner } = *ctx;
+        let CollectorDiagDataCtx {
+            interner,
+            definitions,
+            ..
+        } = *ctx;
         let code = (unsafe { *(&self.kind as *const CollectorDiagKind as *const u8) }) as u16
             + CollectorDiagCtx::COLLECTOR_ERROR_OFFSET;
 
-        let kind = match &self.kind {
-            Warning(kind) => DiagnosticKind::Warning(
-                code,
-                match kind {
+        let mut diag = Diagnostic::new(
+            self.span,
+            match &self.kind {
+                Note(kind) => DiagnosticKind::Note(match kind {
                     _ => "".into(),
-                },
-            ),
+                }),
 
-            Error(kind) => DiagnosticKind::Error(
-                code,
-                match kind {
-                    Err::Duplication {
-                        ident,
-                        earlier_def: _,
-                    } => {
-                        format!(
-                            "identifier `{}` has already been used in an earlier definition.",
+                Warning(kind) => DiagnosticKind::Warning(match kind {
+                    _ => "".into(),
+                }),
+
+                Error(kind) => DiagnosticKind::Error(
+                    code,
+                    match kind {
+                        Err::Duplication {
+                            ident,
+                            earlier_def: _,
+                        } => {
+                            format!(
+                                "identifier `{}` has already been used in an earlier definition.",
+                                interner.get(*ident)
+                            )
+                        }
+                    },
+                ),
+            },
+        );
+
+        // Optionally add details
+        match &self.kind {
+            Note(kind) => match kind {
+                _ => {}
+            },
+
+            Warning(kind) => match kind {
+                _ => {}
+            },
+
+            Error(kind) => match kind {
+                Err::Duplication { ident, earlier_def } => {
+                    let def = definitions.get(*earlier_def);
+
+                    diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "earlier definition of `{}`",
                             interner.get(*ident)
-                        )
-                    }
-                },
-            ),
-        };
+                        )),
+                    );
+                }
 
-        Diagnostic::new(self.span, kind)
+                #[allow(unreachable_patterns)]
+                _ => {}
+            },
+        }
+
+        diag
     }
 }

@@ -1,6 +1,8 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirTable, def::{DefId, Definition, DefinitionTable}, program::HirProgram
+    HirTable,
+    def::{DefId, Definition, DefinitionTable},
+    program::HirProgram,
 };
 use hycc_scope::ScopeCtx;
 
@@ -8,8 +10,8 @@ use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
 #[derive(Debug)]
 pub struct Collector<'t, 'h> {
-    pub(crate) definitions: DefinitionTable,
-    pub(crate) scope_ctx: ScopeCtx,
+    pub definitions: DefinitionTable,
+    pub scope_ctx: ScopeCtx,
     pub dctx: CollectorDiagCtx,
     pub(crate) hir_table: &'t HirTable<'h>,
 }
@@ -31,6 +33,8 @@ impl<'t, 'h> Collector<'t, 'h> {
 
         let (name, space) = (definition.name, definition.kind.space());
         if let Some(earlier_def) = top.get(space, name) {
+            // let def = self.definitions.get(earlier_def);
+
             Err(Some(CollectorDiag::error(
                 definition.span,
                 CollectorDiagErrorKind::Duplication {

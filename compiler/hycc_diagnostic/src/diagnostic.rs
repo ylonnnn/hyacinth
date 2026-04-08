@@ -2,13 +2,13 @@ use hycc_span::Span;
 
 #[derive(Debug, Clone)]
 pub enum DiagnosticKind {
-    Note(u16, String),
-    Warning(u16, String),
+    Note(String),
+    Warning(String),
     Error(u16, String),
 }
 
 impl DiagnosticKind {
-    pub fn data(&self) -> (&'static str, u16, &String) {
+    pub fn data(&self) -> (&'static str, Option<u16>, &String) {
         let kind = match self {
             Self::Note(..) => "note",
             Self::Warning(..) => "warning",
@@ -16,9 +16,8 @@ impl DiagnosticKind {
         };
 
         match self {
-            Self::Note(code, message)
-            | Self::Warning(code, message)
-            | Self::Error(code, message) => (kind, *code, message),
+            Self::Note(message) | Self::Warning(message) => (kind, None, message),
+            Self::Error(code, message) => (kind, Some(*code), message),
         }
     }
 }
@@ -133,5 +132,5 @@ impl DiagnosticContext<()> for DiagnosticCtx {
 
 #[derive(Debug, Clone)]
 pub enum DiagNoteKind {
-    Info(String)
+    Info(String),
 }

@@ -69,10 +69,18 @@ pub fn compile<'h>(session: &mut Session<'h>) {
 
     let hir = lower_ast_to_hir(session, tree);
     let mut collector = Collector::new(&session.hir_table);
+
     collector.collect(hir);
+
+    let (definitions, scope_ctx) = (collector.definitions, collector.scope_ctx);
 
     collector.dctx.emit(
         &mut session.dctx,
-        CollectorDiagDataCtx::new(&session.interner),
+        CollectorDiagDataCtx::new(
+            &session.interner,
+            &session.hir_table,
+            &definitions,
+            &scope_ctx,
+        ),
     );
 }

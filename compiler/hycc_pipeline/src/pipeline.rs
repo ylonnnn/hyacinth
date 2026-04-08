@@ -72,7 +72,7 @@ pub fn compile<'h>(session: &mut Session<'h>) {
 
     collector.collect(hir);
 
-    let (definitions, scope_ctx) = (collector.definitions, collector.scope_ctx);
+    let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
 
     collector.dctx.emit(
         &mut session.dctx,

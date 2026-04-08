@@ -7,17 +7,42 @@ use crate::collector::{CollectResult, Collector};
 
 impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
-        let definition = match &item.kind {
-            HirItemKind::Fn(func) => {
-                Definition::new_default(func.ident.ident, DefKind::Fn, item.id, item.span)
-            }
+        match &item.kind {
+            HirItemKind::Fn(_) => self.collect_fn(&item),
 
-            HirItemKind::VarDecl(decl) => {
-                Definition::new_default(decl.ident.ident, DefKind::Var, item.id, item.span)
-            }
+            HirItemKind::VarDecl(_) => self.collect_var(&item),
+        }
+    }
+
+    pub(crate) fn collect_fn(&mut self, fn_item: &HirItem) -> CollectResult {
+        let HirItemKind::Fn(func) = &fn_item.kind else {
+            unreachable!()
         };
 
-        self.define(definition)?;
+        self.define(Definition::new_default(
+            func.ident.ident,
+            DefKind::Fn,
+            fn_item.id,
+            fn_item.span,
+        ))?;
+
+        // Create the scope of the function body
+        // Define the parameters
+
+        Ok(())
+    }
+
+    pub(crate) fn collect_var(&mut self, var_item: &HirItem) -> CollectResult {
+        let HirItemKind::VarDecl(var) = &var_item.kind else {
+            unreachable!()
+        };
+
+        self.define(Definition::new_default(
+            var.ident.ident,
+            DefKind::Var,
+            var_item.id,
+            var_item.span,
+        ))?;
 
         Ok(())
     }

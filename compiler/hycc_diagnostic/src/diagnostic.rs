@@ -130,3 +130,8 @@ impl DiagnosticContext<()> for DiagnosticCtx {
 
     fn emit(&self, _target: &mut DiagnosticCtx, _ctx: ()) {}
 }
+
+#[derive(Debug, Clone)]
+pub enum DiagNoteKind {
+    Info(String)
+}

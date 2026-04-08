@@ -1,7 +1,6 @@
 use crate::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx,
-    diagnostic::DiagnosticKind,
-    reporter::{DiagnosticReportStatus, DiagnosticReporter},
+    Diagnostic, DiagnosticContext, DiagnosticCtx, diagnostic::DiagnosticKind,
+    reporter::DiagnosticReporter,
 };
 
 use hycc_source::{Source, SourceRegistry};
@@ -35,7 +34,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
         source: &Source,
         severity_color: &'static str,
         position_range: (Position, Position),
-    ) -> String {
+    ) -> Vec<String> {
         let (start, end) = &position_range;
         let digit_n = ((end.line as f32).log10().floor() as usize) + 1;
 
@@ -45,7 +44,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .zip(1_u32..)
             .skip((start.line - 1) as usize)
             .take((end.line.saturating_sub(start.line) + 1) as usize)
-            .map(|(line, num)| {
+            .flat_map(|(line, num)| {
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                 let dig_n = ((num as f32).log10().floor() as usize) + 1;
 
@@ -61,22 +60,24 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     ternary!(num == end.line, end.column - 1, line.len() as u32),
                 );
 
-                format!(
-                    "{prefix}{line}\n{ptr_prefix}{padding}{pointer}",
-                    ptr_prefix = format!(
-                        "  {space}  {pipe}  {r}",
-                        space = " ".repeat(digit_n as usize),
-                        pipe = "|".style(bb).style(b),
+                [
+                    format!("{prefix}{line}"),
+                    format!(
+                        "{ptr_prefix}{padding}{pointer}",
+                        ptr_prefix = format!(
+                            "  {space}  {pipe}  {r}",
+                            space = " ".repeat(digit_n as usize),
+                            pipe = "|".style(bb).style(b),
+                        ),
+                        padding = " ".repeat(ln_start as usize),
+                        pointer = "^"
+                            .repeat(((ln_end - ln_start) as usize).clamp(1, usize::MAX))
+                            .style(severity_color)
+                            .bold()
                     ),
-                    padding = " ".repeat(ln_start as usize),
-                    pointer = "^"
-                        .repeat(((ln_end - ln_start) as usize).clamp(1, usize::MAX))
-                        .style(severity_color)
-                        .bold()
-                )
+                ]
             })
-            .collect::<Vec<String>>()
-            .join("\n")
+            .collect()
     }
 
     pub fn highlight(&self, message: &String, severity_color: &'static str) -> String {
@@ -101,8 +102,13 @@ impl<'d, 's> CLIReporter<'d, 's> {
 }
 
 impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
-    fn format_diagnostic(&self, diagnostic: &Diagnostic) -> String {
-        let Diagnostic { span, kind, .. } = diagnostic;
+    fn format_diagnostic(&self, diagnostic: &Diagnostic, indentation: u8) -> String {
+        let Diagnostic {
+            span,
+            kind,
+            details,
+            ..
+        } = diagnostic;
 
         let source = self.source_registry.get(span.src_id);
         let (s_kind, code, args) = kind.data();
@@ -110,30 +116,33 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let (start, end) = span.to_position_range(&source);
         let sev_color = self.color(&kind);
 
+        let indentation = 6 * indentation as usize;
+        let s_kind_indent = "=".bright_black().repeat(indentation.saturating_sub(3));
+        let indent = " ".repeat(indentation);
+
         format!(
-            "{}<{}> -> {}{}\n{} {}:{}\n{}\n{}",
+            " {s_kind_indent}> {}<{}> -> {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
             s_kind.to_string().style(&sev_color).bold(),
             code.to_string().style(&sev_color),
-            style::RESET,
             self.highlight(&format!("{}", args), sev_color),
             "----->".bright_black(),
             source.identifier.1,
             start.clone(),
-            self.emphasize(source, sev_color, (start, end)),
-            style::RESET
+            emphasis = self
+                .emphasize(source, sev_color, (start, end))
+                .join(&format!("\n{indent}")),
+            reset = style::RESET,
+            details = details
+                .iter()
+                .map(|diag| self.format_diagnostic(diag, indentation as u8 + 1))
+                .collect::<Vec<String>>()
+                .join("\n\n")
         )
     }
 
-    fn report(&self) -> DiagnosticReportStatus {
-        let status: DiagnosticReportStatus = [0; 3];
-
+    fn report(&self) {
         for diagnostic in self.dctx.data() {
-            let formatted = self.format_diagnostic(diagnostic);
-            // status[diagnostic.severity as usize] += 1;
-
-            println!("{formatted}");
+            println!("{}", self.format_diagnostic(diagnostic, 0));
         }
-
-        status
     }
 }

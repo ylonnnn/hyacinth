@@ -2,7 +2,7 @@ use std::path::{self, PathBuf};
 
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
-    item::{Fn, FnParam, FnParamList, Petal, PetalKind, VarDecl},
+    item::{Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, VarDecl},
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
@@ -57,6 +57,10 @@ impl<'s> Parser<'s> {
 
         let span = tok.span;
         let kind = match tok.kind {
+            TokenKind::Ident(TokenIdentKind::Pub) => {
+                return self.parse_item_with_accessibility();
+            }
+
             TokenKind::Ident(TokenIdentKind::Petal) => {
                 ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
             }
@@ -74,6 +78,13 @@ impl<'s> Parser<'s> {
 
         let mut item = Item::new(kind);
         item.span = span.merge(&item.span);
+
+        Ok(item)
+    }
+
+    pub fn parse_item_with_accessibility(&mut self) -> ParseResult<Item> {
+        let mut item = self.parse_item_with_recovery()?;
+        item.accessibility = ItemAccessibility::Pub;
 
         Ok(item)
     }

@@ -110,7 +110,9 @@ pub enum TokenIdentKind {
     Normal,
 
     // Keywords
-    Petal,    
+    Pub,
+
+    Petal,
 
     Fn,
     Let,
@@ -119,11 +121,19 @@ pub enum TokenIdentKind {
 #[repr(u8)]
 #[derive(Debug, Default, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum TokenKind {
-    Int { base: u8 },
-    Float { base: u8 },
+    Int {
+        base: u8,
+    },
+    Float {
+        base: u8,
+    },
     Bool,
-    Char { terminated: bool },
-    String { terminated: bool },
+    Char {
+        terminated: bool,
+    },
+    String {
+        terminated: bool,
+    },
 
     Ident(TokenIdentKind),
     MacroIdent,

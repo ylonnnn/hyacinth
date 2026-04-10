@@ -1,18 +1,23 @@
+use hycc_ast::item::ItemAccessibility;
 use hycc_span::Span;
 
 use crate::{HirId, block::HirBlock, expr::HirExpr, path::HirRawIdent, ty::HirTy};
 
 #[derive(Debug, Clone)]
 pub enum HirItemKind<'h> {
+    Petal(Box<HirPetal<'h>>),
     Fn(Box<HirFn<'h>>),
     VarDecl(Box<HirVarDecl<'h>>),
 }
+
+pub type HirItemAccessibility = ItemAccessibility;
 
 #[derive(Debug, Clone)]
 pub struct HirItem<'h> {
     pub id: HirId,
     pub kind: HirItemKind<'h>,
     pub span: Span,
+    pub accessibility: HirItemAccessibility,
 }
 
 impl<'h> HirItem<'h> {
@@ -21,8 +26,22 @@ impl<'h> HirItem<'h> {
             id: HirId::Invalid,
             kind,
             span,
+            accessibility: HirItemAccessibility::Priv,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum HirPetalKind {
+    File,
+    Inline,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirPetal<'h> {
+    pub kind: HirPetalKind,
+    pub items: Vec<&'h HirItem<'h>>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

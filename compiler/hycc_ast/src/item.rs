@@ -21,10 +21,17 @@ impl ItemKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemAccessibility {
+    Pub,
+    Priv,
+}
+
 #[derive(Debug, Clone)]
 pub struct Item {
     pub kind: ItemKind,
     pub span: Span,
+    pub accessibility: ItemAccessibility,
 }
 
 impl Item {
@@ -32,6 +39,7 @@ impl Item {
         Self {
             span: kind.span(),
             kind,
+            accessibility: ItemAccessibility::Priv,
         }
     }
 }

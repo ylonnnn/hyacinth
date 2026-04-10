@@ -8,6 +8,7 @@ use crate::collector::{CollectResult, Collector};
 impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         match &item.kind {
+            HirItemKind::Petal(_) => todo!("collect petals"),
             HirItemKind::Fn(_) => self.collect_fn(&item),
 
             HirItemKind::VarDecl(_) => self.collect_var(&item),

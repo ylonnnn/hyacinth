@@ -1,7 +1,7 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Program, Stmt, StmtKind, Ty, TyKind,
     expr::Unary,
-    item::{Fn, FnParamList, VarDecl},
+    item::{Fn, FnParamList, Petal, PetalKind, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
     ty::Array,
@@ -14,7 +14,9 @@ use crate::{
     HirNode, HirTable,
     block::HirBlock,
     expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
-    item::{HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirVarDecl},
+    item::{
+        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirVarDecl,
+    },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     program::HirProgram,
     stmt::{HirStmt, HirStmtKind},
@@ -63,18 +65,30 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
-            ItemKind::Petal(_) => todo!("lower petal items"),
+            ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(petal))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
             ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
         };
 
-        if let HirNode::Item(item) = self
-            .hir_table
-            .add(HirNode::Item(HirItem::new(kind, item.span)))
-        {
+        let mut hir_item = HirItem::new(kind, item.span);
+        hir_item.accessibility = item.accessibility;
+
+        if let HirNode::Item(item) = self.hir_table.add(HirNode::Item(hir_item)) {
             item
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_petal(&mut self, petal: &Petal) -> HirPetal<'h> {
+        HirPetal {
+            kind: ternary!(
+                matches!(petal.kind, PetalKind::File(..)),
+                HirPetalKind::File,
+                HirPetalKind::Inline
+            ),
+            span: petal.span,
+            items: Vec::new(),
         }
     }
 

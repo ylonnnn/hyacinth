@@ -30,6 +30,8 @@ impl<'s> Lexer<'s> {
             dctx: LexerDiagCtx::new(),
             offset: 0,
             reserved: hashmap! {
+                "pub" => TokenKind::Ident(TokenIdentKind::Pub),
+
                 "petal" => TokenKind::Ident(TokenIdentKind::Petal),
 
                 "fn" => TokenKind::Ident(TokenIdentKind::Fn),

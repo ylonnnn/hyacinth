@@ -6,7 +6,7 @@ use hycc_ast::{
 
 use crate::parser::{Parser, parser::ParseResult};
 
-impl Parser {
+impl<'s> Parser<'s> {
     pub fn parse_raw_ident(&mut self) -> ParseResult<Token> {
         let tg = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))?;
         let Some(tok) = tg.underlying() else {

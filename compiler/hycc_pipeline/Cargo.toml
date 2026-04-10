@@ -9,6 +9,7 @@ hycc_collection = { path = "../hycc_collection" }
 hycc_diagnostic = { path = "../hycc_diagnostic" }
 hycc_hir = { path = "../hycc_hir" }
 hycc_parser = { path = "../hycc_parser" }
+hycc_session = { path = "../hycc_session" }
 hycc_source = { path = "../hycc_source" }
 hycc_symbol = { path = "../hycc_symbol" }
 hycc_util = { path = "../hycc_util" }

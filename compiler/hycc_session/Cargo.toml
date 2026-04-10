@@ -1,0 +1,10 @@
+[package]
+name = "hycc_session"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hycc_diagnostic = { path = "../hycc_diagnostic" }
+hycc_hir = { path = "../hycc_hir" }
+hycc_source = { path = "../hycc_source" }
+hycc_symbol = { path = "../hycc_symbol" }

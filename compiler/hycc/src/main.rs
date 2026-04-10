@@ -1,5 +1,5 @@
 use hycc_pipeline::pipeline;
 
 fn main() {
-    pipeline::invoke("hyc-tests/collection/collection.hyc");
+    pipeline::invoke("hyc-tests/project-test/test/src/main.hyc");
 }

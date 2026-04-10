@@ -121,7 +121,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let indent = " ".repeat(indentation);
 
         format!(
-            " {s_kind_indent}> {}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
+            " {s_kind_indent} {}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
             s_kind.to_string().style(&sev_color).bold(),
             code.map_or_else(
                 || ":".into(),

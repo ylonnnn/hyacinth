@@ -1,9 +1,12 @@
+use std::path::{self, PathBuf};
+
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
-    item::{Fn, FnParam, FnParamList, VarDecl},
+    item::{Fn, FnParam, FnParamList, Petal, PetalKind, VarDecl},
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
+use hycc_util::ternary;
 
 use crate::parser::{
     Parser,
@@ -11,11 +14,11 @@ use crate::parser::{
     parser::ParseResult,
 };
 
-impl Parser {
+impl<'s> Parser<'s> {
     pub fn parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.parse_item();
         if let Err(_) = item {
-            self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+            self.sync(&[TokenKind::LnFeed, TokenKind::RightBrace]);
         }
 
         item
@@ -24,7 +27,7 @@ impl Parser {
     pub fn try_parse_item_with_recovery(&mut self) -> ParseResult<Item> {
         let item = self.try_parse_item();
         if let Err(_) = item {
-            self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+            self.sync(&[TokenKind::LnFeed, TokenKind::RightBrace]);
         }
 
         item
@@ -53,6 +56,10 @@ impl Parser {
 
         let span = tok.span;
         let kind = match tok.kind {
+            TokenKind::Ident(TokenIdentKind::Petal) => {
+                ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
+            }
+
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 ItemKind::Fn(Box::new(self.parse_fn_with_recovery()?))
             }
@@ -70,9 +77,91 @@ impl Parser {
         Ok(item)
     }
 
+    pub fn parse_petal_with_recovery(&mut self) -> ParseResult<Petal> {
+        let data = self.parse_petal();
+        self.try_sync(&[TokenKind::RightBrace]);
+
+        data
+    }
+
+    // petal FILE
+    // petal PATH { ITEM* }
+    pub fn parse_petal(&mut self) -> ParseResult<Petal> {
+        // PATH
+        let path = self.parse_path()?;
+        let is_inline =
+            path.segments.len() > 1 || self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0;
+
+        let span = path.span;
+        let segment = path.segments[0].ident.clone();
+
+        let mut petal = Petal::new(
+            ternary!(
+                is_inline,
+                PetalKind::Inline(path),
+                PetalKind::File(segment.view(&self.source.data).to_string())
+            ),
+            Vec::new(),
+            span,
+        );
+
+        match &mut petal.kind {
+            // PATH (inline petal)
+            PetalKind::Inline(_) => {
+                while !self.stream.at_eof() {
+                    petal.items.push(self.parse_item_with_recovery()?);
+                }
+            }
+
+            // PATH (file)
+            // Attempt to check if the file exists and use the absolute path
+            PetalKind::File(file_path) => {
+                let parent_path = path::Path::new(&self.source.identifier.1).parent().unwrap();
+
+                // TODO: fix hardcoded `.hyc` extensions and `petal.hyc` directory petal file
+                let mut found = false;
+                for f_petal_path in &[
+                    PathBuf::from(format!("{file_path}.hyc")),
+                    PathBuf::from(file_path.clone()).join("petal.hyc"),
+                ] {
+                    let mut path = parent_path
+                        .join(&f_petal_path)
+                        .to_string_lossy()
+                        .to_string();
+
+                    match std::fs::exists(&path) {
+                        Ok(res) if (found = res, res).1 => {
+                            std::mem::swap(file_path, &mut path);
+                            break;
+                        }
+
+                        Err(err) => match err.kind() {
+                            _ => panic!("an error occurred: {err:?}"),
+                        },
+
+                        _ => {}
+                    }
+                }
+
+                if !found {
+                    Err(Some(ParserDiag::error(
+                        span,
+                        ParserDiagErrorKind::UnrecognizedPetalFile {
+                            name: segment.clone(),
+                        },
+                    )))?
+                }
+            }
+        }
+
+        self.require_terminator()?;
+
+        Ok(petal)
+    }
+
     pub fn parse_fn_with_recovery(&mut self) -> ParseResult<Fn> {
         let data = self.parse_fn();
-        self.try_sync(vec![TokenKind::RightBrace]);
+        self.try_sync(&[TokenKind::RightBrace]);
 
         data
     }
@@ -95,6 +184,8 @@ impl Parser {
 
         // { STMT* }
         let body = self.parse_block();
+
+        self.require_terminator()?;
 
         Ok(Fn {
             ident: ident?,
@@ -164,7 +255,7 @@ impl Parser {
 
     pub fn parse_var_decl_with_recovery(&mut self) -> ParseResult<VarDecl> {
         let decl = self.parse_var_decl();
-        self.try_sync(vec![TokenKind::LnFeed]);
+        self.try_sync(&[TokenKind::LnFeed]);
 
         decl
     }

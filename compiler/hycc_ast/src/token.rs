@@ -110,6 +110,8 @@ pub enum TokenIdentKind {
     Normal,
 
     // Keywords
+    Petal,    
+
     Fn,
     Let,
 }

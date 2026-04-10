@@ -50,7 +50,7 @@ impl TokenStream {
     }
 
     pub fn eof(&self, absolute: bool) -> bool {
-        self.offset >= (self.data.len() - (!absolute as usize))
+        self.offset >= ((self.data.len().saturating_sub(1)).saturating_sub(!absolute as usize))
     }
 
     pub fn adjust(&mut self) {
@@ -109,7 +109,7 @@ impl TokenStream {
         });
     }
 
-    pub fn first_of_offset(&self, include: Vec<TokenKind>) -> usize {
+    pub fn first_of_offset(&self, include: &[TokenKind]) -> usize {
         let set: HashSet<_> = include.into_iter().collect();
         let mut offset = 0;
 
@@ -124,7 +124,7 @@ impl TokenStream {
         offset
     }
 
-    pub fn first_not_offset(&self, exclude: Vec<TokenKind>) -> usize {
+    pub fn first_not_offset(&self, exclude: &[TokenKind]) -> usize {
         let set: HashSet<_> = exclude.into_iter().collect();
         let mut offset = 0;
 
@@ -143,7 +143,7 @@ impl TokenStream {
         &mut self,
         kind: TokenKind,
         consumption: TokenConsumptionKind,
-        exclude: Vec<TokenKind>,
+        exclude: &[TokenKind],
         expectation: TokenMatchExpectation,
     ) -> (bool, Option<TokenGraph>) {
         let offset = self.first_not_offset(exclude);
@@ -172,7 +172,7 @@ impl TokenStream {
         &mut self,
         kind: TokenKind,
         consumption: TokenConsumptionKind,
-        exclude: Vec<TokenKind>,
+        exclude: &[TokenKind],
     ) -> (bool, Option<TokenGraph>) {
         self.expect(kind, consumption, exclude, TokenMatchExpectation::Exact)
     }
@@ -181,7 +181,7 @@ impl TokenStream {
         &mut self,
         kind: TokenKind,
         consumption: TokenConsumptionKind,
-        exclude: Vec<TokenKind>,
+        exclude: &[TokenKind],
     ) -> (bool, Option<TokenGraph>) {
         self.expect(kind, consumption, exclude, TokenMatchExpectation::Similar)
     }

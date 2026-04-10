@@ -74,6 +74,7 @@ dependencies = [
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_parser",
+ "hycc_session",
  "hycc_source",
  "hycc_symbol",
  "hycc_util",
@@ -86,6 +87,16 @@ dependencies = [
  "hycc_hir",
  "hycc_symbol",
  "hycc_util",
+]
+
+[[package]]
+name = "hycc_session"
+version = "0.1.0"
+dependencies = [
+ "hycc_diagnostic",
+ "hycc_hir",
+ "hycc_source",
+ "hycc_symbol",
 ]
 
 [[package]]

@@ -130,6 +130,10 @@ pub enum ParserDiagErrorKind {
     InvalidVarDecl {
         ident: Token,
     },
+
+    UnrecognizedPetalFile {
+        name: Token,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -147,7 +151,7 @@ impl ToString for UnexpectedTokenExpectation {
     }
 }
 
-impl ParserDiagKind {
+impl<'s> ParserDiagKind {
     pub fn is_warning(&self) -> bool {
         matches!(self, Self::Warning(..))
     }
@@ -163,7 +167,7 @@ pub struct ParserDiag {
     pub span: Span,
 }
 
-impl ParserDiag {
+impl<'s> ParserDiag {
     pub fn warning(span: Span, kind: ParserDiagWarningKind) -> Self {
         Self {
             span,
@@ -248,10 +252,42 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
 
                         message
                     }
+
+                    Err::UnrecognizedPetalFile { name } => {
+                        format!(
+                            "cannot find corresponding petal file for petal `{}`",
+                            name.view(&source.data)
+                        )
+                    }
                 },
             ),
         };
 
-        Diagnostic::new(self.span, kind)
+        let mut diag = Diagnostic::new(self.span, kind);
+
+        match &self.kind {
+            Warning(kind) => match kind {
+                _ => {}
+            },
+
+            Error(kind) => match kind {
+                Err::UnrecognizedPetalFile { name } => {
+                    let petal_name = name.view(&source.data);
+
+                    diag.detail(
+                        name.span,
+                        DiagnosticKind::Note(format!(
+                            "create petal file: `{}` or `{}`",
+                            format_args!("{petal_name}.hyc"),
+                            format_args!("{petal_name}/petal.hyc")
+                        )),
+                    );
+                }
+
+                _ => {}
+            },
+        }
+
+        diag
     }
 }

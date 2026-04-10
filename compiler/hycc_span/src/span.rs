@@ -10,12 +10,16 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn new(offset: u32, len: u16, src_id: u16) -> Self {
+    pub fn new(offset: u32, len: u16, src_id: SourceId) -> Self {
         Self {
             offset,
             len,
-            src_id: SourceId(src_id),
+            src_id,
         }
+    }
+
+    pub fn dummy(src_id: SourceId) -> Self {
+        Self::new(0, 1, src_id)
     }
 
     pub fn merge(&self, other: &Span) -> Span {
@@ -28,7 +32,7 @@ impl Span {
         Self::new(
             start,
             (self.end().max(other.end()) - start) as u16,
-            self.src_id.0,
+            self.src_id,
         )
     }
 
@@ -71,14 +75,14 @@ impl Span {
 
 impl Default for Span {
     fn default() -> Self {
-        Self::new(0, 0, u16::MAX)
+        Self::new(0, 0, SourceId(u16::MAX))
     }
 }
 
 impl From<(u32, u16, u16)> for Span {
     fn from(value: (u32, u16, u16)) -> Self {
         let (offset, len, src_id) = value;
-        Self::new(offset, len, src_id)
+        Self::new(offset, len, SourceId(src_id))
     }
 }
 

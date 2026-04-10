@@ -1,29 +1,33 @@
 use hycc_ast::{
-    Program,
+    item::{Petal, PetalKind},
     token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_diagnostic::DiagnosticContext;
+use hycc_source::Source;
+use hycc_span::Span;
 
 use crate::parser::diag::{
     ParserDiag, ParserDiagCtx, ParserDiagErrorKind, UnexpectedTokenExpectation,
 };
 
 #[derive(Debug)]
-pub struct Parser {
+pub struct Parser<'s> {
     pub(super) stream: TokenStream,
     pub dctx: ParserDiagCtx,
+    pub(super) source: &'s Source,
 
     pub(super) generic_delimeter_encounters: usize,
 }
 
 pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
 
-impl Parser {
-    pub fn new(stream: TokenStream) -> Self {
+impl<'s> Parser<'s> {
+    pub fn new(stream: TokenStream, source: &'s Source) -> Self {
         Self {
             stream,
             dctx: ParserDiagCtx::new(),
+            source,
 
             generic_delimeter_encounters: 0,
         }
@@ -31,27 +35,16 @@ impl Parser {
 
     pub fn adjust_to_nonlf(&mut self) {
         self.stream
-            .adjustn(self.stream.first_not_offset(vec![TokenKind::LnFeed]));
+            .adjustn(self.stream.first_not_offset(&[TokenKind::LnFeed]));
     }
 
     pub fn peek_nonlf(&self) -> Option<&TokenGraph> {
         self.peekn_nonlf(0)
     }
 
-    pub fn peekn_nonlf(&self, mut offset: usize) -> Option<&TokenGraph> {
-        while let Some(tg) = self.stream.peekn(offset) {
-            let Some(tok) = tg.underlying() else {
-                return None;
-            };
-
-            if tok.kind != TokenKind::LnFeed {
-                return Some(tg);
-            }
-
-            offset += 1
-        }
-
-        None
+    pub fn peekn_nonlf(&self, offset: usize) -> Option<&TokenGraph> {
+        let offset = offset + self.stream.first_not_offset(&[TokenKind::LnFeed]);
+        self.stream.peekn(offset)
     }
 
     pub fn peek_nonlf_token(&self) -> Option<&Token> {
@@ -59,7 +52,7 @@ impl Parser {
     }
 
     pub fn next_nonlf(&mut self) -> Option<TokenGraph> {
-        let offset = self.stream.first_not_offset(vec![TokenKind::LnFeed]) + 1;
+        let offset = self.stream.first_not_offset(&[TokenKind::LnFeed]) + 1;
         let peek = self.stream.peekn(offset - 1).cloned();
 
         self.stream.adjustn(offset);
@@ -79,7 +72,7 @@ impl Parser {
         expectation: TokenMatchExpectation,
     ) -> (bool, Option<TokenGraph>) {
         self.stream
-            .expect(kind, consumption, vec![TokenKind::LnFeed], expectation)
+            .expect(kind, consumption, &[TokenKind::LnFeed], expectation)
     }
 
     pub fn expect_exact_nonlf(&mut self, kind: TokenKind) -> (bool, Option<TokenGraph>) {
@@ -137,7 +130,7 @@ impl Parser {
         &mut self,
         kind: TokenKind,
         consumption: TokenConsumptionKind,
-        exclude: Vec<TokenKind>,
+        exclude: &[TokenKind],
         expectation: TokenMatchExpectation,
     ) -> Result<TokenGraph, Option<ParserDiag>> {
         let (matched, tg) = self.stream.expect(kind, consumption, exclude, expectation);
@@ -165,7 +158,7 @@ impl Parser {
         consumption: TokenConsumptionKind,
         expectation: TokenMatchExpectation,
     ) -> Result<TokenGraph, Option<ParserDiag>> {
-        self.require(kind, consumption, vec![TokenKind::LnFeed], expectation)
+        self.require(kind, consumption, &[TokenKind::LnFeed], expectation)
     }
 
     pub fn require_exact_nonlf(
@@ -216,7 +209,7 @@ impl Parser {
         self.require(
             TokenKind::LnFeed,
             TokenConsumptionKind::UponSuccess,
-            vec![],
+            &[],
             TokenMatchExpectation::Exact,
         )
     }
@@ -231,12 +224,16 @@ impl Parser {
         data
     }
 
-    pub fn parse(&mut self) -> Program {
-        let mut program = Program::new(Vec::new());
+    pub fn parse(&mut self) -> Petal {
+        let mut petal = Petal::new(
+            PetalKind::File(self.source.identifier.1.clone()),
+            Vec::new(),
+            Span::dummy(self.source.identifier.0),
+        );
 
         while !self.stream.at_eof() {
             match self.parse_item_with_recovery() {
-                Ok(item) => program.items.push(item),
+                Ok(item) => petal.items.push(item),
                 Err(err) => {
                     if let Some(err) = err {
                         self.dctx.add(err);
@@ -245,15 +242,15 @@ impl Parser {
             }
         }
 
-        program
+        petal
     }
 
-    pub fn sync(&mut self, with: Vec<TokenKind>) {
+    pub fn sync(&mut self, with: &[TokenKind]) {
         self.stream.adjustn(self.stream.first_of_offset(with) + 1);
         self.dctx.sync();
     }
 
-    pub fn try_sync(&mut self, with: Vec<TokenKind>) {
+    pub fn try_sync(&mut self, with: &[TokenKind]) {
         if self.dctx.is_in_disarray() {
             self.sync(with);
         }

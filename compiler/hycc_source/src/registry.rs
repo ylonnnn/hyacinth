@@ -8,28 +8,29 @@ pub struct SourceRegistry {
 impl SourceRegistry {
     const CAPACITY: usize = u16::MAX as usize;
 
-    pub fn new(root: Source) -> Self {
-        let mut inst = Self {
+    pub fn new() -> Self {
+        Self {
             sources: Vec::new(),
-        };
-
-        inst.register(root);
-        inst
+        }
     }
 
     pub fn root(&self) -> &Source {
         &self.sources[0]
     }
 
-    pub fn register(&mut self, mut source: Source) {
+    pub fn register(&mut self, mut source: Source) -> SourceId {
         assert!(
             self.sources.len() < Self::CAPACITY,
             "project source tree cannot exceed {} source nodes!",
             Self::CAPACITY
         );
 
-        source.identifier.0 = SourceId(self.sources.len() as u16);
+        let src_id = SourceId(self.sources.len() as u16);
+
+        source.identifier.0 = src_id;
         self.sources.push(source);
+
+        src_id
     }
 
     pub fn get(&self, id: SourceId) -> &Source {

@@ -2,10 +2,10 @@ use hycc_ast::{Stmt, StmtKind, token::TokenKind};
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
-impl Parser {
+impl<'s> Parser<'s> {
     pub fn parse_stmt_with_recovery(&mut self) -> ParseResult<Stmt> {
         let stmt = self.parse_stmt();
-        self.try_sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+        self.try_sync(&[TokenKind::LnFeed, TokenKind::RightBrace]);
 
         stmt
     }
@@ -50,7 +50,7 @@ impl Parser {
                             match self.parse_expr_stmt() {
                                 Ok(expr) => Ok(Stmt::new(StmtKind::Expr(Box::new(expr)))),
                                 Err(err) => {
-                                    self.sync(vec![TokenKind::LnFeed, TokenKind::RightBrace]);
+                                    self.sync(&[TokenKind::LnFeed, TokenKind::RightBrace]);
                                     Err(err)
                                 }
                             }

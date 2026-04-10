@@ -24,7 +24,7 @@ pub enum ExprInfixBindingPower {
     Primary,
 }
 
-impl Parser {
+impl<'s> Parser<'s> {
     pub fn expr_infix_binding_power_of(kind: TokenKind) -> Option<(u8, u8)> {
         use ExprInfixBindingPower::*;
 
@@ -60,7 +60,7 @@ impl Parser {
             .expect(
                 TokenKind::LnFeed,
                 TokenConsumptionKind::UponSuccess,
-                Vec::new(),
+                &[],
                 TokenMatchExpectation::Exact,
             )
             .0;

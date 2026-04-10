@@ -28,9 +28,14 @@ pub struct Source {
 impl Source {
     pub fn new(path: &str) -> Self {
         match fs::read_to_string(path.to_string()) {
-            Ok(data) => Self {
-                identifier: (SourceId::Invalid(), path.into()),
-                data,
+            Ok(data) => match std::path::absolute(path) {
+                Ok(path) => Self {
+                    identifier: (SourceId::Invalid(), path.to_str().unwrap().into()),
+                    data,
+                },
+                _ => {
+                    panic!("er")
+                }
             },
             Err(err) => match err {
                 _ => panic!("error: {err:?}"),

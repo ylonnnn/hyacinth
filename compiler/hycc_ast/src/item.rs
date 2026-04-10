@@ -1,4 +1,4 @@
-use crate::{Block, Expr, Ty, token::Token};
+use crate::{Block, Expr, Path, Ty, token::Token};
 
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -6,6 +6,7 @@ use hycc_util::ternary;
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum ItemKind {
+    Petal(Box<Petal>),
     Fn(Box<Fn>),
     VarDecl(Box<VarDecl>),
 }
@@ -13,6 +14,7 @@ pub enum ItemKind {
 impl ItemKind {
     pub fn span(&self) -> Span {
         match self {
+            Self::Petal(petal) => petal.span,
             Self::VarDecl(var) => var.span(),
             Self::Fn(func) => func.span(),
         }
@@ -31,6 +33,25 @@ impl Item {
             span: kind.span(),
             kind,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PetalKind {
+    File(String),
+    Inline(Path),
+}
+
+#[derive(Debug, Clone)]
+pub struct Petal {
+    pub kind: PetalKind,
+    pub items: Vec<Item>,
+    pub span: Span,
+}
+
+impl Petal {
+    pub fn new(kind: PetalKind, items: Vec<Item>, span: Span) -> Self {
+        Self { items, span, kind }
     }
 }
 

@@ -30,8 +30,11 @@ impl<'s> Lexer<'s> {
             dctx: LexerDiagCtx::new(),
             offset: 0,
             reserved: hashmap! {
+                "petal" => TokenKind::Ident(TokenIdentKind::Petal),
+
                 "fn" => TokenKind::Ident(TokenIdentKind::Fn),
                 "let" => TokenKind::Ident(TokenIdentKind::Let),
+
                 "true", "false" => TokenKind::Bool,
             },
         }
@@ -395,7 +398,7 @@ impl<'s> Lexer<'s> {
         if self.eof() {
             return Some(TokenGraph::Node(token!(
                 TokenKind::Eof,
-                Span::new(self.offset, 1_u16, src_id.0)
+                Span::new(self.offset, 1_u16, src_id)
             )));
         }
 
@@ -554,7 +557,7 @@ impl<'s> Lexer<'s> {
     }
 
     pub fn tokenize(&mut self) -> TokenStream {
-        let mut collection = Vec::new();
+        let mut collection: Vec<TokenGraph> = Vec::new();
         let mut terminate = false;
 
         while !terminate {
@@ -562,11 +565,27 @@ impl<'s> Lexer<'s> {
                 continue;
             };
 
+            // If the EOF is reached, attempt to trim unnecesary line feeds
             if let TokenGraph::Node(token) = &tg
                 && matches!(token.kind, TokenKind::Eof)
             {
-                collection.pop();
                 terminate = true;
+
+                loop {
+                    let Some(tg) = collection.get(collection.len().saturating_sub(2)) else {
+                        break;
+                    };
+
+                    let Some(tok) = tg.underlying() else {
+                        break;
+                    };
+
+                    if tok.kind == TokenKind::LnFeed {
+                        collection.pop();
+                    } else {
+                        break;
+                    }
+                }
             }
 
             collection.push(tg);

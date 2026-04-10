@@ -98,7 +98,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     };
 
-    dbg!(tree);
+    // dbg!(tree);
     // let (hir_table, hir) = lower_hir(session, tree);
     // let mut collector = Collector::new(&hir_table);
 

@@ -73,7 +73,10 @@ impl<'s> Parser<'s> {
                 //     Some("expected type"),
                 // ));
 
-                Err(None)
+                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                    tok.clone(),
+                    "type",
+                )))
             }
         }?;
 
@@ -82,7 +85,9 @@ impl<'s> Parser<'s> {
         };
 
         match tok.kind {
-            TokenKind::Eq | TokenKind::Comma | TokenKind::LeftBrace => return Ok(ty),
+            TokenKind::Eq | TokenKind::Comma | TokenKind::LeftBrace | TokenKind::RightParen => {
+                return Ok(ty);
+            }
 
             _ => {
                 // self.dctx.add(errors::unexpected_token(

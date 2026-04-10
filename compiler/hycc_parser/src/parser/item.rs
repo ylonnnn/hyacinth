@@ -6,6 +6,7 @@ use hycc_ast::{
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
+use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;
 
 use crate::parser::{
@@ -213,15 +214,41 @@ impl<'s> Parser<'s> {
             .merge(&data.last().unwrap().underlying().unwrap().span);
 
         self.use_stream(
-            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
             |s| {
                 let mut params = FnParamList {
                     span: span,
                     list: Vec::new(),
                 };
 
-                if s.stream.is_empty() {
+                if s.stream.is_empty() || s.stream.abs_eof() {
                     return Ok(params);
+                }
+
+                match s.parse_fn_param() {
+                    Ok(lead) => {
+                        params.list.push(lead);
+                        while s.expect_exact_nonlf(TokenKind::Comma).0 {
+                            if s.stream.abs_eof() {
+                                break;
+                            }
+
+                            match s.parse_fn_param() {
+                                Ok(param) => params.list.push(param),
+                                Err(diag) => {
+                                    if let Some(diag) = diag {
+                                        s.dctx.add(diag);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Err(diag) => {
+                        if let Some(diag) = diag {
+                            s.dctx.add(diag);
+                        }
+                    }
                 }
 
                 if let Ok(lead) = s.parse_fn_param() {

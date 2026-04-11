@@ -2,9 +2,9 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirTable,
     def::{DefId, Definition, DefinitionTable},
-    program::HirProgram,
+    item::HirPetal,
 };
-use hycc_scope::ScopeCtx;
+use hycc_scope::{ScopeCtx, ScopeId};
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
@@ -50,7 +50,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         }
     }
 
-    pub fn collect(&mut self, tree: &HirProgram) {
+    pub fn collect(&mut self, tree: &HirPetal) {
         for item in &tree.items {
             if let Err(Some(err)) = self.collect_item(item) {
                 self.dctx.add(err);

@@ -1,5 +1,5 @@
 use hycc_ast::{
-    Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Program, Stmt, StmtKind, Ty, TyKind,
+    Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::Unary,
     item::{Fn, FnParamList, Petal, PetalKind, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
@@ -18,7 +18,6 @@ use crate::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
-    program::HirProgram,
     stmt::{HirStmt, HirStmtKind},
     ty::{HirArray, HirTy, HirTyKind},
 };
@@ -54,17 +53,27 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         self.intern_str(token.view(&self.source.data))
     }
 
-    pub fn lower(&mut self, tree: Program) -> &'h HirProgram<'h> {
-        let HirNode::Program(hir_tree) = self.hir_table.add(HirNode::Program(HirProgram::new(
-            tree.items
-                .iter()
-                .map(|item| self.lower_item(&item))
-                .collect(),
-        ))) else {
+    pub fn lower(&mut self, tree: Petal) -> &'h HirPetal<'h> {
+        if let HirNode::Item(item) = self.hir_table.add(HirNode::Item(HirItem::new(
+            HirItemKind::Petal(Box::new(HirPetal {
+                kind: HirPetalKind::Root,
+                items: tree
+                    .items
+                    .iter()
+                    .map(|item| self.lower_item(&item))
+                    .collect(),
+                span: tree.span,
+            })),
+            tree.span,
+        ))) {
+            if let HirItemKind::Petal(petal) = &item.kind {
+                &petal
+            } else {
+                unreachable!()
+            }
+        } else {
             unreachable!()
-        };
-
-        hir_tree
+        }
     }
 
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
@@ -85,12 +94,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     }
 
     fn lower_petal(&mut self, petal: &Petal) -> HirPetal<'h> {
+        let kind = match &petal.kind {
+            PetalKind::Root => HirPetalKind::Root,
+            PetalKind::File(path, _) => HirPetalKind::File(self.lower_path(path)),
+            PetalKind::Inline(path) => HirPetalKind::Inline(self.lower_path(path)),
+        };
+
         HirPetal {
-            kind: ternary!(
-                matches!(petal.kind, PetalKind::File(..)),
-                HirPetalKind::File,
-                HirPetalKind::Inline
-            ),
+            kind,
             span: petal.span,
             items: Vec::new(),
         }

@@ -1,7 +1,5 @@
-use std::path::PathBuf;
-
 use hycc_ast::{
-    ItemKind, Program,
+    ItemKind,
     item::{Petal, PetalKind},
 };
 use hycc_collection::{collector::Collector, diag::CollectorDiagDataCtx};
@@ -9,7 +7,7 @@ use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
 };
-use hycc_hir::{HirTable, builder::HirBuilder, program::HirProgram};
+use hycc_hir::{HirTable, builder::HirBuilder, item::HirPetal};
 use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
@@ -86,7 +84,7 @@ pub fn parse_source(session: &mut Session, src_id: SourceId) -> Option<Petal> {
     Some(root_petal)
 }
 
-pub fn lower_hir<'h>(session: &mut Session, tree: Program) -> (HirTable<'h>, &'h HirProgram<'h>) {
+pub fn lower_hir<'h>(session: &mut Session, tree: Petal) -> (HirTable<'h>, &'h HirPetal<'h>) {
     let hir_table = HirTable::new();
     let mut hir_builder =
         HirBuilder::new(&mut session.interner, session.registry.root(), &hir_table);
@@ -101,16 +99,15 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     };
 
-    dbg!(tree);
-    // let (hir_table, hir) = lower_hir(session, tree);
-    // let mut collector = Collector::new(&hir_table);
+    let (hir_table, hir) = lower_hir(session, tree);
+    let mut collector = Collector::new(&hir_table);
 
-    // collector.collect(hir);
+    collector.collect(hir);
 
-    // let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
+    let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
 
-    // collector.dctx.emit(
-    //     &mut session.dctx,
-    //     CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
-    // );
+    collector.dctx.emit(
+        &mut session.dctx,
+        CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
+    );
 }

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use hycc_hir::def::{DefId, DefSpace};
+use hycc_hir::{
+    HirId,
+    def::{DefId, DefSpace},
+};
 use hycc_symbol::Symbol;
 use hycc_util::ternary;
 
@@ -47,6 +50,8 @@ impl ScopeId {
 pub struct ScopeCtx {
     table: ScopeTable,
     stack: Vec<ScopeId>,
+    node_table: HashMap<HirId, ScopeId>,
+    def_table: HashMap<DefId, ScopeId>,
 }
 
 impl ScopeCtx {
@@ -54,10 +59,34 @@ impl ScopeCtx {
         let mut inst = Self {
             table: ScopeTable::new(),
             stack: Vec::new(),
+            node_table: HashMap::new(),
+            def_table: HashMap::new(),
         };
 
         inst.stack.push(inst.table.insert(Scope::new()));
         inst
+    }
+
+    pub fn attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
+        let scope_id = self.table.insert(scope);
+        self.node_table.insert(hir_id, scope_id);
+
+        scope_id
+    }
+
+    pub fn attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) {
+        self.node_table.insert(hir_id, scope_id);
+    }
+
+    pub fn attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
+        let scope_id = self.table.insert(scope);
+        self.def_table.insert(def_id, scope_id);
+
+        scope_id
+    }
+
+    pub fn attach_id_to_def(&mut self, def_id: DefId, scope_id: ScopeId) {
+        self.def_table.insert(def_id, scope_id);
     }
 
     pub fn push(&mut self, scope: Scope) -> ScopeId {
@@ -84,6 +113,24 @@ impl ScopeCtx {
 
     pub fn top_mut(&mut self) -> &mut Scope {
         self.table.get_mut(*self.stack.last_mut().unwrap())
+    }
+
+    pub fn enter<F>(&mut self, scope: Scope, mut handler: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.push(scope);
+        handler(self);
+        self.pop();
+    }
+
+    pub fn enter_by_id<F>(&mut self, scope_id: ScopeId, mut handler: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.push_id(scope_id);
+        handler(self);
+        self.pop();
     }
 }
 

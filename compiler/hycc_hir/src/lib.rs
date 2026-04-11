@@ -5,7 +5,6 @@ use crate::{
     expr::HirExpr,
     item::HirItem,
     path::{HirIdent, HirPath, HirRawIdent},
-    program::HirProgram,
     stmt::HirStmt,
     ty::HirTy,
 };
@@ -17,14 +16,11 @@ pub mod block;
 pub mod expr;
 pub mod item;
 pub mod path;
-pub mod program;
 pub mod stmt;
 pub mod ty;
 
 #[derive(Debug)]
 pub enum HirNode<'h> {
-    Program(HirProgram<'h>),
-
     Item(HirItem<'h>),
 
     Block(HirBlock<'h>),

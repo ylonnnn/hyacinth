@@ -7,6 +7,7 @@ use hycc_ast::{
     token_stream::TokenStream,
 };
 use hycc_diagnostic::DiagnosticContext;
+use hycc_session::config;
 use hycc_util::ternary;
 
 use crate::parser::{
@@ -105,64 +106,65 @@ impl<'s> Parser<'s> {
             path.segments.len() > 1 || self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0;
 
         let span = path.span;
-        let segment = path.segments[0].ident.clone();
+        // Default to `PetalKind::Root`
+        let mut petal = Petal::new(PetalKind::Root, Vec::new(), span);
 
-        let mut petal = Petal::new(
-            ternary!(
-                is_inline,
-                PetalKind::Inline(path),
-                PetalKind::File(segment.view(&self.source.data).to_string())
-            ),
-            Vec::new(),
-            span,
-        );
+        // let mut petal = Petal::new(
+        //     ternary!(
+        //         is_inline,
+        //         PetalKind::Inline(path),
+        //         PetalKind::File(segment.view(&self.source.data).to_string())
+        //     ),
+        //     Vec::new(),
+        //     span,
+        // );
 
-        match &mut petal.kind {
-            // PATH (inline petal)
-            PetalKind::Inline(_) => {
-                while !self.stream.at_eof() {
-                    petal.items.push(self.parse_item_with_recovery()?);
+        // PATH (inline petal)
+        if is_inline {
+            petal.kind = PetalKind::Inline(path);
+            while !self.stream.at_eof() {
+                petal.items.push(self.parse_item_with_recovery()?);
+            }
+        }
+        // PATH (file)
+        // Attempt to check if the file exists and use the absolute path
+        else {
+            let segment = path.segments[0].ident.clone();
+            let file_path = segment.view(&self.source.data);
+            let parent_path = path::Path::new(&self.source.identifier.1).parent().unwrap();
+            let mut found = false;
+
+            petal.kind = PetalKind::File(path, parent_path.to_path_buf());
+
+            for f_petal_path in &[
+                path::Path::new(&format!("{file_path}.{}", config::HYC_FILE_EXT)),
+                path::Path::new(file_path)
+                    .join(config::HYC_DIR_PETAL_FILE)
+                    .as_path(),
+            ] {
+                let path_buf = parent_path.join(&f_petal_path);
+
+                found = match std::fs::exists(&path_buf) {
+                    Ok(res) => res,
+                    Err(err) => panic!("an error occurred: {err:?}"),
+                };
+
+                if found {
+                    let PetalKind::File(_, buf) = &mut petal.kind else {
+                        break;
+                    };
+
+                    *buf = path_buf;
                 }
             }
 
-            // PATH (file)
-            // Attempt to check if the file exists and use the absolute path
-            PetalKind::File(file_path) => {
-                let parent_path = path::Path::new(&self.source.identifier.1).parent().unwrap();
-
-                // TODO: fix hardcoded `.hyc` extensions and `petal.hyc` directory petal file
-                let mut found = false;
-                for f_petal_path in &[
-                    PathBuf::from(format!("{file_path}.hyc")),
-                    PathBuf::from(file_path.clone()).join("petal.hyc"),
-                ] {
-                    let mut path = parent_path
-                        .join(&f_petal_path)
-                        .to_string_lossy()
-                        .to_string();
-
-                    match std::fs::exists(&path) {
-                        Ok(res) if (found = res, res).1 => {
-                            std::mem::swap(file_path, &mut path);
-                            break;
-                        }
-
-                        Err(err) => match err.kind() {
-                            _ => panic!("an error occurred: {err:?}"),
-                        },
-
-                        _ => {}
-                    }
-                }
-
-                if !found {
-                    Err(Some(ParserDiag::error(
-                        span,
-                        ParserDiagErrorKind::UnrecognizedPetalFile {
-                            name: segment.clone(),
-                        },
-                    )))?
-                }
+            if !found {
+                Err(Some(ParserDiag::error(
+                    span,
+                    ParserDiagErrorKind::UnrecognizedPetalFile {
+                        name: segment.clone(),
+                    },
+                )))?;
             }
         }
 

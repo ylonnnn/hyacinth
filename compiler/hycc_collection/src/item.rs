@@ -15,16 +15,28 @@ impl<'t, 'h> Collector<'t, 'h> {
         }
     }
 
+    pub(crate) fn collect_petal(&mut self, petal_item: &HirItem) -> CollectResult {
+        let HirItemKind::Petal(petal) = &petal_item.kind else {
+            unreachable!();
+        };
+
+        // Definition::new(
+        // )
+
+        todo!()
+    }
+
     pub(crate) fn collect_fn(&mut self, fn_item: &HirItem) -> CollectResult {
         let HirItemKind::Fn(func) = &fn_item.kind else {
             unreachable!()
         };
 
-        self.define(Definition::new_default(
+        self.define(Definition::new(
             func.ident.ident,
             DefKind::Fn,
             fn_item.id,
             fn_item.span,
+            fn_item.accessibility,
         ))?;
 
         // Create the scope of the function body
@@ -38,11 +50,12 @@ impl<'t, 'h> Collector<'t, 'h> {
             unreachable!()
         };
 
-        self.define(Definition::new_default(
+        self.define(Definition::new(
             var.ident.ident,
             DefKind::Var,
             var_item.id,
             var_item.span,
+            var_item.accessibility,
         ))?;
 
         Ok(())

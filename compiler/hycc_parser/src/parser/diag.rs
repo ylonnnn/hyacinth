@@ -3,6 +3,7 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagnosticKind},
 };
+use hycc_session::config;
 use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -277,9 +278,9 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                     diag.detail(
                         name.span,
                         DiagnosticKind::Note(format!(
-                            "create petal file: `{}` or `{}`",
-                            format_args!("{petal_name}.hyc"),
-                            format_args!("{petal_name}/petal.hyc")
+                            "create petal file `{}` or `{}` relative to the current file.",
+                            format_args!("{petal_name}.{}", config::HYC_FILE_EXT),
+                            format_args!("{petal_name}/{}", config::HYC_DIR_PETAL_FILE)
                         )),
                     );
                 }

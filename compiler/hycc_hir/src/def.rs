@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 
-use crate::HirId;
+use crate::{HirId, item::HirItemAccessibility};
 
 #[derive(Debug)]
 pub struct DefinitionTable {
@@ -59,6 +59,8 @@ impl DefId {
 
 #[derive(Debug, Clone)]
 pub enum DefKind {
+    Petal,
+
     Fn,
     Var,
 }
@@ -66,6 +68,8 @@ pub enum DefKind {
 impl DefKind {
     pub fn space(&self) -> DefSpace {
         match self {
+            Self::Petal => DefSpace::Type,
+
             Self::Fn => DefSpace::Value,
             Self::Var => DefSpace::Value,
         }
@@ -78,11 +82,7 @@ pub enum DefSpace {
     Value,
 }
 
-#[derive(Debug, Clone)]
-pub enum DefAccessibility {
-    Pub,
-    Priv,
-}
+pub type DefAccessibility = HirItemAccessibility;
 
 #[derive(Debug, Clone)]
 pub struct Definition {

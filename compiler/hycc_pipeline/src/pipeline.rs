@@ -68,16 +68,19 @@ pub fn parse_source(session: &mut Session, src_id: SourceId) -> Option<Petal> {
             continue;
         };
 
-        let PetalKind::File(file) = &mut petal.kind else {
+        let PetalKind::File(_, buf) = &mut petal.kind else {
             continue;
         };
 
-        let src_id = session.registry.register(Source::new(&file));
-        let Some(file_petal) = parse_source(session, src_id) else {
+        let src_id = session
+            .registry
+            .register(Source::new(buf.to_str().unwrap()));
+
+        let Some(mut file_petal) = parse_source(session, src_id) else {
             continue;
         };
 
-        item.kind = ItemKind::Petal(Box::new(file_petal));
+        std::mem::swap(&mut file_petal.items, &mut petal.items);
     }
 
     Some(root_petal)

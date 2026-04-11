@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use hycc_ast::{
     item::{Petal, PetalKind},
     token::{Token, TokenGraph, TokenKind},
@@ -226,7 +228,7 @@ impl<'s> Parser<'s> {
 
     pub fn parse(&mut self) -> Petal {
         let mut petal = Petal::new(
-            PetalKind::File(self.source.identifier.1.clone()),
+            PetalKind::Root,
             Vec::new(),
             Span::dummy(self.source.identifier.0),
         );

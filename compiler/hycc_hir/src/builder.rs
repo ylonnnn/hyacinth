@@ -46,8 +46,12 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         }
     }
 
+    pub fn intern_str(&mut self, s: &str) -> Symbol {
+        self.interner.intern(s)
+    }
+
     pub fn intern_tok_str(&mut self, token: &Token) -> Symbol {
-        self.interner.intern(token.view(&self.source.data))
+        self.intern_str(token.view(&self.source.data))
     }
 
     pub fn lower(&mut self, tree: Program) -> &'h HirProgram<'h> {

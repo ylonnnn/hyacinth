@@ -60,6 +60,7 @@ version = "0.1.0"
 dependencies = [
  "hycc_ast",
  "hycc_diagnostic",
+ "hycc_session",
  "hycc_source",
  "hycc_span",
  "hycc_util",

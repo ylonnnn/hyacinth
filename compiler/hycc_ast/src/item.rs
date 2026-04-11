@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{Block, Expr, Path, Ty, token::Token};
 
 use hycc_span::Span;
@@ -46,7 +48,8 @@ impl Item {
 
 #[derive(Debug, Clone)]
 pub enum PetalKind {
-    File(String),
+    Root,
+    File(Path, PathBuf),
     Inline(Path),
 }
 
@@ -59,7 +62,7 @@ pub struct Petal {
 
 impl Petal {
     pub fn new(kind: PetalKind, items: Vec<Item>, span: Span) -> Self {
-        Self { items, span, kind }
+        Self { kind, items, span }
     }
 }
 

@@ -4,6 +4,7 @@ use hycc_hir::{
     item::{HirFnParam, HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
+use hycc_util::ternary;
 
 use crate::collector::{CollectResult, Collector};
 
@@ -33,14 +34,15 @@ impl<'t, 'h> Collector<'t, 'h> {
 
         let mut scopes = 0;
         for segment in &path.segments {
-            let def_id = self.define(Definition::new(
+            let def = Definition::new(
                 segment.ident.ident,
                 DefKind::Petal,
                 petal_item.id,
                 petal_item.span,
                 petal_item.accessibility,
-            ))?;
+            );
 
+            let def_id = ternary!(petal.is_inline(), self.ensure_define(def), self.define(def))?;
             let scope_id = self.scope_ctx.attach_to_def(def_id, Scope::new());
 
             self.scope_ctx.push_id(scope_id);

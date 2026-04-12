@@ -33,8 +33,6 @@ impl<'t, 'h> Collector<'t, 'h> {
 
         let (name, space) = (definition.name, definition.kind.space());
         if let Some(earlier_def) = top.get(space, name) {
-            // let def = self.definitions.get(earlier_def);
-
             Err(Some(CollectorDiag::error(
                 definition.span,
                 CollectorDiagErrorKind::Duplication {
@@ -42,6 +40,20 @@ impl<'t, 'h> Collector<'t, 'h> {
                     earlier_def,
                 },
             )))
+        } else {
+            let def_id = self.definitions.define_hir(definition.hir_id, definition);
+            top.define(space, name, def_id);
+
+            Ok(def_id)
+        }
+    }
+
+    pub fn ensure_define(&mut self, definition: Definition) -> CollectResult<DefId> {
+        let top = self.scope_ctx.top_mut();
+
+        let (name, space) = (definition.name, definition.kind.space());
+        if let Some(earlier_def) = top.get(space, name) {
+            Ok(earlier_def)
         } else {
             let def_id = self.definitions.define_hir(definition.hir_id, definition);
             top.define(space, name, def_id);

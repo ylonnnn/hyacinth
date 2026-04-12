@@ -1,4 +1,4 @@
-use std::path::{self, PathBuf};
+use std::path::{self};
 
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
@@ -8,7 +8,6 @@ use hycc_ast::{
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_session::config;
-use hycc_util::ternary;
 
 use crate::parser::{
     Parser,
@@ -109,32 +108,45 @@ impl<'s> Parser<'s> {
         // Default to `PetalKind::Root`
         let mut petal = Petal::new(PetalKind::Root, Vec::new(), span);
 
-        // let mut petal = Petal::new(
-        //     ternary!(
-        //         is_inline,
-        //         PetalKind::Inline(path),
-        //         PetalKind::File(segment.view(&self.source.data).to_string())
-        //     ),
-        //     Vec::new(),
-        //     span,
-        // );
-
-        // PATH (inline petal)
+        // PATH (inline)
         if is_inline {
             petal.kind = PetalKind::Inline(path);
-            while !self.stream.at_eof() {
-                petal.items.push(self.parse_item_with_recovery()?);
-            }
+
+            let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
+                TokenGraph::Collection { data, .. } => data,
+                _ => Err(None)?,
+            };
+
+            let n = data.len();
+            self.use_stream(
+                TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                |s| {
+                    if s.stream.is_empty() {
+                        return;
+                    }
+
+                    while !s.stream.at_eof() {
+                        match s.parse_item_with_recovery() {
+                            Ok(item) => petal.items.push(item),
+                            Err(diag) => {
+                                if let Some(diag) = diag {
+                                    s.dctx.add(diag);
+                                }
+                            }
+                        }
+                    }
+                },
+            );
         }
         // PATH (file)
         // Attempt to check if the file exists and use the absolute path
         else {
             let segment = path.segments[0].ident.clone();
-            let file_path = segment.view(&self.source.data);
             let parent_path = path::Path::new(&self.source.identifier.1).parent().unwrap();
-            let mut found = false;
-
             petal.kind = PetalKind::File(path, parent_path.to_path_buf());
+
+            let mut found = false;
+            let file_path = segment.view(&self.source.data);
 
             for f_petal_path in &[
                 path::Path::new(&format!("{file_path}.{}", config::HYC_FILE_EXT)),

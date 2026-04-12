@@ -9,3 +9,4 @@ hycc_hir = { path = "../hycc_hir" }
 hycc_scope = { path = "../hycc_scope" }
 hycc_span = { path = "../hycc_span" }
 hycc_symbol = { path = "../hycc_symbol" }
+hycc_util = { path = "../hycc_util" }

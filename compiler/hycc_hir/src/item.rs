@@ -51,6 +51,12 @@ pub struct HirPetal<'h> {
     pub span: Span,
 }
 
+impl<'h> HirPetal<'h> {
+    pub fn is_inline(&self) -> bool {
+        matches!(self.kind, HirPetalKind::Inline(..))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct HirFn<'h> {
     pub ident: &'h HirRawIdent,

@@ -62,15 +62,27 @@ pub struct HirFn<'h> {
 
 #[derive(Debug, Clone)]
 pub struct HirFnParamList<'h> {
-    pub list: Vec<HirFnParam<'h>>,
+    pub list: Vec<&'h HirFnParam<'h>>,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct HirFnParam<'h> {
+    pub id: HirId,
     pub ident: &'h HirRawIdent,
     pub ty: &'h HirTy<'h>,
     pub span: Span,
+}
+
+impl<'h> HirFnParam<'h> {
+    pub fn new(ident: &'h HirRawIdent, ty: &'h HirTy<'h>, span: Span) -> Self {
+        Self {
+            id: HirId::Invalid,
+            ident,
+            ty,
+            span,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -121,11 +121,17 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         let mut data = Vec::new();
 
         for param in &params.list {
-            data.push(HirFnParam::<'h> {
-                ident: self.lower_raw_ident(&param.ident),
-                ty: self.lower_ty(&param.ty),
-                span: param.span(),
-            })
+            if let HirNode::FnParam(param) =
+                self.hir_table.add(HirNode::FnParam(HirFnParam::<'h>::new(
+                    self.lower_raw_ident(&param.ident),
+                    self.lower_ty(&param.ty),
+                    param.span(),
+                )))
+            {
+                data.push(param);
+            } else {
+                unreachable!();
+            }
         }
 
         HirFnParamList {

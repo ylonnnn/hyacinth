@@ -1,6 +1,7 @@
+use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefKind, Definition},
-    item::{HirItem, HirItemKind, HirPetalKind},
+    def::{DefAccessibility, DefKind, Definition},
+    item::{HirFnParam, HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
 
@@ -44,8 +45,6 @@ impl<'t, 'h> Collector<'t, 'h> {
 
             self.scope_ctx.push_id(scope_id);
             scopes += 1;
-
-            // TODO: repeatedly create petals
         }
 
         while scopes > 0 {
@@ -61,7 +60,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             unreachable!()
         };
 
-        self.define(Definition::new(
+        let def_id = self.define(Definition::new(
             func.ident.ident,
             DefKind::Fn,
             fn_item.id,
@@ -69,8 +68,32 @@ impl<'t, 'h> Collector<'t, 'h> {
             fn_item.accessibility,
         ))?;
 
-        // Create the scope of the function body
-        // Define the parameters
+        let scope_id = self.scope_ctx.attach_to_def(def_id, Scope::new());
+        self.enter_scope(scope_id, |s| {
+            // Define the function parameters
+            for param in &func.params.list {
+                match s.collect_fn_param(&param) {
+                    Ok(_) => {}
+                    Err(diag) => {
+                        if let Some(diag) = diag {
+                            s.dctx.add(diag);
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    pub(crate) fn collect_fn_param(&mut self, param: &HirFnParam) -> CollectResult {
+        self.define(Definition::new(
+            param.ident.ident,
+            DefKind::FnParam,
+            param.id,
+            param.span,
+            DefAccessibility::Priv,
+        ))?;
 
         Ok(())
     }

@@ -62,6 +62,8 @@ pub enum DefKind {
     Petal,
 
     Fn,
+    FnParam,
+
     Var,
 }
 
@@ -70,8 +72,7 @@ impl DefKind {
         match self {
             Self::Petal => DefSpace::Type,
 
-            Self::Fn => DefSpace::Value,
-            Self::Var => DefSpace::Value,
+            Self::Fn | Self::FnParam | Self::Var => DefSpace::Value,
         }
     }
 }

@@ -50,6 +50,15 @@ impl<'t, 'h> Collector<'t, 'h> {
         }
     }
 
+    pub fn enter_scope<F>(&mut self, scope_id: ScopeId, mut handler: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.scope_ctx.push_id(scope_id);
+        handler(self);
+        self.scope_ctx.pop();
+    }
+
     pub fn collect(&mut self, tree: &HirPetal) {
         for item in &tree.items {
             if let Err(Some(err)) = self.collect_item(item) {

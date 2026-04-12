@@ -3,7 +3,7 @@ use hycc_arena::typed::TypedArena;
 use crate::{
     block::HirBlock,
     expr::HirExpr,
-    item::HirItem,
+    item::{HirFnParam, HirItem},
     path::{HirIdent, HirPath, HirRawIdent},
     stmt::HirStmt,
     ty::HirTy,
@@ -30,8 +30,12 @@ pub enum HirNode<'h> {
     Expr(HirExpr<'h>),
 
     Path(HirPath<'h>),
+
+    // Non-general nodes
     Ident(HirIdent<'h>),
     RawIdent(HirRawIdent),
+
+    FnParam(HirFnParam<'h>),
 }
 
 #[derive(Debug)]
@@ -42,22 +46,43 @@ impl<'h> HirTable<'h> {
         Self(TypedArena::new())
     }
 
-    pub fn insert(&self, node: HirNode<'h>) -> HirId {
+    fn attach_id(&self, node: &mut HirNode<'h>) -> HirId {
+        let data = unsafe { &*self.0.data.get() };
+        let id = HirId(data.len());
+
+        match node {
+            HirNode::Item(node) => node.id = id,
+            HirNode::Block(node) => node.id = id,
+            HirNode::Stmt(node) => node.id = id,
+            HirNode::Ty(node) => node.id = id,
+            HirNode::Expr(node) => node.id = id,
+            HirNode::Path(node) => node.id = id,
+
+            HirNode::Ident(node) => node.id = id,
+            HirNode::RawIdent(node) => node.id = id,
+            HirNode::FnParam(node) => node.id = id,
+        };
+
+        id
+    }
+
+    pub fn insert(&self, mut node: HirNode<'h>) -> HirId {
+        let hir_id = self.attach_id(&mut node);
         self.0.alloc(node);
-        HirId(unsafe { (&*self.0.data.get()).len() })
+
+        hir_id
     }
 
     pub fn add(&self, node: HirNode<'h>) -> &'h HirNode<'h> {
-        let data = unsafe { &mut *self.0.data.get() };
-        data.push(Box::new(node));
-        unsafe { &*(data.last().unwrap().as_ref() as *const HirNode<'h>) }
+        let hir_id = self.insert(node);
+        self.get(hir_id)
     }
 
-    pub fn get(&'h self, id: HirId) -> &'h HirNode<'h> {
+    pub fn get(&self, id: HirId) -> &'h HirNode<'h> {
         unsafe { (&*self.0.data.get())[id.unwrap()].as_ref() }
     }
 
-    pub fn get_mut(&'h self, id: HirId) -> &'h mut HirNode<'h> {
+    pub fn get_mut(&self, id: HirId) -> &'h mut HirNode<'h> {
         unsafe { (&mut *self.0.data.get())[id.unwrap()].as_mut() }
     }
 }

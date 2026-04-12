@@ -116,7 +116,7 @@ impl<'s> Lexer<'s> {
             if c == b'\n' {
                 return Some(TokenGraph::Node(token!(
                     TokenKind::LnFeed,
-                    (self.offset, 1, self.source.identifier.0).into()
+                    (self.offset - 1, 1, self.source.identifier.0).into()
                 )));
             }
         }

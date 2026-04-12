@@ -6,7 +6,7 @@ use hycc_ast::{
     token::{Token, TokenKind},
     ty::Array,
 };
-use hycc_source::Source;
+use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_util::{digit_value, ternary};
 
@@ -28,19 +28,19 @@ where
     'h: 't,
 {
     interner: &'i mut SymbolInterner,
-    source: &'s Source,
+    registry: &'s SourceRegistry,
     hir_table: &'t HirTable<'h>,
 }
 
 impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     pub fn new(
         interner: &'i mut SymbolInterner,
-        source: &'s Source,
+        source: &'s SourceRegistry,
         hir_table: &'t HirTable<'h>,
     ) -> Self {
         Self {
             interner,
-            source,
+            registry: source,
             hir_table,
         }
     }
@@ -50,7 +50,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     }
 
     pub fn intern_tok_str(&mut self, token: &Token) -> Symbol {
-        self.intern_str(token.view(&self.source.data))
+        let source = self.registry.get(token.span.src_id);
+        self.intern_str(token.view(&source.data))
     }
 
     pub fn lower(&mut self, tree: Petal) -> &'h HirPetal<'h> {
@@ -103,7 +104,11 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         HirPetal {
             kind,
             span: petal.span,
-            items: Vec::new(),
+            items: petal
+                .items
+                .iter()
+                .map(|item| self.lower_item(&item))
+                .collect(),
         }
     }
 
@@ -209,7 +214,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     }
 
     fn lower_literal(&mut self, lit: &Token) -> HirLiteral {
-        let view = lit.view(&self.source.data);
+        let source = self.registry.get(lit.span.src_id);
+        let view = lit.view(&source.data);
 
         match &lit.kind {
             TokenKind::Int { base } | TokenKind::Float { base } => {

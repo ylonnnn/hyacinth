@@ -68,25 +68,79 @@ impl ScopeCtx {
     }
 
     pub fn attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
+        assert!(
+            !self.node_table.contains_key(&hir_id),
+            "hir node already has a scope attached!"
+        );
+
         let scope_id = self.table.insert(scope);
-        self.node_table.insert(hir_id, scope_id);
+        self.attach_id(hir_id, scope_id);
 
         scope_id
+    }
+
+    pub fn try_attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
+        if let Some(scope_id) = self.node_table.get(&hir_id) {
+            *scope_id
+        } else {
+            self.attach(hir_id, scope)
+        }
     }
 
     pub fn attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) {
+        assert!(
+            !self.node_table.contains_key(&hir_id),
+            "hir node already has a scope attached!"
+        );
+
         self.node_table.insert(hir_id, scope_id);
     }
 
+    pub fn try_attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) -> ScopeId {
+        if let Some(scope_id) = self.node_table.get(&hir_id) {
+            *scope_id
+        } else {
+            self.attach_id(hir_id, scope_id);
+            scope_id
+        }
+    }
+
     pub fn attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
+        assert!(
+            !self.def_table.contains_key(&def_id),
+            "definition already has a scope attached!"
+        );
+
         let scope_id = self.table.insert(scope);
-        self.def_table.insert(def_id, scope_id);
+        self.attach_id_to_def(def_id, scope_id);
 
         scope_id
     }
 
+    pub fn try_attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
+        if let Some(scope_id) = self.def_table.get(&def_id) {
+            *scope_id
+        } else {
+            self.attach_to_def(def_id, scope)
+        }
+    }
+
     pub fn attach_id_to_def(&mut self, def_id: DefId, scope_id: ScopeId) {
+        assert!(
+            !self.def_table.contains_key(&def_id),
+            "definition already has a scope attached!"
+        );
+
         self.def_table.insert(def_id, scope_id);
+    }
+
+    pub fn try_attach_id_to_def(&mut self, def_id: DefId, scope_id: ScopeId) -> ScopeId {
+        if let Some(scope_id) = self.def_table.get(&def_id) {
+            *scope_id
+        } else {
+            self.attach_id_to_def(def_id, scope_id);
+            scope_id
+        }
     }
 
     pub fn push(&mut self, scope: Scope) -> ScopeId {

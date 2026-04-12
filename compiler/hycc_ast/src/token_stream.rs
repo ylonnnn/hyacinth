@@ -19,7 +19,7 @@ pub enum TokenMatchExpectation {
 
 #[derive(Debug)]
 pub struct TokenStream {
-    data: Vec<TokenGraph>,
+    pub data: Vec<TokenGraph>,
     offset: usize,
     saved_offset: usize,
 }

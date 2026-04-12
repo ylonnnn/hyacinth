@@ -25,10 +25,10 @@ impl Token {
     }
 
     pub fn view<'a>(&self, source: &'a String) -> &'a str {
-        let offset = self.span.offset;
+        let Span { offset, len, .. } = self.span;
         ternary!(
             self.kind != TokenKind::Eof,
-            &source[(offset as usize)..((offset + self.span.len as u32) as usize)],
+            &source[(offset as usize)..((offset + len as u32) as usize)],
             "EOF"
         )
     }
@@ -44,8 +44,9 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "<{:?}:{}:{}>",
+            "<{:?}:{}:{}:{}>",
             self.kind,
+            self.span.src_id.0,
             self.span.offset,
             self.span.offset + self.span.len as u32
         )

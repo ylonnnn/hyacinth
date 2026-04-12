@@ -42,11 +42,24 @@ impl<'t, 'h> Collector<'t, 'h> {
                 petal_item.accessibility,
             );
 
-            let def_id = ternary!(petal.is_inline(), self.ensure_define(def), self.define(def))?;
-            let scope_id = self.scope_ctx.attach_to_def(def_id, Scope::new());
-
+            let def_id = ternary!(petal.is_inline(), self.try_define(def), self.define(def))?;
+            let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
             self.scope_ctx.push_id(scope_id);
             scopes += 1;
+        }
+
+        // Define the items within the petal
+        for item in &petal.items {
+            // Manual diagnostic collection to allow for multiple
+            // diagnostics from multiple item collection
+            match self.collect_item(&item) {
+                Ok(_) => {}
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+                }
+            }
         }
 
         while scopes > 0 {

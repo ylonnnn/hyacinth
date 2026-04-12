@@ -49,7 +49,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         }
     }
 
-    pub fn ensure_define(&mut self, definition: Definition) -> CollectResult<DefId> {
+    pub fn try_define(&mut self, definition: Definition) -> CollectResult<DefId> {
         let top = self.scope_ctx.top_mut();
 
         let (name, space) = (definition.name, definition.kind.space());

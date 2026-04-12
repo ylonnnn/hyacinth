@@ -86,8 +86,7 @@ pub fn parse_source(session: &mut Session, src_id: SourceId) -> Option<Petal> {
 
 pub fn lower_hir<'h>(session: &mut Session, tree: Petal) -> (HirTable<'h>, &'h HirPetal<'h>) {
     let hir_table = HirTable::new();
-    let mut hir_builder =
-        HirBuilder::new(&mut session.interner, session.registry.root(), &hir_table);
+    let mut hir_builder = HirBuilder::new(&mut session.interner, &session.registry, &hir_table);
 
     let hir = hir_builder.lower(tree);
     (hir_table, hir)
@@ -102,10 +101,13 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let (hir_table, hir) = lower_hir(session, tree);
     let mut collector = Collector::new(&hir_table);
 
+    // dbg!(&hir);
+    // dbg!(&session.interner);
+    // dbg!(&session.registry);
+
     collector.collect(hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
-
     collector.dctx.emit(
         &mut session.dctx,
         CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),

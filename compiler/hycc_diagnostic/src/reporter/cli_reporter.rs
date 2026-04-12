@@ -117,7 +117,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let sev_color = self.color(&kind);
 
         let indentation = 6 * indentation as usize;
-        let s_kind_indent = "=".bright_black().repeat(indentation.saturating_sub(3));
+        let s_kind_indent = "=".bright_black().repeat(indentation.saturating_sub(2));
         let indent = " ".repeat(indentation);
 
         format!(

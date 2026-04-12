@@ -56,7 +56,7 @@ impl Path {
     }
 
     pub fn add(&mut self, segment: Identifier) {
-        self.span.merge(&segment.span);
+        self.span = self.span.merge(&segment.span);
         self.segments.push(segment);
     }
 }

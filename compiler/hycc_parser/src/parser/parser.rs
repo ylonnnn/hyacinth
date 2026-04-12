@@ -18,6 +18,7 @@ pub struct Parser<'s> {
     pub(super) source: &'s Source,
 
     pub(super) generic_delimeter_encounters: usize,
+    pub(super) petal_stack: Vec<String>,
 }
 
 pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
@@ -30,6 +31,7 @@ impl<'s> Parser<'s> {
             source,
 
             generic_delimeter_encounters: 0,
+            petal_stack: Vec::new(),
         }
     }
 

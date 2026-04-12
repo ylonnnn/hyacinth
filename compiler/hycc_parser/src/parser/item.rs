@@ -1,4 +1,4 @@
-use std::path::{self};
+use std::path::{self, PathBuf};
 
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
@@ -101,8 +101,7 @@ impl<'s> Parser<'s> {
     pub fn parse_petal(&mut self) -> ParseResult<Petal> {
         // PATH
         let path = self.parse_path()?;
-        let is_inline =
-            path.segments.len() > 1 || self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0;
+        let is_inline = self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0;
 
         let span = path.span;
         // Default to `PetalKind::Root`
@@ -110,6 +109,12 @@ impl<'s> Parser<'s> {
 
         // PATH (inline)
         if is_inline {
+            let init_len = self.petal_stack.len();
+            for segment in &path.segments {
+                self.petal_stack
+                    .push(segment.ident.view(&self.source.data).into());
+            }
+
             petal.kind = PetalKind::Inline(path);
 
             let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
@@ -137,24 +142,35 @@ impl<'s> Parser<'s> {
                     }
                 },
             );
+
+            while self.petal_stack.len() > init_len {
+                self.petal_stack.pop();
+            }
         }
         // PATH (file)
         // Attempt to check if the file exists and use the absolute path
         else {
-            let segment = path.segments[0].ident.clone();
             let parent_path = path::Path::new(&self.source.identifier.1).parent().unwrap();
+            let segments: Vec<&str> = path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.view(&self.source.data))
+                .collect();
+
             petal.kind = PetalKind::File(path, parent_path.to_path_buf());
 
             let mut found = false;
-            let file_path = segment.view(&self.source.data);
+            let file = self
+                .petal_stack
+                .iter()
+                .collect::<PathBuf>()
+                .join(segments.iter().collect::<PathBuf>());
 
-            for f_petal_path in &[
-                path::Path::new(&format!("{file_path}.{}", config::HYC_FILE_EXT)),
-                path::Path::new(file_path)
-                    .join(config::HYC_DIR_PETAL_FILE)
-                    .as_path(),
+            for f_path in &[
+                file.with_extension(config::HYC_FILE_EXT),
+                file.join(config::HYC_DIR_PETAL_FILE),
             ] {
-                let path_buf = parent_path.join(&f_petal_path);
+                let path_buf = parent_path.join(&f_path);
 
                 found = match std::fs::exists(&path_buf) {
                     Ok(res) => res,
@@ -174,9 +190,7 @@ impl<'s> Parser<'s> {
             if !found {
                 Err(Some(ParserDiag::error(
                     span,
-                    ParserDiagErrorKind::UnrecognizedPetalFile {
-                        name: segment.clone(),
-                    },
+                    ParserDiagErrorKind::UnrecognizedPetalFile { path: file },
                 )))?;
             }
         }

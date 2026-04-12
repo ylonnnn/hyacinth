@@ -1,3 +1,5 @@
+use std::path::{self, PathBuf};
+
 use hycc_ast::token::{Token, TokenKind};
 use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
@@ -133,7 +135,7 @@ pub enum ParserDiagErrorKind {
     },
 
     UnrecognizedPetalFile {
-        name: Token,
+        path: PathBuf,
     },
 }
 
@@ -254,10 +256,13 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         message
                     }
 
-                    Err::UnrecognizedPetalFile { name } => {
+                    Err::UnrecognizedPetalFile { path } => {
                         format!(
                             "cannot find corresponding petal file for petal `{}`",
-                            name.view(&source.data)
+                            path.to_str().unwrap().replace(
+                                path::MAIN_SEPARATOR_STR,
+                                &config::HYC_PATH_SEP_TOK_KIND.to_string()
+                            )
                         )
                     }
                 },
@@ -272,15 +277,15 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
             },
 
             Error(kind) => match kind {
-                Err::UnrecognizedPetalFile { name } => {
-                    let petal_name = name.view(&source.data);
+                Err::UnrecognizedPetalFile { path } => {
+                    let petal = path.to_str().unwrap();
 
                     diag.detail(
-                        name.span,
+                        diag.span,
                         DiagnosticKind::Note(format!(
                             "create petal file `{}` or `{}` relative to the current file.",
-                            format_args!("{petal_name}.{}", config::HYC_FILE_EXT),
-                            format_args!("{petal_name}/{}", config::HYC_DIR_PETAL_FILE)
+                            format_args!("{}.{}", petal, config::HYC_FILE_EXT),
+                            format_args!("{}/{}", petal, config::HYC_DIR_PETAL_FILE)
                         )),
                     );
                 }

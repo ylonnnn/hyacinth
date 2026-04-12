@@ -467,10 +467,11 @@ impl<'s> Lexer<'s> {
                     b'/' => match self.peekn(1) {
                         Some(b'/') => {
                             self.skip_until(|_, c| c == b'\n');
-                            Some(token!(
-                                TokenKind::DocComment,
-                                (start, (self.offset - start) as u16, src_id).into()
-                            ))
+                            // Some(token!(
+                            //     TokenKind::DocComment,
+                            //     (start, (self.offset - start) as u16, src_id).into()
+                            // ))
+                            None
                         }
                         Some(b'=') => Some(token!(TokenKind::SlashEq, span.extend(1))),
                         _ => Some(token!(TokenKind::Slash, span)),

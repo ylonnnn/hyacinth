@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use hycc_ast::{
     item::{Petal, PetalKind},
     token::{Token, TokenGraph, TokenKind},

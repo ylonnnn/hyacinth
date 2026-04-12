@@ -13,6 +13,7 @@ pub struct Collector<'t, 'h> {
     pub definitions: DefinitionTable,
     pub scope_ctx: ScopeCtx,
     pub dctx: CollectorDiagCtx,
+    #[allow(unused)]
     pub(crate) hir_table: &'t HirTable<'h>,
 }
 

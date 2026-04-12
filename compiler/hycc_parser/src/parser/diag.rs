@@ -251,7 +251,6 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                             "invalid variable declaration for `{}`.",
                             ident.view(&source.data)
                         );
-                        // TODO: additional detail/note
 
                         message
                     }
@@ -277,6 +276,10 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
             },
 
             Error(kind) => match kind {
+                Err::InvalidVarDecl { .. } => {
+                    diag.detail(diag.span, DiagnosticKind::Note(format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")));
+                }
+
                 Err::UnrecognizedPetalFile { path } => {
                     let petal = path.to_str().unwrap();
 

@@ -149,9 +149,6 @@ impl<'s> Parser<'s> {
                     Err(err) => panic!("an error occurred: {err:?}"),
                 };
 
-                dbg!(found);
-                dbg!(&path_buf);
-
                 if found {
                     let PetalKind::File(_, buf) = &mut petal.kind else {
                         break;

@@ -15,6 +15,17 @@ pub struct Collector<'t, 'h> {
     pub dctx: CollectorDiagCtx,
     #[allow(unused)]
     pub(crate) hir_table: &'t HirTable<'h>,
+
+    // Default to top-level collection
+    pub(crate) level: CollectionLevel,
+    // The current collection level of the current node
+    pub(crate) node_level: CollectionLevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollectionLevel {
+    Top,
+    Local,
 }
 
 pub type CollectResult<T = (), E = Option<CollectorDiag>> = Result<T, E>;
@@ -26,6 +37,8 @@ impl<'t, 'h> Collector<'t, 'h> {
             scope_ctx: ScopeCtx::new(),
             dctx: CollectorDiagCtx::new(),
             hir_table,
+            level: CollectionLevel::Top,
+            node_level: CollectionLevel::Top,
         }
     }
 
@@ -72,7 +85,23 @@ impl<'t, 'h> Collector<'t, 'h> {
         self.scope_ctx.pop();
     }
 
+    pub fn is_expected_to_be_collected(&self) -> bool {
+        self.level == CollectionLevel::Local && self.node_level == CollectionLevel::Top
+    }
+
     pub fn collect(&mut self, tree: &HirPetal) {
+        // Top-level collection
+        self.level = CollectionLevel::Top;
+        self.collect_tree(tree);
+
+        // Local definitions collection
+        self.level = CollectionLevel::Local;
+        self.collect_tree(tree);
+    }
+
+    fn collect_tree(&mut self, tree: &HirPetal) {
+        self.node_level = CollectionLevel::Top;
+
         for item in &tree.items {
             if let Err(Some(err)) = self.collect_item(item) {
                 self.dctx.add(err);

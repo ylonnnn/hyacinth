@@ -12,6 +12,7 @@ use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
 };
+use hycc_resolution::name::resolver::Resolver;
 use hycc_session::{session::Session, unit::CompilationUnitId};
 use hycc_source::{Source, source::SourceId};
 use hycc_util::ternary;
@@ -101,10 +102,6 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let (hir_table, hir) = lower_hir(session, tree);
     let mut collector = Collector::new(&hir_table);
 
-    // dbg!(&hir);
-    // dbg!(&session.interner);
-    // dbg!(&session.registry);
-
     collector.collect(hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
@@ -112,4 +109,10 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         &mut session.dctx,
         CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
     );
+
+    if session.dctx.error_occurred() {
+        return;
+    }
+
+    let mut resolver = Resolver::new();
 }

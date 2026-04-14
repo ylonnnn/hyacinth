@@ -6,7 +6,7 @@ use hycc_hir::{
 use hycc_scope::Scope;
 use hycc_util::ternary;
 
-use crate::collector::{CollectResult, Collector};
+use crate::collector::{CollectResult, CollectionLevel, Collector};
 
 impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
@@ -37,28 +37,34 @@ impl<'t, 'h> Collector<'t, 'h> {
             let def = Definition::new(
                 segment.ident.ident,
                 DefKind::Petal,
-                petal_item.id,
+                segment.id,
                 petal_item.span,
                 petal_item.accessibility,
             );
 
-            let def_id = ternary!(petal.is_inline(), self.try_define(def), self.define(def))?;
+            let def_id = ternary!(
+                self.is_expected_to_be_collected(),
+                {
+                    let def_id = self.definitions.get_def_id(segment.id);
+                    if let Some(def_id) = def_id {
+                        *def_id
+                    } else {
+                        return Ok(());
+                    }
+                },
+                ternary!(petal.is_inline(), self.try_define(def), self.define(def))?
+            );
             let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+
+            self.definitions.define_id_hir(segment.id, def_id);
             self.scope_ctx.push_id(scope_id);
+
             scopes += 1;
         }
 
-        // Define the items within the petal
         for item in &petal.items {
-            // Manual diagnostic collection to allow for multiple
-            // diagnostics from multiple item collection
-            match self.collect_item(&item) {
-                Ok(_) => {}
-                Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
-                }
+            if let Err(Some(diag)) = self.collect_item(&item) {
+                self.dctx.add(diag);
             }
         }
 
@@ -75,28 +81,52 @@ impl<'t, 'h> Collector<'t, 'h> {
             unreachable!()
         };
 
-        let def_id = self.define(Definition::new(
-            func.ident.ident,
-            DefKind::Fn,
-            fn_item.id,
-            fn_item.span,
-            fn_item.accessibility,
-        ))?;
+        let def_id = ternary!(
+            self.is_expected_to_be_collected(),
+            {
+                let def_id = self.definitions.get_def_id(fn_item.id);
+                if let Some(def_id) = def_id {
+                    *def_id
+                } else {
+                    return Ok(());
+                }
+            },
+            self.define(Definition::new(
+                func.ident.ident,
+                DefKind::Fn,
+                fn_item.id,
+                fn_item.span,
+                fn_item.accessibility,
+            ))?
+        );
 
-        let scope_id = self.scope_ctx.attach_to_def(def_id, Scope::new());
+        let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+        let prev_n_lev = self.node_level;
+
+        self.node_level = CollectionLevel::Local;
+
         self.enter_scope(scope_id, |s| {
-            // Define the function parameters
-            for param in &func.params.list {
-                match s.collect_fn_param(&param) {
-                    Ok(_) => {}
-                    Err(diag) => {
-                        if let Some(diag) = diag {
+            match s.level {
+                CollectionLevel::Top => {
+                    // Define the function parameters
+                    for param in &func.params.list {
+                        if let Err(Some(diag)) = s.collect_fn_param(&param) {
+                            s.dctx.add(diag);
+                        }
+                    }
+                }
+
+                CollectionLevel::Local => {
+                    for stmt in &func.body.stmts {
+                        if let Err(Some(diag)) = s.collect_stmt(&stmt) {
                             s.dctx.add(diag);
                         }
                     }
                 }
             }
         });
+
+        self.node_level = prev_n_lev;
 
         Ok(())
     }

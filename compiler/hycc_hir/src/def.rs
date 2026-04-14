@@ -35,6 +35,10 @@ impl DefinitionTable {
         def_id
     }
 
+    pub fn define_id_hir(&mut self, hir_id: HirId, def_id: DefId) {
+        self.map.insert(hir_id, def_id);
+    }
+
     pub fn get_def_id(&self, hir_id: HirId) -> Option<&DefId> {
         self.map.get(&hir_id)
     }

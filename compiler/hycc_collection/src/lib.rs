@@ -2,3 +2,4 @@ pub mod collector;
 pub mod diag;
 
 pub mod item;
+pub mod stmt;

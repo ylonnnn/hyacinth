@@ -101,11 +101,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         );
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-        let prev_n_lev = self.node_level;
-
-        self.node_level = CollectionLevel::Local;
-
-        self.enter_scope(scope_id, |s| {
+        self.enter_scope(scope_id, CollectionLevel::Local, |s| {
             match s.level {
                 CollectionLevel::Top => {
                     // Define the function parameters
@@ -125,8 +121,6 @@ impl<'t, 'h> Collector<'t, 'h> {
                 }
             }
         });
-
-        self.node_level = prev_n_lev;
 
         Ok(())
     }

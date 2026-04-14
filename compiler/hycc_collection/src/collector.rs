@@ -76,13 +76,19 @@ impl<'t, 'h> Collector<'t, 'h> {
         }
     }
 
-    pub fn enter_scope<F>(&mut self, scope_id: ScopeId, mut handler: F)
+    pub fn enter_scope<F>(&mut self, scope_id: ScopeId, level: CollectionLevel, mut handler: F)
     where
         F: FnMut(&mut Self),
     {
+        let prev_node_level = self.node_level;
+
+        self.node_level = level;
         self.scope_ctx.push_id(scope_id);
+
         handler(self);
+
         self.scope_ctx.pop();
+        self.node_level = prev_node_level;
     }
 
     pub fn is_expected_to_be_collected(&self) -> bool {

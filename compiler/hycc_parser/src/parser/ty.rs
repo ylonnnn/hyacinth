@@ -4,7 +4,7 @@ use hycc_ast::{
     token_stream::TokenStream,
 };
 
-use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
+use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,24 +84,31 @@ impl<'s> Parser<'s> {
             return Ok(ty);
         };
 
-        match tok.kind {
-            TokenKind::Eq | TokenKind::Comma | TokenKind::LeftBrace | TokenKind::RightParen => {
-                return Ok(ty);
-            }
+        // match tok.kind {
+        //     TokenKind::Eq
+        //     | TokenKind::Comma
+        //     | TokenKind::LeftBrace
+        //     | TokenKind::RightParen
+        //     | TokenKind::Greater
+        //     | TokenKind::GreaterGreater => {
+        //         return Ok(ty);
+        //     }
 
-            _ => {
-                // self.dctx.add(errors::unexpected_token(
-                //     self.source,
-                //     &tok,
-                //     Some("expected type suffix"),
-                // ));
+        //     _ => {
+        //         // self.dctx.add(errors::unexpected_token(
+        //         //     self.source,
+        //         //     &tok,
+        //         //     Some("expected type suffix"),
+        //         // ));
 
-                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
-                    tok.clone(),
-                    "type suffix",
-                )))
-            }
-        }
+        //         // Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+        //         //     tok.clone(),
+        //         //     "type suffix",
+        //         // )))
+        //     }
+        // }
+
+        Ok(ty)
     }
 
     pub fn parse_grouped_ty(&mut self) -> ParseResult<Ty> {
@@ -142,6 +149,8 @@ impl<'s> Parser<'s> {
 
     // PATH
     pub fn parse_path_ty(&mut self) -> ParseResult<Ty> {
-        Ok(Ty::new(TyKind::Path(Box::new(self.parse_path()?))))
+        Ok(Ty::new(TyKind::Path(Box::new(
+            self.parse_path(PathKind::Ty)?,
+        ))))
     }
 }

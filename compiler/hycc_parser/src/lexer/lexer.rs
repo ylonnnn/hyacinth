@@ -507,8 +507,8 @@ impl<'s> Lexer<'s> {
                     }),
 
                     b'>' => Some(match self.peekn(1) {
-                        Some(b'=') => token!(TokenKind::GreaterEq, span.extend(1)),
-                        Some(b'>') => token!(TokenKind::GreaterGreater, span.extend(1)),
+                        // Some(b'=') => token!(TokenKind::GreaterEq, span.extend(1)),
+                        // Some(b'>') => token!(TokenKind::GreaterGreater, span.extend(1)),
                         _ => token!(TokenKind::Greater, span),
                     }),
 

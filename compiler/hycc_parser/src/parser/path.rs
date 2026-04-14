@@ -1,10 +1,19 @@
 use hycc_ast::{
     Identifier, Path,
     path::{IdentifierArgument, IdentifierArguments},
-    token::{Token, TokenIdentKind, TokenKind},
+    token::{Token, TokenGraph, TokenIdentKind, TokenKind},
+    token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
+use hycc_diagnostic::DiagnosticContext;
 
 use crate::parser::{Parser, parser::ParseResult};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathKind {
+    None,
+    Expr,
+    Ty,
+}
 
 impl<'s> Parser<'s> {
     pub fn parse_raw_ident(&mut self) -> ParseResult<Token> {
@@ -17,19 +26,19 @@ impl<'s> Parser<'s> {
     }
 
     // IDENT (:: IDENT)*
-    pub fn parse_path(&mut self) -> ParseResult<Path> {
-        let lead = self.parse_ident()?;
+    pub fn parse_path(&mut self, kind: PathKind) -> ParseResult<Path> {
+        let lead = self.parse_ident(kind)?;
         let mut path = Path::new(vec![lead]);
 
         while self.expect_exact_nonlf(TokenKind::ColonColon).0 {
-            path.add(self.parse_ident()?)
+            path.add(self.parse_ident(kind)?)
         }
 
         Ok(path)
     }
 
     // RAW_IDENT < GENERIC_ARG (, GENERIC_ARG)* >
-    pub fn parse_ident(&mut self) -> ParseResult<Identifier> {
+    pub fn parse_ident(&mut self, kind: PathKind) -> ParseResult<Identifier> {
         // RAW_IDENT
         let raw_ident = self.parse_raw_ident();
 
@@ -42,28 +51,28 @@ impl<'s> Parser<'s> {
             && matched
         {
             closed = false;
-            args = self.parse_ident_args();
+            match self.parse_ident_args() {
+                Ok(arguments) => args = Some(arguments),
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+                }
+            }
 
             // >
-            if self.expect_exact_nonlf(TokenKind::Greater).0 {
-            }
-            // If the generic argument closing token did not match, it may
-            // be a bound token (e.g. >>, >=)
-            else {
-                if self
-                    .expect_preserved_exact_nonlf(TokenKind::GreaterGreater)
-                    .0
-                {
-                    // Requires N "<" encounters for the current token to be consumed
-                    self.generic_delimeter_encounters += 1;
-                    if self.generic_delimeter_encounters % 2 == 0 {
-                        self.adjust_to_nonlf();
+            match self.require(
+                TokenKind::Greater,
+                TokenConsumptionKind::UponSuccess,
+                &[],
+                TokenMatchExpectation::Exact,
+            ) {
+                Ok(_) => closed = true,
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
                     }
-
-                    closed = true;
                 }
-
-                // TODO: for the token kind ">="
             }
         }
 
@@ -73,6 +82,7 @@ impl<'s> Parser<'s> {
             // a binary expression such as a < b
             if let Some(args) = &args
                 && args.data.len() <= 1
+                && kind == PathKind::Expr
             {
                 // TODO
                 // Misdiagnose the most recent error if it exists
@@ -91,9 +101,10 @@ impl<'s> Parser<'s> {
     }
 
     // < GENERIC_ARG (, GENERIC_ARG) >
-    pub fn parse_ident_args(&mut self) -> Option<IdentifierArguments> {
-        let tg = self.next_nonlf()?;
-        let op_delim = tg.underlying()?;
+    pub fn parse_ident_args(&mut self) -> ParseResult<IdentifierArguments> {
+        let Some(op_delim) = self.next_nonlf_token() else {
+            return Err(None);
+        };
 
         let mut arguments = IdentifierArguments {
             data: Vec::new(),
@@ -101,16 +112,13 @@ impl<'s> Parser<'s> {
         };
         let mut expect = true;
 
-        while !self.expect_preserved_exact_nonlf(TokenKind::Greater).0
-            && !self
-                .expect_preserved_exact_nonlf(TokenKind::GreaterGreater)
-                .0
+        while !self.expect_exact_nonlf(TokenKind::Greater).0
+        // && !self.expect_exact_nonlf(TokenKind::GreaterGreater).0
         {
             if expect {
-                if let Some(arg) = self.parse_ident_arg() {
-                    arguments.data.push(arg);
-                }
+                let arg = self.parse_ident_arg()?;
 
+                arguments.data.push(arg);
                 expect = false;
             }
 
@@ -122,17 +130,21 @@ impl<'s> Parser<'s> {
             break;
         }
 
-        Some(arguments)
+        Ok(arguments)
     }
 
     // GENERIC_ARG ::= { EXPR } | TYPE
-    pub fn parse_ident_arg(&mut self) -> Option<IdentifierArgument> {
-        if self.expect_exact_nonlf(TokenKind::LeftBrace).0 {
-            // TODO: parse expression
-            None
+    pub fn parse_ident_arg(&mut self) -> ParseResult<IdentifierArgument> {
+        if let (_, Some(TokenGraph::Collection { data, .. })) =
+            self.expect_exact_nonlf(TokenKind::LeftBrace)
+        {
+            let n = data.len();
+            self.use_stream(
+                TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                |s| Ok(IdentifierArgument::Expr(Box::new(s.parse_expr(0)?))),
+            )
         } else {
-            // TODO: parse type
-            None
+            Ok(IdentifierArgument::Ty(Box::new(self.parse_ty()?)))
         }
     }
 }

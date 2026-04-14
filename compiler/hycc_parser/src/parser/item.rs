@@ -13,6 +13,7 @@ use crate::parser::{
     Parser,
     diag::{ParserDiag, ParserDiagErrorKind},
     parser::ParseResult,
+    path::PathKind,
 };
 
 impl<'s> Parser<'s> {
@@ -100,7 +101,7 @@ impl<'s> Parser<'s> {
     // petal PATH { ITEM* }
     pub fn parse_petal(&mut self) -> ParseResult<Petal> {
         // PATH
-        let path = self.parse_path()?;
+        let path = self.parse_path(PathKind::None)?;
         let is_inline = self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0;
 
         let span = path.span;
@@ -337,14 +338,13 @@ impl<'s> Parser<'s> {
         let mut ty = Option::<Ty>::None;
         if self.expect_exact_nonlf(TokenKind::Colon).0 {
             // TY
-            ty = Some(self.parse_ty()?)
+            ty = Some(dbg!(self.parse_ty())?)
         }
 
         // =
         let mut val = Option::<Expr>::None;
-        if self.peek_nonlf().is_some() {
+        if self.expect_exact_nonlf(TokenKind::Eq).0 {
             // EXPR
-            self.require_abs_exact_nonlf(TokenKind::Eq)?;
             val = Some(self.parse_expr(0)?);
         }
 

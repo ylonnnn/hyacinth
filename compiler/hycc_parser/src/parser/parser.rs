@@ -37,7 +37,7 @@ impl<'s> Parser<'s> {
 
     pub fn adjust_to_nonlf(&mut self) {
         self.stream
-            .adjustn(self.stream.first_not_offset(&[TokenKind::LnFeed]));
+            .adjustn(self.stream.first_not_offset(&[TokenKind::LnFeed]) + 1);
     }
 
     pub fn peek_nonlf(&self) -> Option<&TokenGraph> {

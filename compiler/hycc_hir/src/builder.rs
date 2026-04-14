@@ -266,9 +266,9 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         (
             match &op.kind {
                 TokenKind::Plus => BinaryOp::Add,
-                TokenKind::Minus => BinaryOp::Add,
-                TokenKind::Star => BinaryOp::Add,
-                TokenKind::Slash => BinaryOp::Add,
+                TokenKind::Minus => BinaryOp::Sub,
+                TokenKind::Star => BinaryOp::Mul,
+                TokenKind::Slash => BinaryOp::Div,
                 TokenKind::Percent => BinaryOp::Mod,
                 TokenKind::CaretCaret => BinaryOp::Exp,
 
@@ -283,7 +283,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 TokenKind::PipePipe => BinaryOp::Or,
 
                 TokenKind::Ampersand => BinaryOp::BitwiseAnd,
-                TokenKind::Pipe => BinaryOp::Or,
+                TokenKind::Pipe => BinaryOp::BitwiseOr,
                 TokenKind::Caret => BinaryOp::BitwiseXor,
                 TokenKind::LessLess => BinaryOp::BitwiseLShift,
                 TokenKind::GreaterGreater => BinaryOp::BitwiseRShift,

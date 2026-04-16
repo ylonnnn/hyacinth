@@ -2,7 +2,7 @@
 macro_rules! ternary {
     ($cond:expr, $t_res:expr, $f_res:expr) => {
         if $cond { $t_res } else { $f_res }
-    }
+    };
 }
 
 #[macro_export]
@@ -24,6 +24,13 @@ macro_rules! hashmap {
 
         map
     }}
+}
+
+#[macro_export]
+macro_rules! bug {
+    ($($arg:tt)*) => {
+        panic!("bug encountered: {}", format_args!($($arg)*));
+    };
 }
 
 #[macro_export]

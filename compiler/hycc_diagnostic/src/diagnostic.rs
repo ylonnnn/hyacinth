@@ -116,7 +116,7 @@ impl DiagnosticContext<()> for DiagnosticCtx {
     }
 
     fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
-        self.1 = self.1 && diagnostic.is_error();
+        self.1 = self.1 || diagnostic.is_error();
         let data = self.data_mut();
 
         data.push(diagnostic);

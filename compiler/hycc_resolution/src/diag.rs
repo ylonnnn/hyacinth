@@ -2,30 +2,33 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
+use hycc_hir::def::DefSpace;
 // use hycc_hir::{
 //     HirTable,
 //     def::{DefId, DefinitionTable},
 // };
 // use hycc_scope::ScopeCtx;
 use hycc_span::Span;
+use hycc_symbol::{Symbol, SymbolInterner};
 // use hycc_symbol::{Symbol, SymbolInterner};
 
 #[derive(Debug)]
-pub struct ResolverDiagDataCtx {
-    // pub interner: &'i SymbolInterner,
+pub struct ResolverDiagDataCtx<'i> {
+    pub interner: &'i SymbolInterner,
     // pub hir_table: &'t HirTable<'h>,
     // pub definitions: &'d DefinitionTable,
     // pub scope_ctx: &'s ScopeCtx,
 }
 
-impl ResolverDiagDataCtx {
-    pub fn new(// interner: &'i SymbolInterner,
+impl<'i> ResolverDiagDataCtx<'i> {
+    pub fn new(
+        interner: &'i SymbolInterner,
         // hir_table: &'t HirTable<'h>,
         // definitions: &'d DefinitionTable,
         // scope_ctx: &'s ScopeCtx,
     ) -> Self {
         Self {
-            // interner,
+            interner,
             // hir_table,
             // definitions,
             // scope_ctx,
@@ -62,7 +65,7 @@ impl ResolverDiagCtx {
     }
 }
 
-impl DiagnosticContext<ResolverDiagDataCtx, ResolverDiag> for ResolverDiagCtx {
+impl<'i> DiagnosticContext<ResolverDiagDataCtx<'i>, ResolverDiag> for ResolverDiagCtx {
     fn data(&self) -> &Vec<ResolverDiag> {
         &self.0
     }
@@ -93,7 +96,9 @@ pub enum ResolverDiagKind {
 pub enum ResolverDiagWarningKind {}
 
 #[derive(Debug, Clone)]
-pub enum ResolverDiagErrorKind {}
+pub enum ResolverDiagErrorKind {
+    UnrecognizedSymbol(Symbol, DefSpace),
+}
 
 #[derive(Debug, Clone)]
 pub struct ResolverDiag {
@@ -117,14 +122,12 @@ impl ResolverDiag {
     }
 }
 
-impl Diag<ResolverDiagDataCtx> for ResolverDiag {
+impl<'i> Diag<ResolverDiagDataCtx<'i>> for ResolverDiag {
     fn emit(&self, ctx: &ResolverDiagDataCtx) -> Diagnostic {
-        // use ResolverDiagErrorKind as Err;
+        use ResolverDiagErrorKind as Err;
         use ResolverDiagKind::*;
 
-        let ResolverDiagDataCtx { .. } = *ctx;
-        let code = (unsafe { *(&self.kind as *const ResolverDiagKind as *const u8) }) as u16
-            + ResolverDiagCtx::RESOLVER_ERROR_OFFSET;
+        let ResolverDiagDataCtx { interner, .. } = *ctx;
 
         let diag = Diagnostic::new(
             self.span,
@@ -137,12 +140,23 @@ impl Diag<ResolverDiagDataCtx> for ResolverDiag {
                     _ => "".into(),
                 }),
 
-                Error(kind) => DiagnosticKind::Error(
-                    code,
-                    match kind {
-                        _ => "".into(),
-                    },
-                ),
+                Error(kind) => {
+                    let code = (unsafe { *(&self.kind as *const ResolverDiagKind as *const u8) })
+                        as u16
+                        + ResolverDiagCtx::RESOLVER_ERROR_OFFSET;
+
+                    DiagnosticKind::Error(
+                        code,
+                        match kind {
+                            Err::UnrecognizedSymbol(symbol, space) => {
+                                format!(
+                                    "cannot resolve unrecognized {space} `{}`.",
+                                    interner.get(*symbol)
+                                )
+                            }
+                        },
+                    )
+                }
             },
         );
 

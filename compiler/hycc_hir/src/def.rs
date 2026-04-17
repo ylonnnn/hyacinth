@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use hycc_span::Span;
 use hycc_symbol::Symbol;
@@ -85,6 +85,19 @@ impl DefKind {
 pub enum DefSpace {
     Type,
     Value,
+}
+
+impl Display for DefSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Type => "type",
+                Self::Value => "value",
+            }
+        )
+    }
 }
 
 pub type DefAccessibility = HirItemAccessibility;

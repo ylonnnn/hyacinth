@@ -12,7 +12,10 @@ use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
 };
-use hycc_resolution::ident::resolver::Resolver;
+use hycc_resolution::{
+    diag::{ResolverDiagCtx, ResolverDiagDataCtx},
+    ident::resolver::Resolver,
+};
 use hycc_session::{session::Session, unit::CompilationUnitId};
 use hycc_source::{Source, source::SourceId};
 use hycc_util::ternary;
@@ -119,5 +122,10 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     dbg!(&session.interner);
 
     let mut resolver = Resolver::new(&mut collector.scope_ctx, &collector.definitions);
+
     resolver.resolve(&hir);
+    resolver.dctx.emit(
+        &mut session.dctx,
+        ResolverDiagDataCtx::new(&session.interner),
+    );
 }

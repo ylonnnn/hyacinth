@@ -5,7 +5,10 @@ use hycc_hir::{
 };
 use hycc_util::{bug, ternary};
 
-use crate::ident::resolver::{ResolveResult, Resolver};
+use crate::{
+    diag::{ResolverDiag, ResolverDiagErrorKind},
+    ident::resolver::{ResolveResult, Resolver},
+};
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_path(&mut self, path: &HirPath) -> ResolveResult {
@@ -39,7 +42,10 @@ impl<'s, 'd> Resolver<'s, 'd> {
         };
 
         let Some(def_id) = self.get_def_id(space, ident.ident.ident) else {
-            todo!("throw error: unrecognized symbol: {:?}", ident.ident.ident)
+            return Err(Some(ResolverDiag::error(
+                ident.span,
+                ResolverDiagErrorKind::UnrecognizedSymbol(ident.ident.ident, space),
+            )));
         };
 
         self.resolved.insert(ident.id, def_id);

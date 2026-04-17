@@ -105,6 +105,20 @@ impl ScopeCtx {
         }
     }
 
+    pub fn get_id(&self, hir_id: HirId) -> Option<ScopeId> {
+        Some(*self.node_table.get(&hir_id)?)
+    }
+
+    pub fn get(&self, hir_id: HirId) -> Option<&Scope> {
+        let scope_id = self.get_id(hir_id)?;
+        Some(self.table.get(scope_id))
+    }
+
+    pub fn get_mut(&mut self, hir_id: HirId) -> Option<&mut Scope> {
+        let scope_id = self.get_id(hir_id)?;
+        Some(self.table.get_mut(scope_id))
+    }
+
     pub fn attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
         assert!(
             !self.def_table.contains_key(&def_id),
@@ -141,6 +155,20 @@ impl ScopeCtx {
             self.attach_id_to_def(def_id, scope_id);
             scope_id
         }
+    }
+
+    pub fn get_id_from_def(&self, def_id: DefId) -> Option<ScopeId> {
+        Some(*self.def_table.get(&def_id)?)
+    }
+
+    pub fn get_from_def(&self, def_id: DefId) -> Option<&Scope> {
+        let scope_id = self.get_id_from_def(def_id)?;
+        Some(self.table.get(scope_id))
+    }
+
+    pub fn get_mut_from_def(&mut self, def_id: DefId) -> Option<&mut Scope> {
+        let scope_id = self.get_id_from_def(def_id)?;
+        Some(self.table.get_mut(scope_id))
     }
 
     pub fn push(&mut self, scope: Scope) -> ScopeId {
@@ -185,6 +213,31 @@ impl ScopeCtx {
         self.push_id(scope_id);
         handler(self);
         self.pop();
+    }
+
+    pub fn get_def(&self, space: DefSpace, name: Symbol, mut depth: usize) -> Option<DefId> {
+        for scope_id in self.stack.iter().rev() {
+            if depth == 0 {
+                break;
+            }
+
+            let def_id = self.table.get(*scope_id).get(space, name);
+            if def_id.is_some() {
+                return def_id;
+            }
+
+            depth -= 1;
+        }
+
+        None
+    }
+
+    pub fn get_def_current_only(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
+        self.get_def(space, name, 1)
+    }
+
+    pub fn get_def_until_root(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
+        self.get_def(space, name, usize::MAX)
     }
 }
 

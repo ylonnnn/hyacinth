@@ -109,8 +109,8 @@ impl<'t, 'h> Collector<'t, 'h> {
         self.node_level = CollectionLevel::Top;
 
         for item in &tree.items {
-            if let Err(Some(err)) = self.collect_item(item) {
-                self.dctx.add(err);
+            if let Err(Some(diag)) = self.collect_item(item) {
+                self.dctx.add(diag);
             }
         }
     }

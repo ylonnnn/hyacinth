@@ -1,2 +1,2 @@
-pub mod name;
 pub mod diag;
+pub mod ident;

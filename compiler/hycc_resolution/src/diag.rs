@@ -38,10 +38,10 @@ pub struct ResolverDiagCtx(Vec<ResolverDiag>, bool);
 
 impl ResolverDiagCtx {
     #[allow(unused)]
-    const COLLECTOR_NOTE_OFFSET: u16 = 200;
+    const RESOLVER_NOTE_OFFSET: u16 = 200;
     #[allow(unused)]
-    const COLLECTOR_WARNING_OFFSET: u16 = 300;
-    const COLLECTOR_ERROR_OFFSET: u16 = 450;
+    const RESOLVER_WARNING_OFFSET: u16 = 300;
+    const RESOLVER_ERROR_OFFSET: u16 = 450;
 
     pub fn new() -> Self {
         Self(Vec::new(), false)
@@ -124,7 +124,7 @@ impl Diag<ResolverDiagDataCtx> for ResolverDiag {
 
         let ResolverDiagDataCtx { .. } = *ctx;
         let code = (unsafe { *(&self.kind as *const ResolverDiagKind as *const u8) }) as u16
-            + ResolverDiagCtx::COLLECTOR_ERROR_OFFSET;
+            + ResolverDiagCtx::RESOLVER_ERROR_OFFSET;
 
         let diag = Diagnostic::new(
             self.span,

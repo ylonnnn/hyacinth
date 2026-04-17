@@ -1,4 +1,4 @@
-use hycc_ast::item::ItemAccessibility;
+use hycc_ast::item::{ItemAccessibility, StructFieldAccessibility};
 use hycc_span::Span;
 
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum HirItemKind<'h> {
     Petal(Box<HirPetal<'h>>),
+    Struct(Box<HirStruct<'h>>),
     Fn(Box<HirFn<'h>>),
     VarDecl(Box<HirVarDecl<'h>>),
 }
@@ -54,6 +55,46 @@ pub struct HirPetal<'h> {
 impl<'h> HirPetal<'h> {
     pub fn is_inline(&self) -> bool {
         matches!(self.kind, HirPetalKind::Inline(..))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirStruct<'h> {
+    pub ident: &'h HirRawIdent,
+    pub fields: HirStructFieldList<'h>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirStructFieldList<'h> {
+    pub list: Vec<&'h HirStructField<'h>>,
+    pub span: Span,
+}
+
+pub type HirStructFieldAccessibility = StructFieldAccessibility;
+
+#[derive(Debug, Clone)]
+pub struct HirStructField<'h> {
+    pub id: HirId,
+    pub ident: &'h HirRawIdent,
+    pub ty: &'h HirTy<'h>,
+    pub accessibility: HirStructFieldAccessibility,
+    pub span: Span,
+}
+
+impl<'h> HirStructField<'h> {
+    pub fn new(
+        ident: &'h HirRawIdent,
+        ty: &'h HirTy<'h>,
+        accessibility: HirStructFieldAccessibility,
+        span: Span,
+    ) -> Self {
+        Self {
+            id: HirId::Invalid,
+            ident,
+            ty,
+            accessibility,
+            span,
+        }
     }
 }
 

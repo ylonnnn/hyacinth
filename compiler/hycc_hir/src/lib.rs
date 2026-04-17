@@ -3,7 +3,7 @@ use hycc_arena::typed::TypedArena;
 use crate::{
     block::HirBlock,
     expr::HirExpr,
-    item::{HirFnParam, HirItem},
+    item::{HirFnParam, HirItem, HirStructField},
     path::{HirIdent, HirPath, HirRawIdent},
     stmt::HirStmt,
     ty::HirTy,
@@ -35,6 +35,7 @@ pub enum HirNode<'h> {
     Ident(HirIdent<'h>),
     RawIdent(HirRawIdent),
 
+    StructField(HirStructField<'h>),
     FnParam(HirFnParam<'h>),
 }
 
@@ -50,20 +51,21 @@ impl<'h> HirTable<'h> {
         let data = unsafe { &*self.0.data.get() };
         let id = HirId(data.len());
 
-        match node {
-            HirNode::Item(node) => node.id = id,
-            HirNode::Block(node) => node.id = id,
-            HirNode::Stmt(node) => node.id = id,
-            HirNode::Ty(node) => node.id = id,
-            HirNode::Expr(node) => node.id = id,
-            HirNode::Path(node) => node.id = id,
+        let n_id = match node {
+            HirNode::Item(node) => &mut node.id,
+            HirNode::Block(node) => &mut node.id,
+            HirNode::Stmt(node) => &mut node.id,
+            HirNode::Ty(node) => &mut node.id,
+            HirNode::Expr(node) => &mut node.id,
+            HirNode::Path(node) => &mut node.id,
 
-            HirNode::Ident(node) => node.id = id,
-            HirNode::RawIdent(node) => node.id = id,
-            HirNode::FnParam(node) => node.id = id,
+            HirNode::Ident(node) => &mut node.id,
+            HirNode::RawIdent(node) => &mut node.id,
+            HirNode::StructField(node) => &mut node.id,
+            HirNode::FnParam(node) => &mut node.id,
         };
 
-        id
+        (*n_id = id, id).1
     }
 
     pub fn insert(&self, mut node: HirNode<'h>) -> HirId {

@@ -273,7 +273,7 @@ impl<'s> Parser<'s> {
                     }
                 }
 
-                Ok(dbg!(fields))
+                Ok(fields)
             },
         )
     }

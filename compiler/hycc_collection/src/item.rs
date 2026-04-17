@@ -12,6 +12,7 @@ impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         match &item.kind {
             HirItemKind::Petal(_) => self.collect_petal(&item),
+            HirItemKind::Struct(_) => todo!("collect struct"),
             HirItemKind::Fn(_) => self.collect_fn(&item),
 
             HirItemKind::VarDecl(_) => self.collect_var(&item),

@@ -1,7 +1,7 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::Unary,
-    item::{Fn, FnParamList, Petal, PetalKind, VarDecl},
+    item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
     ty::Array,
@@ -15,7 +15,8 @@ use crate::{
     block::HirBlock,
     expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
     item::{
-        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirVarDecl,
+        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
+        HirStructField, HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirStmt, HirStmtKind},
@@ -79,8 +80,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
-            ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(petal))),
-            ItemKind::Struct(..) => todo!("lower struct"),
+            ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(&petal))),
+            ItemKind::Struct(strct) => HirItemKind::Struct(Box::new(self.lower_struct(&strct))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
             ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
         };
@@ -110,6 +111,38 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 .iter()
                 .map(|item| self.lower_item(&item))
                 .collect(),
+        }
+    }
+
+    fn lower_struct(&mut self, strct: &Struct) -> HirStruct<'h> {
+        HirStruct {
+            ident: self.lower_raw_ident(&strct.ident),
+            fields: self.lower_struct_fields(&strct.fields),
+        }
+    }
+
+    fn lower_struct_fields(&mut self, fields: &StructFieldList) -> HirStructFieldList<'h> {
+        let mut data = Vec::new();
+
+        for field in &fields.list {
+            if let HirNode::StructField(field) =
+                self.hir_table
+                    .add(HirNode::StructField(HirStructField::<'h>::new(
+                        self.lower_raw_ident(&field.ident),
+                        self.lower_ty(&field.ty),
+                        field.accessibility,
+                        field.ident.span,
+                    )))
+            {
+                data.push(field);
+            } else {
+                unreachable!();
+            }
+        }
+
+        HirStructFieldList {
+            list: data,
+            span: fields.span,
         }
     }
 

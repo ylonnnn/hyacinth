@@ -11,6 +11,7 @@ impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
+            HirItemKind::Struct(_) => todo!("resolve struct"),
             HirItemKind::Fn(func) => self.resolve_fn(&func),
             HirItemKind::VarDecl(decl) => self.resolve_var_decl(&decl),
         }

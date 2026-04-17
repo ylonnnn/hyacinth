@@ -112,13 +112,13 @@ impl<'s> Parser<'s> {
         };
         let mut expect = true;
 
-        while !self.expect_exact_nonlf(TokenKind::Greater).0
-        // && !self.expect_exact_nonlf(TokenKind::GreaterGreater).0
-        {
-            if expect {
-                let arg = self.parse_ident_arg()?;
+        while !self.expect_exact_nonlf(TokenKind::Greater).0 {
+            if !expect {
+                self.require_exact_nonlf(TokenKind::Comma)?;
+            }
 
-                arguments.data.push(arg);
+            if expect {
+                arguments.data.push(self.parse_ident_arg()?);
                 expect = false;
             }
 

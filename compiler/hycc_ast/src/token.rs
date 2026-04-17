@@ -115,6 +115,8 @@ pub enum TokenIdentKind {
 
     Petal,
 
+    Struct,
+
     Fn,
     Let,
 }

@@ -34,6 +34,8 @@ impl<'s> Lexer<'s> {
 
                 "petal" => TokenKind::Ident(TokenIdentKind::Petal),
 
+                "struct" => TokenKind::Ident(TokenIdentKind::Struct),
+
                 "fn" => TokenKind::Ident(TokenIdentKind::Fn),
                 "let" => TokenKind::Ident(TokenIdentKind::Let),
 

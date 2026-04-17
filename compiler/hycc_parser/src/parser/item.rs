@@ -2,7 +2,10 @@ use std::path::{self, PathBuf};
 
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
-    item::{Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, VarDecl},
+    item::{
+        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, Struct, StructField,
+        StructFieldAccessibility, StructFieldList, VarDecl,
+    },
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
@@ -64,6 +67,10 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ident(TokenIdentKind::Petal) => {
                 ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
+            }
+
+            TokenKind::Ident(TokenIdentKind::Struct) => {
+                ItemKind::Struct(Box::new(self.parse_struct_with_recovery()?))
             }
 
             TokenKind::Ident(TokenIdentKind::Fn) => {
@@ -201,6 +208,96 @@ impl<'s> Parser<'s> {
         Ok(petal)
     }
 
+    pub fn parse_struct_with_recovery(&mut self) -> ParseResult<Struct> {
+        let data = self.parse_struct();
+        self.try_sync(&[TokenKind::RightBrace]);
+
+        data
+    }
+
+    // struct IDENT { (FIELD (, FIELD)?)* }
+    // struct IDENT { (IDENT : TY (, IDENT : TY)?)* }
+    pub fn parse_struct(&mut self) -> ParseResult<Struct> {
+        // IDENT
+        let ident = self.parse_raw_ident();
+
+        // FIELDS
+        let fields = self.parse_struct_fields();
+
+        Ok(Struct {
+            ident: ident?,
+            fields: fields?,
+        })
+    }
+
+    // { (FIELD (, FIELD)?)* }
+    // { (IDENT : TY (, IDENT : TY)?)* }
+    pub fn parse_struct_fields(&mut self) -> ParseResult<StructFieldList> {
+        let TokenGraph::Collection { data, .. } = self.require_exact_nonlf(TokenKind::LeftBrace)?
+        else {
+            return Err(None);
+        };
+
+        let close = data.last().unwrap().underlying().unwrap().clone();
+        let n = data.len();
+        let span = data
+            .first()
+            .unwrap()
+            .underlying()
+            .unwrap()
+            .span
+            .merge(&close.span);
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
+            |s| -> ParseResult<StructFieldList> {
+                let mut fields = StructFieldList {
+                    list: Vec::new(),
+                    span,
+                };
+
+                let mut expect = true;
+                while !s.expect_exact_nonlf(close.kind).0 {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        fields.list.push(s.parse_struct_field()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(dbg!(fields))
+            },
+        )
+    }
+
+    // (ACCESSIBILITY)? IDENT : TY
+    pub fn parse_struct_field(&mut self) -> ParseResult<StructField> {
+        // TODO: ACCESSIBILITY
+
+        // IDENT
+        let ident = self.parse_raw_ident()?;
+
+        // :
+        self.require_abs_exact_nonlf(TokenKind::Colon)?;
+
+        // TY
+        let ty = Box::new(self.parse_ty()?);
+
+        Ok(StructField {
+            ident,
+            ty,
+            accessibility: StructFieldAccessibility::Priv, // TODO: default for now
+        })
+    }
+
     pub fn parse_fn_with_recovery(&mut self) -> ParseResult<Fn> {
         let data = self.parse_fn();
         self.try_sync(&[TokenKind::RightBrace]);
@@ -239,12 +336,12 @@ impl<'s> Parser<'s> {
 
     // (PARAM (, PARAM)*)
     pub fn parse_fn_param_list(&mut self) -> ParseResult<FnParamList> {
-        let data = match self.require_exact_nonlf(TokenKind::LeftParen) {
-            Ok(TokenGraph::Collection { data, .. }) => data,
-            Ok(_) => Err(None)?,
-            Err(err) => Err(err)?,
+        let TokenGraph::Collection { data, .. } = self.require_exact_nonlf(TokenKind::LeftParen)?
+        else {
+            return Err(None);
         };
 
+        let close = data.last().unwrap().underlying().unwrap().clone();
         let n = data.len();
         let span = data
             .first()
@@ -252,7 +349,7 @@ impl<'s> Parser<'s> {
             .underlying()
             .unwrap()
             .span
-            .merge(&data.last().unwrap().underlying().unwrap().span);
+            .merge(&close.span);
 
         self.use_stream(
             TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
@@ -262,40 +359,20 @@ impl<'s> Parser<'s> {
                     list: Vec::new(),
                 };
 
-                if s.stream.is_empty() || s.stream.abs_eof() {
-                    return Ok(params);
-                }
-
-                match s.parse_fn_param() {
-                    Ok(lead) => {
-                        params.list.push(lead);
-                        while s.expect_exact_nonlf(TokenKind::Comma).0 {
-                            if s.stream.abs_eof() {
-                                break;
-                            }
-
-                            match s.parse_fn_param() {
-                                Ok(param) => params.list.push(param),
-                                Err(diag) => {
-                                    if let Some(diag) = diag {
-                                        s.dctx.add(diag);
-                                    }
-                                }
-                            }
-                        }
+                let mut expect = true;
+                while !s.expect_exact_nonlf(close.kind).0 {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
                     }
 
-                    Err(diag) => {
-                        if let Some(diag) = diag {
-                            s.dctx.add(diag);
-                        }
-                    }
-                }
-
-                if let Ok(lead) = s.parse_fn_param() {
-                    params.list.push(lead);
-                    while s.expect_exact_nonlf(TokenKind::Comma).0 {
+                    if expect {
                         params.list.push(s.parse_fn_param()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
                     }
                 }
 

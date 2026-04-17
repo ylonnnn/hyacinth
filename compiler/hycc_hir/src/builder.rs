@@ -80,6 +80,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
             ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(petal))),
+            ItemKind::Struct(..) => todo!("lower struct"),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
             ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
         };

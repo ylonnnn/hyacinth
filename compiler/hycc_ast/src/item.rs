@@ -9,6 +9,7 @@ use hycc_util::ternary;
 #[derive(Debug, Clone)]
 pub enum ItemKind {
     Petal(Box<Petal>),
+    Struct(Box<Struct>),
     Fn(Box<Fn>),
     VarDecl(Box<VarDecl>),
 }
@@ -17,6 +18,7 @@ impl ItemKind {
     pub fn span(&self) -> Span {
         match self {
             Self::Petal(petal) => petal.span,
+            Self::Struct(strct) => strct.ident.span,
             Self::VarDecl(var) => var.span(),
             Self::Fn(func) => func.span(),
         }
@@ -64,6 +66,27 @@ impl Petal {
     pub fn new(kind: PetalKind, items: Vec<Item>, span: Span) -> Self {
         Self { kind, items, span }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Struct {
+    pub ident: Token,
+    pub fields: StructFieldList,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructFieldList {
+    pub list: Vec<StructField>,
+    pub span: Span,
+}
+
+pub type StructFieldAccessibility = ItemAccessibility;
+
+#[derive(Debug, Clone)]
+pub struct StructField {
+    pub ident: Token,
+    pub ty: Box<Ty>,
+    pub accessibility: StructFieldAccessibility,
 }
 
 #[derive(Debug, Clone)]

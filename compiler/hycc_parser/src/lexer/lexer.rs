@@ -374,9 +374,7 @@ impl<'s> Lexer<'s> {
             // collection is not closed.
             if *eof {
                 let Some(TokenGraph::Node(op_tok)) = data.first() else {
-                    unreachable!(
-                        "BUG: token graph delimeter collection is always expected to at least have the opening token!"
-                    );
+                    unreachable!();
                 };
 
                 self.dctx.error(

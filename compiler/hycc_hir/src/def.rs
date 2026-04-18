@@ -28,6 +28,10 @@ impl DefinitionTable {
         &self.data[id.unwrap()]
     }
 
+    pub fn get_mut(&mut self, id: DefId) -> &mut Definition {
+        &mut self.data[id.unwrap()]
+    }
+
     pub fn define_hir(&mut self, hir_id: HirId, definition: Definition) -> DefId {
         let def_id = self.insert(definition);
         self.map.insert(hir_id, def_id);
@@ -65,8 +69,10 @@ impl DefId {
 pub enum DefKind {
     Petal,
 
-    Fn,
+    Fn(Box<FnDef>),
     FnParam,
+
+    Struct(Box<StructDef>),
 
     Var,
 }
@@ -74,11 +80,49 @@ pub enum DefKind {
 impl DefKind {
     pub fn space(&self) -> DefSpace {
         match self {
-            Self::Petal => DefSpace::Type,
+            Self::Petal | Self::Struct(_) => DefSpace::Type,
 
-            Self::Fn | Self::FnParam | Self::Var => DefSpace::Value,
+            Self::Fn(_) | Self::FnParam | Self::Var => DefSpace::Value,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnDef {
+    pub params: Vec<DefId>,
+    pub ret_ty: Option<HirId>,
+}
+
+impl FnDef {
+    pub fn new(ret_ty: Option<HirId>) -> Self {
+        Self {
+            params: Vec::new(),
+            ret_ty,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDef {
+    pub fields: Vec<StructFieldDef>,
+    pub field_map: HashMap<Symbol, usize>,
+}
+
+impl StructDef {
+    pub fn new() -> Self {
+        Self {
+            fields: Vec::new(),
+            field_map: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StructFieldDef {
+    pub name: Symbol,
+    pub span: Span,
+    pub accessibility: DefAccessibility,
+    pub ty: HirId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

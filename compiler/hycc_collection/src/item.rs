@@ -1,10 +1,10 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefAccessibility, DefKind, Definition},
+    def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
     item::{HirFnParam, HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
-use hycc_util::ternary;
+use hycc_util::{bug, ternary};
 
 use crate::collector::{CollectResult, CollectionLevel, Collector};
 
@@ -12,7 +12,7 @@ impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         match &item.kind {
             HirItemKind::Petal(_) => self.collect_petal(&item),
-            HirItemKind::Struct(_) => todo!("collect struct"),
+            HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
 
             HirItemKind::VarDecl(_) => self.collect_var(&item),
@@ -77,6 +77,45 @@ impl<'t, 'h> Collector<'t, 'h> {
         Ok(())
     }
 
+    pub(crate) fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
+        if self.is_expected_to_be_collected() {
+            return Ok(());
+        }
+
+        let HirItemKind::Struct(strct) = &struct_item.kind else {
+            bug!("item is ensured to be a struct")
+        };
+
+        let def_id = self.define(Definition::new(
+            strct.ident.ident,
+            DefKind::Struct(Box::new(StructDef::new())),
+            struct_item.id,
+            struct_item.span,
+            struct_item.accessibility,
+        ))?;
+
+        let DefKind::Struct(def) = &mut self.definitions.get_mut(def_id).kind else {
+            bug!("struct definition is expected to be defined after definition")
+        };
+
+        for field in &strct.fields.list {
+            let name = field.ident.ident;
+            if let Some(idx) = def.field_map.get(&name) {
+                todo!("throw error: duplication: {idx:?}")
+            };
+
+            def.field_map.insert(name, def.fields.len());
+            def.fields.push(StructFieldDef {
+                name,
+                accessibility: field.accessibility,
+                span: field.span,
+                ty: field.ty.id,
+            });
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn collect_fn(&mut self, fn_item: &HirItem) -> CollectResult {
         let HirItemKind::Fn(func) = &fn_item.kind else {
             unreachable!()
@@ -94,7 +133,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             },
             self.define(Definition::new(
                 func.ident.ident,
-                DefKind::Fn,
+                DefKind::Fn(Box::new(FnDef::new(func.ret_ty.map(|ty| ty.id)))),
                 fn_item.id,
                 fn_item.span,
                 fn_item.accessibility,
@@ -107,9 +146,25 @@ impl<'t, 'h> Collector<'t, 'h> {
                 CollectionLevel::Top => {
                     // Define the function parameters
                     for param in &func.params.list {
-                        if let Err(Some(diag)) = s.collect_fn_param(&param) {
-                            s.dctx.add(diag);
-                        }
+                        let res = s.define(Definition::new(
+                            param.ident.ident,
+                            DefKind::FnParam,
+                            param.id,
+                            param.span,
+                            DefAccessibility::Priv,
+                        ));
+
+                        match res {
+                            Ok(def_id) => {
+                                if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
+                                    def.params.push(def_id)
+                                }
+                            }
+                            Err(Some(diag)) => {
+                                s.dctx.add(diag);
+                            }
+                            _ => {}
+                        };
                     }
                 }
 
@@ -122,18 +177,6 @@ impl<'t, 'h> Collector<'t, 'h> {
                 }
             }
         });
-
-        Ok(())
-    }
-
-    pub(crate) fn collect_fn_param(&mut self, param: &HirFnParam) -> CollectResult {
-        self.define(Definition::new(
-            param.ident.ident,
-            DefKind::FnParam,
-            param.id,
-            param.span,
-            DefAccessibility::Priv,
-        ))?;
 
         Ok(())
     }

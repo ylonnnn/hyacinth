@@ -1,7 +1,9 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::DefSpace,
-    item::{HirFn, HirFnParam, HirItem, HirItemKind, HirPetal, HirPetalKind, HirVarDecl},
+    item::{
+        HirFn, HirFnParam, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct, HirVarDecl,
+    },
 };
 use hycc_util::bug;
 
@@ -11,7 +13,7 @@ impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
-            HirItemKind::Struct(_) => todo!("resolve struct"),
+            HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(func) => self.resolve_fn(&func),
             HirItemKind::VarDecl(decl) => self.resolve_var_decl(&decl),
         }
@@ -55,6 +57,16 @@ impl<'s, 'd> Resolver<'s, 'd> {
         Ok(())
     }
 
+    pub(crate) fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {
+        for field in &strct.fields.list {
+            if let Err(Some(diag)) = self.resolve_ty(&field.ty) {
+                self.dctx.add(diag);
+            }
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn resolve_fn(&mut self, func: &HirFn) -> ResolveResult {
         let Some(def_id) = self.get_def_id(DefSpace::Value, func.ident.ident) else {
             bug!("no def_id for ident: {:?}", func.ident.ident)
@@ -66,7 +78,7 @@ impl<'s, 'd> Resolver<'s, 'd> {
 
         self.enter_scope(scope_id, |s| {
             for param in &func.params.list {
-                if let Err(Some(diag)) = s.resolve_fn_param(&param) {
+                if let Err(Some(diag)) = s.resolve_ty(&param.ty) {
                     s.dctx.add(diag);
                 }
             }
@@ -83,10 +95,6 @@ impl<'s, 'd> Resolver<'s, 'd> {
         });
 
         Ok(())
-    }
-
-    pub(crate) fn resolve_fn_param(&mut self, param: &HirFnParam) -> ResolveResult {
-        self.resolve_ty(&param.ty)
     }
 
     pub(crate) fn resolve_var_decl(&mut self, decl: &HirVarDecl) -> ResolveResult {

@@ -80,9 +80,9 @@ impl<'s> Parser<'s> {
             }
         }?;
 
-        let Some(tok) = self.peek_nonlf_token() else {
-            return Ok(ty);
-        };
+        // let Some(tok) = self.peek_nonlf_token() else {
+        //     return Ok(ty);
+        // };
 
         // match tok.kind {
         //     TokenKind::Eq

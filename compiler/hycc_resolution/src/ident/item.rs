@@ -1,9 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::DefSpace,
-    item::{
-        HirFn, HirFnParam, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct, HirVarDecl,
-    },
+    item::{HirFn, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct, HirVarDecl},
 };
 use hycc_util::bug;
 

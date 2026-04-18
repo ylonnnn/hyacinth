@@ -12,10 +12,7 @@ use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
 };
-use hycc_resolution::{
-    diag::{ResolverDiagCtx, ResolverDiagDataCtx},
-    ident::resolver::Resolver,
-};
+use hycc_resolution::{diag::ResolverDiagDataCtx, ident::resolver::Resolver};
 use hycc_session::{session::Session, unit::CompilationUnitId};
 use hycc_source::{Source, source::SourceId};
 use hycc_util::ternary;

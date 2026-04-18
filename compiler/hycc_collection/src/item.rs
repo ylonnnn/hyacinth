@@ -1,7 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
-    item::{HirFnParam, HirItem, HirItemKind, HirPetalKind},
+    item::{HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
 use hycc_util::{bug, ternary};

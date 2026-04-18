@@ -17,7 +17,6 @@ pub struct Parser<'s> {
     pub dctx: ParserDiagCtx,
     pub(super) source: &'s Source,
 
-    pub(super) generic_delimeter_encounters: usize,
     pub(super) petal_stack: Vec<String>,
 }
 
@@ -30,7 +29,6 @@ impl<'s> Parser<'s> {
             dctx: ParserDiagCtx::new(),
             source,
 
-            generic_delimeter_encounters: 0,
             petal_stack: Vec::new(),
         }
     }

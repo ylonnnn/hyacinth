@@ -5,7 +5,7 @@ use hycc_hir::{
 };
 use hycc_util::bug;
 
-use crate::ident::resolver::{ResolveResult, Resolver};
+use crate::{ResolveResult, ident::resolver::Resolver};
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {

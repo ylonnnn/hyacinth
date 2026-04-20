@@ -9,7 +9,7 @@ use hycc_hir::{
 use hycc_scope::{ScopeCtx, ScopeId};
 use hycc_symbol::Symbol;
 
-use crate::diag::{ResolverDiag, ResolverDiagCtx};
+use crate::diag::ResolverDiagCtx;
 
 #[derive(Debug)]
 pub struct Resolver<'s, 'd> {
@@ -22,8 +22,6 @@ pub struct Resolver<'s, 'd> {
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
 }
-
-pub type ResolveResult<T = (), E = Option<ResolverDiag>> = Result<T, E>;
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub fn new(scope_ctx: &'s mut ScopeCtx, definitions: &'d DefinitionTable) -> Self {

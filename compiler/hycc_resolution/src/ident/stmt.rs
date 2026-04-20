@@ -1,6 +1,6 @@
 use hycc_hir::stmt::{HirStmt, HirStmtKind};
 
-use crate::ident::resolver::{ResolveResult, Resolver};
+use crate::{ResolveResult, ident::resolver::Resolver};
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_stmt(&mut self, stmt: &HirStmt) -> ResolveResult {

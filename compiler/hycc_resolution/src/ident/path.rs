@@ -6,8 +6,9 @@ use hycc_hir::{
 use hycc_util::{bug, ternary};
 
 use crate::{
+    ResolveResult,
     diag::{ResolverDiag, ResolverDiagErrorKind},
-    ident::resolver::{ResolveResult, Resolver},
+    ident::resolver::Resolver,
 };
 
 impl<'s, 'd> Resolver<'s, 'd> {

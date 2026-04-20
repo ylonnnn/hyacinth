@@ -123,4 +123,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         &mut session.dctx,
         ResolverDiagDataCtx::new(&session.interner),
     );
+
+    if session.dctx.error_occurred() {
+        return;
+    }
 }

@@ -4,7 +4,7 @@ use hycc_hir::{
     expr::{HirExpr, HirExprKind, HirUnary},
 };
 
-use crate::ident::resolver::{ResolveResult, Resolver};
+use crate::{ResolveResult, ident::resolver::Resolver};
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {

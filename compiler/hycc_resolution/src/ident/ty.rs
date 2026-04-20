@@ -4,7 +4,7 @@ use hycc_hir::{
     ty::{HirTy, HirTyKind},
 };
 
-use crate::ident::resolver::{ResolveResult, Resolver};
+use crate::{ResolveResult, ident::resolver::Resolver};
 
 impl<'s, 'd> Resolver<'s, 'd> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult {

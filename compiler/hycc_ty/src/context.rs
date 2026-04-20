@@ -4,13 +4,16 @@ use hycc_hir::{
     HirId,
     def::{BuiltinIntTy, BuiltinTyKind, DefId},
 };
+use hycc_util::bug;
 
-use crate::ty::{IntTy, TyKind};
+use crate::ty::{IntTy, TyKind, TyVar};
 
 #[derive(Debug)]
 pub struct TyCtx {
     storage: Vec<TyKind>,
     map: HashMap<TyKind, TyId>,
+
+    vars: Vec<TyVar>,
 
     node_ty_map: HashMap<HirId, TyId>,
     def_ty_map: HashMap<DefId, TyId>,
@@ -21,6 +24,8 @@ impl TyCtx {
         Self {
             storage: Vec::new(),
             map: HashMap::new(),
+
+            vars: Vec::new(),
 
             node_ty_map: HashMap::new(),
             def_ty_map: HashMap::new(),
@@ -42,6 +47,81 @@ impl TyCtx {
 
     pub fn get(&self, ty_id: TyId) -> &TyKind {
         &self.storage[ty_id.unwrap()]
+    }
+
+    pub fn fresh_var(&mut self) -> TyVarId {
+        self.vars.push(TyVar::Unbound);
+        TyVarId(self.vars.len() - 1)
+    }
+
+    pub fn resolve_var(&mut self, var_id: TyVarId) -> TyVarId {
+        if let Some(TyVar::Linked(id)) = self.vars.get(var_id.unwrap()) {
+            let root = self.resolve_var(*id);
+            self.vars[var_id.unwrap()] = TyVar::Linked(root);
+            root
+        } else {
+            var_id
+        }
+    }
+
+    pub fn bind_var(&mut self, var_id: TyVarId, ty_id: TyId) {
+        let root = self.resolve_var(var_id);
+
+        // TODO: check infinite types
+
+        self.vars[root.unwrap()] = TyVar::Bound(ty_id);
+    }
+
+    pub fn resolve_ty(&mut self, ty_id: TyId) -> TyId {
+        let Some(ty) = self.storage.get(ty_id.unwrap()) else {
+            bug!("no type stored for ty_id: {ty_id:?}");
+        };
+
+        match &ty {
+            TyKind::Infer(var_id) => {
+                let root = self.resolve_var(*var_id);
+                match &self.vars[root.unwrap()] {
+                    TyVar::Bound(ty_id) => self.resolve_ty(*ty_id),
+                    _ => ty_id,
+                }
+            }
+
+            _ => ty_id,
+        }
+    }
+
+    pub fn unify(&mut self, a: TyVarId, b: TyVarId) {
+        let a = self.resolve_var(a);
+        let b = self.resolve_var(b);
+
+        match (&self.vars[a.unwrap()], &self.vars[b.unwrap()]) {
+            (TyVar::Bound(a_ty), TyVar::Bound(b_ty)) => self.unify_ty(*a_ty, *b_ty),
+            (_, TyVar::Bound(v)) => self.bind_var(a, *v),
+            (TyVar::Bound(v), _) => self.bind_var(b, *v),
+            (TyVar::Unbound, TyVar::Unbound) => self.vars[a.unwrap()] = TyVar::Linked(b),
+            (_, TyVar::Linked(..)) | (TyVar::Linked(..), _) => {
+                panic!("resolve_var should eliminate links");
+            }
+        }
+    }
+
+    pub fn unify_ty(&mut self, a: TyId, b: TyId) {
+        if a == b {
+            return;
+        }
+
+        let a_ty = &self.storage[a.unwrap()];
+        let b_ty = &self.storage[b.unwrap()];
+
+        match (&a_ty, &b_ty) {
+            (_, TyKind::Infer(v_id)) => self.bind_var(*v_id, a),
+            (TyKind::Infer(v_id), _) => self.bind_var(*v_id, b),
+            // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+            (a, b) => {
+                // println!("{a:?} {b:?}")
+                panic!("type mismatch: {a:?} {b:?}");
+            }
+        }
     }
 
     pub fn attach_to_hir(&mut self, hir_id: HirId, ty_id: TyId) {
@@ -110,6 +190,19 @@ impl TyId {
 
     pub fn unwrap(&self) -> usize {
         assert_ne!(self.0, usize::MAX, "type id is not valid!");
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TyVarId(usize);
+
+impl TyVarId {
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(usize::MAX);
+
+    pub fn unwrap(&self) -> usize {
+        assert_ne!(self.0, usize::MAX, "type variable id is not valid!");
         self.0
     }
 }

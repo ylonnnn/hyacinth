@@ -1,0 +1,8 @@
+[package]
+name = "hycc_ty"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hycc_hir = { path = "../hycc_hir" }
+hycc_span = { path = "../hycc_span" }

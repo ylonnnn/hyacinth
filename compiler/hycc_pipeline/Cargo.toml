@@ -13,4 +13,5 @@ hycc_resolution = { path = "../hycc_resolution" }
 hycc_session = { path = "../hycc_session" }
 hycc_source = { path = "../hycc_source" }
 hycc_symbol = { path = "../hycc_symbol" }
+hycc_ty = { path = "../hycc_ty" }
 hycc_util = { path = "../hycc_util" }

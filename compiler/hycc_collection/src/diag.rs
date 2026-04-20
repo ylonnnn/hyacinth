@@ -177,13 +177,17 @@ impl<'i, 't, 'h, 'd, 's> Diag<CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>> for Coll
                 Err::Duplication { ident, earlier_def } => {
                     let def = definitions.get(*earlier_def);
 
-                    diag.detail(
-                        def.span,
-                        DiagnosticKind::Note(format!(
-                            "earlier definition of `{}`",
-                            interner.get(*ident)
-                        )),
-                    );
+                    if def.span.src_id.is_valid() {
+                        diag.detail(
+                            def.span,
+                            DiagnosticKind::Note(format!(
+                                "earlier definition of `{}`",
+                                interner.get(*ident)
+                            )),
+                        );
+                    }
+
+                    // TODO: add note that builtin definitions cannot be overwritten
                 }
 
                 #[allow(unreachable_patterns)]

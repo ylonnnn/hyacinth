@@ -9,7 +9,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             bug!("def id of resolved path does not exist: {:?}", path.id);
         };
 
-        let ty_id = self.def_to_ty(*def_id)?;
+        let ty_id = self.def_to_ty(*def_id, path.span)?;
         self.tctx.attach_to_hir(path.id, ty_id);
 
         Ok(())

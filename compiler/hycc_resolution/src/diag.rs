@@ -2,7 +2,7 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
-use hycc_hir::def::DefSpace;
+use hycc_hir::def::{DefId, DefSpace, DefinitionTable};
 // use hycc_hir::{
 //     HirTable,
 //     def::{DefId, DefinitionTable},
@@ -13,24 +13,24 @@ use hycc_symbol::{Symbol, SymbolInterner};
 // use hycc_symbol::{Symbol, SymbolInterner};
 
 #[derive(Debug)]
-pub struct ResolverDiagDataCtx<'i> {
+pub struct ResolverDiagDataCtx<'i, 'd> {
     pub interner: &'i SymbolInterner,
+    pub definitions: &'d DefinitionTable,
     // pub hir_table: &'t HirTable<'h>,
-    // pub definitions: &'d DefinitionTable,
     // pub scope_ctx: &'s ScopeCtx,
 }
 
-impl<'i> ResolverDiagDataCtx<'i> {
+impl<'i, 'd> ResolverDiagDataCtx<'i, 'd> {
     pub fn new(
         interner: &'i SymbolInterner,
+        definitions: &'d DefinitionTable,
         // hir_table: &'t HirTable<'h>,
-        // definitions: &'d DefinitionTable,
         // scope_ctx: &'s ScopeCtx,
     ) -> Self {
         Self {
             interner,
+            definitions,
             // hir_table,
-            // definitions,
             // scope_ctx,
         }
     }
@@ -65,7 +65,7 @@ impl ResolverDiagCtx {
     }
 }
 
-impl<'i> DiagnosticContext<ResolverDiagDataCtx<'i>, ResolverDiag> for ResolverDiagCtx {
+impl<'i, 'd> DiagnosticContext<ResolverDiagDataCtx<'i, 'd>, ResolverDiag> for ResolverDiagCtx {
     fn data(&self) -> &Vec<ResolverDiag> {
         &self.0
     }
@@ -98,6 +98,7 @@ pub enum ResolverDiagWarningKind {}
 #[derive(Debug, Clone)]
 pub enum ResolverDiagErrorKind {
     UnrecognizedSymbol(Symbol, DefSpace),
+    InvalidPetalResolution(Symbol, DefId),
 }
 
 #[derive(Debug, Clone)]
@@ -122,14 +123,18 @@ impl ResolverDiag {
     }
 }
 
-impl<'i> Diag<ResolverDiagDataCtx<'i>> for ResolverDiag {
+impl<'i, 'd> Diag<ResolverDiagDataCtx<'i, 'd>> for ResolverDiag {
     fn emit(&self, ctx: &ResolverDiagDataCtx) -> Diagnostic {
         use ResolverDiagErrorKind as Err;
         use ResolverDiagKind::*;
 
-        let ResolverDiagDataCtx { interner, .. } = *ctx;
+        let ResolverDiagDataCtx {
+            interner,
+            definitions,
+            ..
+        } = *ctx;
 
-        let diag = Diagnostic::new(
+        let mut diag = Diagnostic::new(
             self.span,
             match &self.kind {
                 Note(kind) => DiagnosticKind::Note(match kind {
@@ -154,6 +159,10 @@ impl<'i> Diag<ResolverDiagDataCtx<'i>> for ResolverDiag {
                                     interner.get(*symbol)
                                 )
                             }
+
+                            Err::InvalidPetalResolution(name, _) => {
+                                format!("cannot resolve petal `{}` as type.", interner.get(*name))
+                            }
                         },
                     )
                 }
@@ -171,6 +180,18 @@ impl<'i> Diag<ResolverDiagDataCtx<'i>> for ResolverDiag {
             },
 
             Error(kind) => match kind {
+                Err::InvalidPetalResolution(name, def_id) => {
+                    let def = definitions.get(*def_id);
+
+                    diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "`{}` is defined as a petal here.",
+                            interner.get(*name)
+                        )),
+                    );
+                }
+
                 #[allow(unreachable_patterns)]
                 _ => {}
             },

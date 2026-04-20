@@ -124,7 +124,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     resolver.resolve(&hir);
     resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&session.interner),
+        ResolverDiagDataCtx::new(&session.interner, &definitions),
     );
 
     if session.dctx.error_occurred() {
@@ -136,7 +136,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&session.interner),
+        ResolverDiagDataCtx::new(&session.interner, &definitions),
     );
 
     dbg!(&ty_resolver.tctx);

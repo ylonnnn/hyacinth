@@ -6,9 +6,13 @@ use hycc_hir::{
     def::{BuiltinKind, DefId, DefKind, DefinitionTable},
     item::HirPetal,
 };
+use hycc_span::Span;
 use hycc_ty::context::{TyCtx, TyId};
 
-use crate::{ResolveResult, diag::ResolverDiagCtx};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind},
+};
 
 #[derive(Debug)]
 pub struct TyResolver<'d, 'r> {
@@ -42,14 +46,17 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         }
     }
 
-    pub(crate) fn def_to_ty(&mut self, def_id: DefId) -> ResolveResult<TyId> {
+    pub(crate) fn def_to_ty(&mut self, def_id: DefId, span: Span) -> ResolveResult<TyId> {
         let def = self.definitions.get(def_id);
         let ty_id = match &def.kind {
             DefKind::Builtin(BuiltinKind::Ty(_)) | DefKind::Struct(_) => {
                 self.tctx.get_ty_of_def(def_id).unwrap()
             }
 
-            DefKind::Petal => todo!("throw error: cannot resolve petal as type"),
+            DefKind::Petal => Err(Some(ResolverDiag::error(
+                span,
+                ResolverDiagErrorKind::InvalidPetalResolution(def.name, def_id),
+            )))?,
 
             _ => unreachable!(),
         };

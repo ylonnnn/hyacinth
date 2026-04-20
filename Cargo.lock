@@ -31,6 +31,7 @@ dependencies = [
  "hycc_scope",
  "hycc_span",
  "hycc_symbol",
+ "hycc_ty",
  "hycc_util",
 ]
 

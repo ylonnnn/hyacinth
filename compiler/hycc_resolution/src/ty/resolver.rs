@@ -7,6 +7,7 @@ use hycc_hir::{
         BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, Definition,
         DefinitionTable,
     },
+    item::HirPetal,
 };
 use hycc_ty::{
     context::{TyCtx, TyId},
@@ -16,73 +17,49 @@ use hycc_ty::{
 use crate::{ResolveResult, diag::ResolverDiagCtx};
 
 #[derive(Debug)]
-pub struct TyResolver<'d> {
+pub struct TyResolver<'d, 'r> {
     pub dctx: ResolverDiagCtx,
-
     pub tctx: TyCtx,
+
     pub(crate) definitions: &'d DefinitionTable,
+    pub(crate) resolved: &'r HashMap<HirId, DefId>,
 }
 
-impl<'d> TyResolver<'d> {
-    pub fn new(definitions: &'d DefinitionTable) -> Self {
+impl<'d, 'r> TyResolver<'d, 'r> {
+    pub fn new(
+        tctx: TyCtx,
+        definitions: &'d DefinitionTable,
+        resolved: &'r HashMap<HirId, DefId>,
+    ) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(),
-            tctx: TyCtx::new(),
+            tctx,
+
             definitions,
+            resolved,
         }
     }
 
-    pub fn resolve(&mut self, resolved: &HashMap<HirId, DefId>) {
-        for (hir_id, def_id) in resolved {
-            let def = self.definitions.get(*def_id);
-            if def.kind.space() != DefSpace::Type {
-                continue;
+    pub fn resolve(&mut self, tree: &HirPetal) {
+        for item in &tree.items {
+            if let Err(Some(diag)) = self.resolve_item(&item) {
+                self.dctx.add(diag);
+            }
+        }
+    }
+
+    pub(crate) fn def_to_ty(&mut self, def_id: DefId) -> ResolveResult<TyId> {
+        let def = self.definitions.get(def_id);
+        let ty_id = match &def.kind {
+            DefKind::Builtin(BuiltinKind::Ty(_)) | DefKind::Struct(_) => {
+                self.tctx.get_ty_of_def(def_id).unwrap()
             }
 
-            match self.resolve_def(&def) {
-                Ok(ty_id) => self.tctx.attach_to_hir(*hir_id, ty_id),
-                Err(Some(diag)) => {
-                    self.dctx.add(diag);
-                }
-                _ => {}
-            };
-        }
-
-        // TODO: iterate over the definitions to resolve types of definitions;
-    }
-
-    pub(crate) fn resolve_def(&mut self, def: &Definition) -> ResolveResult<TyId> {
-        match &def.kind {
-            DefKind::Builtin(kind) => match kind {
-                BuiltinKind::Ty(kind) => self.resolve_builtin_ty(&kind),
-
-                #[allow(unreachable_patterns)]
-                _ => unreachable!(),
-            },
-
-            DefKind::Petal => todo!("resolve petal"),
-            DefKind::Struct(strct) => todo!("resolve struct {strct:?}"),
+            DefKind::Petal => todo!("throw error: cannot resolve petal as type"),
 
             _ => unreachable!(),
-        }
-    }
+        };
 
-    pub(crate) fn resolve_builtin_ty(&mut self, kind: &BuiltinTyKind) -> ResolveResult<TyId> {
-        Ok(match kind {
-            BuiltinTyKind::Int(kind) => match kind {
-                BuiltinIntTy::Fixed(width, signed) => {
-                    self.tctx.make_int_ty(IntTy::Fixed(*width, *signed))
-                }
-                BuiltinIntTy::Size(signed) => self.tctx.make_int_ty(IntTy::Size(*signed)),
-            },
-
-            BuiltinTyKind::Float(width) => self.tctx.make_float_ty(*width),
-
-            BuiltinTyKind::Bool => self.tctx.make_bool_ty(),
-
-            BuiltinTyKind::Char => self.tctx.make_char_ty(),
-
-            BuiltinTyKind::String => self.tctx.make_string_ty(),
-        })
+        Ok(ty_id)
     }
 }

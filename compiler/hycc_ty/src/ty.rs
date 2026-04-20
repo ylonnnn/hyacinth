@@ -1,3 +1,4 @@
+use hycc_hir::def::DefId;
 use hycc_span::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -9,6 +10,8 @@ pub enum TyKind {
 
     Char,
     String,
+
+    Adt(DefId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

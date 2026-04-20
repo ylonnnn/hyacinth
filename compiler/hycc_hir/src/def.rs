@@ -19,6 +19,10 @@ impl DefinitionTable {
         }
     }
 
+    pub fn defs(&self) -> &[Definition] {
+        &self.data
+    }
+
     pub fn insert(&mut self, definition: Definition) -> DefId {
         self.data.push(definition);
         DefId(self.data.len() - 1)

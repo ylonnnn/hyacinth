@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use hycc_hir::HirId;
+use hycc_hir::{
+    HirId,
+    def::{BuiltinIntTy, BuiltinTyKind, DefId},
+};
 
 use crate::ty::{IntTy, TyKind};
 
@@ -10,6 +13,7 @@ pub struct TyCtx {
     map: HashMap<TyKind, TyId>,
 
     node_ty_map: HashMap<HirId, TyId>,
+    def_ty_map: HashMap<DefId, TyId>,
 }
 
 impl TyCtx {
@@ -19,6 +23,7 @@ impl TyCtx {
             map: HashMap::new(),
 
             node_ty_map: HashMap::new(),
+            def_ty_map: HashMap::new(),
         }
     }
 
@@ -47,6 +52,30 @@ impl TyCtx {
         self.node_ty_map.get(&hir_id).map(|t| *t)
     }
 
+    pub fn attach_to_def(&mut self, def_id: DefId, ty_id: TyId) {
+        self.def_ty_map.insert(def_id, ty_id);
+    }
+
+    pub fn get_ty_of_def(&self, def_id: DefId) -> Option<TyId> {
+        self.def_ty_map.get(&def_id).map(|t| *t)
+    }
+
+    pub fn make_builtin_ty(&mut self, kind: &BuiltinTyKind) -> TyId {
+        match kind {
+            BuiltinTyKind::Int(kind) => match kind {
+                BuiltinIntTy::Fixed(width, signed) => {
+                    self.make_int_ty(IntTy::Fixed(*width, *signed))
+                }
+                BuiltinIntTy::Size(signed) => self.make_int_ty(IntTy::Size(*signed)),
+            },
+
+            BuiltinTyKind::Float(width) => self.make_float_ty(*width),
+            BuiltinTyKind::Bool => self.make_bool_ty(),
+            BuiltinTyKind::Char => self.make_char_ty(),
+            BuiltinTyKind::String => self.make_string_ty(),
+        }
+    }
+
     pub fn make_int_ty(&mut self, ty: IntTy) -> TyId {
         self.intern(TyKind::Int(ty))
     }
@@ -65,6 +94,10 @@ impl TyCtx {
 
     pub fn make_string_ty(&mut self) -> TyId {
         self.intern(TyKind::String)
+    }
+
+    pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {
+        self.intern(TyKind::Adt(def_id))
     }
 }
 

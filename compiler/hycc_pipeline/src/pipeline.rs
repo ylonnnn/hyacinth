@@ -131,11 +131,13 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_resolver = TyResolver::new(&definitions);
+    let mut ty_resolver = TyResolver::new(collector.tctx, &definitions, &resolver.resolved);
 
-    ty_resolver.resolve(&resolver.resolved);
+    ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
         &mut session.dctx,
         ResolverDiagDataCtx::new(&session.interner),
     );
+
+    dbg!(&ty_resolver.tctx);
 }

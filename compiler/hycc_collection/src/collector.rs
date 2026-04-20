@@ -9,6 +9,7 @@ use hycc_hir::{
 };
 use hycc_scope::{ScopeCtx, ScopeId};
 use hycc_symbol::SymbolInterner;
+use hycc_ty::context::TyCtx;
 use hycc_util::ternary;
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
@@ -18,6 +19,7 @@ pub struct Collector<'t, 'h> {
     pub definitions: DefinitionTable,
     pub scope_ctx: ScopeCtx,
     pub dctx: CollectorDiagCtx,
+    pub tctx: TyCtx,
     #[allow(unused)]
     pub(crate) hir_table: &'t HirTable<'h>,
 
@@ -41,6 +43,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             definitions: DefinitionTable::new(),
             scope_ctx: ScopeCtx::new(),
             dctx: CollectorDiagCtx::new(),
+            tctx: TyCtx::new(),
             hir_table,
             level: CollectionLevel::Top,
             node_level: CollectionLevel::Top,
@@ -52,14 +55,21 @@ impl<'t, 'h> Collector<'t, 'h> {
         for signed in [true, false] {
             let prefix = ternary!(signed, "i", "u");
             for width in [8, 16, 32, 64] {
+                let b_ty = BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed));
+                let ty = self.tctx.make_builtin_ty(&b_ty);
+
                 let def = Definition::builtin(
                     interner.intern(&format!("{}{}", prefix, width.to_string())),
-                    BuiltinKind::Ty(BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed))),
+                    BuiltinKind::Ty(b_ty),
                     DefAccessibility::Pub,
                 );
 
-                if let Err(Some(diag)) = self.define(def) {
-                    self.dctx.add(diag);
+                match self.define(def) {
+                    Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                    Err(Some(diag)) => {
+                        self.dctx.add(diag);
+                    }
+                    _ => {}
                 }
             }
 

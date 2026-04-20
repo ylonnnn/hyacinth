@@ -76,7 +76,13 @@ impl<'d> TyResolver<'d> {
                 BuiltinIntTy::Size(signed) => self.tctx.make_int_ty(IntTy::Size(*signed)),
             },
 
-            _ => todo!("other builtin type kinds"),
+            BuiltinTyKind::Float(width) => self.tctx.make_float_ty(*width),
+
+            BuiltinTyKind::Bool => self.tctx.make_bool_ty(),
+
+            BuiltinTyKind::Char => self.tctx.make_char_ty(),
+
+            BuiltinTyKind::String => self.tctx.make_string_ty(),
         })
     }
 }

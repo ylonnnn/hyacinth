@@ -105,7 +105,7 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone)]
 pub enum BuiltinTyKind {
     Int(BuiltinIntTy),
-    Float(BuiltinFloatTy),
+    Float(u8),
 
     Bool,
 
@@ -117,14 +117,6 @@ pub enum BuiltinTyKind {
 pub enum BuiltinIntTy {
     Fixed(u8, bool),
     Size(bool),
-}
-
-#[derive(Debug, Clone)]
-pub enum BuiltinFloatTy {
-    F8,
-    F16,
-    F32,
-    F64,
 }
 
 #[derive(Debug, Clone)]

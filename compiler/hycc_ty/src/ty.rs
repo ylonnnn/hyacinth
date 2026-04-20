@@ -3,8 +3,12 @@ use hycc_span::Span;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Int(IntTy),
+    Float(u8),
 
     Bool,
+
+    Char,
+    String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

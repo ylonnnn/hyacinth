@@ -51,8 +51,20 @@ impl TyCtx {
         self.intern(TyKind::Int(ty))
     }
 
+    pub fn make_float_ty(&mut self, width: u8) -> TyId {
+        self.intern(TyKind::Float(width))
+    }
+
     pub fn make_bool_ty(&mut self) -> TyId {
         self.intern(TyKind::Bool)
+    }
+
+    pub fn make_char_ty(&mut self) -> TyId {
+        self.intern(TyKind::Char)
+    }
+
+    pub fn make_string_ty(&mut self) -> TyId {
+        self.intern(TyKind::String)
     }
 }
 

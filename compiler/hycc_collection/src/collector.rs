@@ -1,10 +1,15 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirTable,
-    def::{DefId, Definition, DefinitionTable},
+    def::{
+        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, Definition,
+        DefinitionTable,
+    },
     item::HirPetal,
 };
 use hycc_scope::{ScopeCtx, ScopeId};
+use hycc_symbol::SymbolInterner;
+use hycc_util::ternary;
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
@@ -39,6 +44,35 @@ impl<'t, 'h> Collector<'t, 'h> {
             hir_table,
             level: CollectionLevel::Top,
             node_level: CollectionLevel::Top,
+        }
+    }
+
+    pub fn init_builtin_ty(&mut self, interner: &mut SymbolInterner) {
+        // Integers
+        for signed in [true, false] {
+            let prefix = ternary!(signed, "i", "u");
+            for width in [8, 16, 32, 64] {
+                let def = Definition::builtin(
+                    interner.intern(&format!("{}{}", prefix, width.to_string())),
+                    BuiltinKind::Ty(BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed))),
+                    DefAccessibility::Pub,
+                );
+
+                if let Err(Some(diag)) = self.define(def) {
+                    self.dctx.add(diag);
+                }
+            }
+
+            // Pointer Size Integer
+            let def = Definition::builtin(
+                interner.intern(&format!("{}size", prefix)),
+                BuiltinKind::Ty(BuiltinTyKind::Int(BuiltinIntTy::Size(signed))),
+                DefAccessibility::Pub,
+            );
+
+            if let Err(Some(diag)) = self.define(def) {
+                self.dctx.add(diag);
+            }
         }
     }
 

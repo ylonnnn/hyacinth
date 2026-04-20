@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 
-use crate::ty::TyKind;
+use hycc_hir::HirId;
+
+use crate::ty::{IntTy, TyKind};
 
 #[derive(Debug)]
 pub struct TyCtx {
     storage: Vec<TyKind>,
     map: HashMap<TyKind, TyId>,
+
+    node_ty_map: HashMap<HirId, TyId>,
 }
 
 impl TyCtx {
@@ -13,6 +17,8 @@ impl TyCtx {
         Self {
             storage: Vec::new(),
             map: HashMap::new(),
+
+            node_ty_map: HashMap::new(),
         }
     }
 
@@ -31,6 +37,22 @@ impl TyCtx {
 
     pub fn get(&self, ty_id: TyId) -> &TyKind {
         &self.storage[ty_id.unwrap()]
+    }
+
+    pub fn attach_to_hir(&mut self, hir_id: HirId, ty_id: TyId) {
+        self.node_ty_map.insert(hir_id, ty_id);
+    }
+
+    pub fn get_ty_of_hir(&self, hir_id: HirId) -> Option<TyId> {
+        self.node_ty_map.get(&hir_id).map(|t| *t)
+    }
+
+    pub fn make_int_ty(&mut self, ty: IntTy) -> TyId {
+        self.intern(TyKind::Int(ty))
+    }
+
+    pub fn make_bool_ty(&mut self) -> TyId {
+        self.intern(TyKind::Bool)
     }
 }
 

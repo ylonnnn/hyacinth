@@ -12,7 +12,9 @@ use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
 };
-use hycc_resolution::{diag::ResolverDiagDataCtx, ident::resolver::Resolver};
+use hycc_resolution::{
+    diag::ResolverDiagDataCtx, ident::resolver::Resolver, ty::resolver::TyResolver,
+};
 use hycc_session::{session::Session, unit::CompilationUnitId};
 use hycc_source::{Source, source::SourceId};
 use hycc_util::ternary;
@@ -102,6 +104,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let (hir_table, hir) = lower_hir(session, tree);
     let mut collector = Collector::new(&hir_table);
 
+    collector.init_builtin_ty(&mut session.interner);
     collector.collect(hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
@@ -127,4 +130,12 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     if session.dctx.error_occurred() {
         return;
     }
+
+    let mut ty_resolver = TyResolver::new(&definitions);
+
+    ty_resolver.resolve(&resolver.resolved);
+    ty_resolver.dctx.emit(
+        &mut session.dctx,
+        ResolverDiagDataCtx::new(&session.interner),
+    );
 }

@@ -67,6 +67,8 @@ impl DefId {
 
 #[derive(Debug, Clone)]
 pub enum DefKind {
+    Builtin(BuiltinKind),
+
     Petal,
 
     Fn(Box<FnDef>),
@@ -79,7 +81,15 @@ pub enum DefKind {
 
 impl DefKind {
     pub fn space(&self) -> DefSpace {
+        if let Self::Builtin(kind) = self {
+            return match &kind {
+                BuiltinKind::Ty(_) => DefSpace::Type,
+            };
+        }
+
         match self {
+            Self::Builtin(_) => unreachable!(),
+
             Self::Petal | Self::Struct(_) => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var => DefSpace::Value,
@@ -88,18 +98,33 @@ impl DefKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct FnDef {
-    pub params: Vec<DefId>,
-    pub ret_ty: Option<HirId>,
+pub enum BuiltinKind {
+    Ty(BuiltinTyKind),
 }
 
-impl FnDef {
-    pub fn new(ret_ty: Option<HirId>) -> Self {
-        Self {
-            params: Vec::new(),
-            ret_ty,
-        }
-    }
+#[derive(Debug, Clone)]
+pub enum BuiltinTyKind {
+    Int(BuiltinIntTy),
+    Float(BuiltinFloatTy),
+
+    Bool,
+
+    Char,
+    String,
+}
+
+#[derive(Debug, Clone)]
+pub enum BuiltinIntTy {
+    Fixed(u8, bool),
+    Size(bool),
+}
+
+#[derive(Debug, Clone)]
+pub enum BuiltinFloatTy {
+    F8,
+    F16,
+    F32,
+    F64,
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +148,21 @@ pub struct StructFieldDef {
     pub span: Span,
     pub accessibility: DefAccessibility,
     pub ty: HirId,
+}
+
+#[derive(Debug, Clone)]
+pub struct FnDef {
+    pub params: Vec<DefId>,
+    pub ret_ty: Option<HirId>,
+}
+
+impl FnDef {
+    pub fn new(ret_ty: Option<HirId>) -> Self {
+        Self {
+            params: Vec::new(),
+            ret_ty,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -170,6 +210,16 @@ impl Definition {
             span,
             accessibility,
         }
+    }
+
+    pub fn builtin(name: Symbol, kind: BuiltinKind, accessibility: DefAccessibility) -> Self {
+        Self::new(
+            name,
+            DefKind::Builtin(kind),
+            HirId::Invalid,
+            Span::default(),
+            accessibility,
+        )
     }
 
     pub fn new_default(name: Symbol, kind: DefKind, hir_id: HirId, span: Span) -> Self {

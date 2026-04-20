@@ -415,7 +415,7 @@ impl<'s> Parser<'s> {
         let mut ty = Option::<Ty>::None;
         if self.expect_exact_nonlf(TokenKind::Colon).0 {
             // TY
-            ty = Some(dbg!(self.parse_ty())?)
+            ty = Some(self.parse_ty()?)
         }
 
         // =

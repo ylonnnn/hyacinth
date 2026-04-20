@@ -3,16 +3,10 @@ use std::collections::HashMap;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirId,
-    def::{
-        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, Definition,
-        DefinitionTable,
-    },
+    def::{BuiltinKind, DefId, DefKind, DefinitionTable},
     item::HirPetal,
 };
-use hycc_ty::{
-    context::{TyCtx, TyId},
-    ty::IntTy,
-};
+use hycc_ty::context::{TyCtx, TyId};
 
 use crate::{ResolveResult, diag::ResolverDiagCtx};
 

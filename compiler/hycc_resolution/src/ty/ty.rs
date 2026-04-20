@@ -1,7 +1,4 @@
-use hycc_hir::{
-    path::HirPath,
-    ty::{HirTy, HirTyKind},
-};
+use hycc_hir::ty::{HirTy, HirTyKind};
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 

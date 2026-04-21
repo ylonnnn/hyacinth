@@ -189,13 +189,15 @@ impl<'t, 'h> Collector<'t, 'h> {
             unreachable!()
         };
 
-        self.define(Definition::new(
-            var.ident.ident,
-            DefKind::Var,
-            var_item.id,
-            var_item.span,
-            var_item.accessibility,
-        ))?;
+        if !self.is_expected_to_be_collected() {
+            self.define(Definition::new(
+                var.ident.ident,
+                DefKind::Var,
+                var_item.id,
+                var_item.span,
+                var_item.accessibility,
+            ))?;
+        }
 
         Ok(())
     }

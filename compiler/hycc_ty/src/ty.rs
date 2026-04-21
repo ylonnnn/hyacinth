@@ -5,6 +5,8 @@ use crate::context::{TyId, TyVarId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
+    Unit,
+
     Int(IntTy),
     Float(u8),
 

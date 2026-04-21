@@ -108,6 +108,8 @@ pub enum BuiltinKind {
 
 #[derive(Debug, Clone)]
 pub enum BuiltinTyKind {
+    Unit,
+
     Int(BuiltinIntTy),
     Float(u8),
 

@@ -142,6 +142,8 @@ impl TyCtx {
 
     pub fn make_builtin_ty(&mut self, kind: &BuiltinTyKind) -> TyId {
         match kind {
+            BuiltinTyKind::Unit => self.make_unit_ty(),
+
             BuiltinTyKind::Int(kind) => match kind {
                 BuiltinIntTy::Fixed(width, signed) => {
                     self.make_int_ty(IntTy::Fixed(*width, *signed))
@@ -154,6 +156,10 @@ impl TyCtx {
             BuiltinTyKind::Char => self.make_char_ty(),
             BuiltinTyKind::String => self.make_string_ty(),
         }
+    }
+
+    pub fn make_unit_ty(&mut self) -> TyId {
+        self.intern(TyKind::Unit)
     }
 
     pub fn make_int_ty(&mut self, ty: IntTy) -> TyId {

@@ -6,7 +6,7 @@ use hycc_hir::{
 };
 use hycc_util::bug;
 
-use crate::ty::{IntTy, TyKind, TyVar};
+use crate::ty::{InferKind, IntTy, TyKind, TyVar};
 
 #[derive(Debug)]
 pub struct TyCtx {
@@ -78,7 +78,7 @@ impl TyCtx {
         };
 
         match &ty {
-            TyKind::Infer(var_id) => {
+            TyKind::Infer(var_id, _) => {
                 let root = self.resolve_var(*var_id);
                 match &self.vars[root.unwrap()] {
                     TyVar::Bound(ty_id) => self.resolve_ty(*ty_id),
@@ -114,8 +114,12 @@ impl TyCtx {
         let b_ty = &self.storage[b.unwrap()];
 
         match (&a_ty, &b_ty) {
-            (_, TyKind::Infer(v_id)) => self.bind_var(*v_id, a),
-            (TyKind::Infer(v_id), _) => self.bind_var(*v_id, b),
+            (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
+                self.bind_var(*v_id, a)
+            }
+            (TyKind::Infer(v_id, kind), other) if kind.compatible(&other) => {
+                self.bind_var(*v_id, b)
+            }
             // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
             (a, b) => {
                 // println!("{a:?} {b:?}")
@@ -184,6 +188,11 @@ impl TyCtx {
 
     pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {
         self.intern(TyKind::Adt(def_id))
+    }
+
+    pub fn make_inferred_ty(&mut self, kind: InferKind) -> TyId {
+        let var_id = self.fresh_var();
+        self.intern(TyKind::Infer(var_id, kind))
     }
 }
 

@@ -17,10 +17,27 @@ pub enum TyKind {
 
     Adt(DefId),
 
-    Infer(TyVarId),
+    Infer(TyVarId, InferKind),
     Param(DefId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InferKind {
+    Any,
+
+    Int,
+    Float,
+}
+
+impl InferKind {
+    pub fn compatible(&self, ty: &TyKind) -> bool {
+        match self {
+            InferKind::Any => true,
+            InferKind::Int => matches!(ty, TyKind::Int(_) | TyKind::Infer(_, InferKind::Int)),
+            InferKind::Float => matches!(ty, TyKind::Float(_) | TyKind::Infer(_, InferKind::Float)),
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IntTy {
     Fixed(u8, bool),

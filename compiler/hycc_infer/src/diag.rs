@@ -5,14 +5,14 @@ use hycc_diagnostic::{
 use hycc_span::Span;
 
 #[derive(Debug)]
-pub struct InfererDiagDataCtx {
+pub struct InferDiagDataCtx {
     // pub interner: &'i SymbolInterner,
     // pub definitions: &'d DefinitionTable,
     // pub hir_table: &'t HirTable<'h>,
     // pub scope_ctx: &'s ScopeCtx,
 }
 
-impl InfererDiagDataCtx {
+impl InferDiagDataCtx {
     pub fn new(// interner: &'i SymbolInterner,
         // definitions: &'d DefinitionTable,
         // hir_table: &'t HirTable<'h>,
@@ -28,9 +28,9 @@ impl InfererDiagDataCtx {
 }
 
 #[derive(Debug, Clone)]
-pub struct InfererDiagCtx(Vec<InfererDiag>, bool);
+pub struct InferDiagCtx(Vec<InferDiag>, bool);
 
-impl InfererDiagCtx {
+impl InferDiagCtx {
     #[allow(unused)]
     const RESOLVER_NOTE_OFFSET: u16 = 200;
     #[allow(unused)]
@@ -41,27 +41,27 @@ impl InfererDiagCtx {
         Self(Vec::new(), false)
     }
 
-    pub fn warning(&mut self, span: Span, kind: InfererDiagWarningKind) {
-        self.add(InfererDiag {
+    pub fn warning(&mut self, span: Span, kind: InferDiagWarningKind) {
+        self.add(InferDiag {
             span,
-            kind: InfererDiagKind::Warning(kind),
+            kind: InferDiagKind::Warning(kind),
         });
     }
 
-    pub fn error(&mut self, span: Span, kind: InfererDiagErrorKind) {
-        self.add(InfererDiag {
+    pub fn error(&mut self, span: Span, kind: InferDiagErrorKind) {
+        self.add(InferDiag {
             span,
-            kind: InfererDiagKind::Error(kind),
+            kind: InferDiagKind::Error(kind),
         });
     }
 }
 
-impl DiagnosticContext<InfererDiagDataCtx, InfererDiag> for InfererDiagCtx {
-    fn data(&self) -> &Vec<InfererDiag> {
+impl DiagnosticContext<InferDiagDataCtx, InferDiag> for InferDiagCtx {
+    fn data(&self) -> &Vec<InferDiag> {
         &self.0
     }
 
-    fn data_mut(&mut self) -> &mut Vec<InfererDiag> {
+    fn data_mut(&mut self) -> &mut Vec<InferDiag> {
         &mut self.0
     }
 
@@ -69,7 +69,7 @@ impl DiagnosticContext<InfererDiagDataCtx, InfererDiag> for InfererDiagCtx {
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: InfererDiagDataCtx) {
+    fn emit(&self, target: &mut DiagnosticCtx, ctx: InferDiagDataCtx) {
         for diag in self.data() {
             target.add(diag.emit(&ctx));
         }
@@ -77,46 +77,46 @@ impl DiagnosticContext<InfererDiagDataCtx, InfererDiag> for InfererDiagCtx {
 }
 
 #[derive(Debug, Clone)]
-pub enum InfererDiagKind {
+pub enum InferDiagKind {
     Note(DiagNoteKind),
-    Warning(InfererDiagWarningKind),
-    Error(InfererDiagErrorKind),
+    Warning(InferDiagWarningKind),
+    Error(InferDiagErrorKind),
 }
 
 #[derive(Debug, Clone)]
-pub enum InfererDiagWarningKind {}
+pub enum InferDiagWarningKind {}
 
 #[derive(Debug, Clone)]
-pub enum InfererDiagErrorKind {}
+pub enum InferDiagErrorKind {}
 
 #[derive(Debug, Clone)]
-pub struct InfererDiag {
-    pub kind: InfererDiagKind,
+pub struct InferDiag {
+    pub kind: InferDiagKind,
     pub span: Span,
 }
 
-impl InfererDiag {
-    pub fn warning(span: Span, kind: InfererDiagWarningKind) -> Self {
+impl InferDiag {
+    pub fn warning(span: Span, kind: InferDiagWarningKind) -> Self {
         Self {
             span,
-            kind: InfererDiagKind::Warning(kind),
+            kind: InferDiagKind::Warning(kind),
         }
     }
 
-    pub fn error(span: Span, kind: InfererDiagErrorKind) -> Self {
+    pub fn error(span: Span, kind: InferDiagErrorKind) -> Self {
         Self {
             span,
-            kind: InfererDiagKind::Error(kind),
+            kind: InferDiagKind::Error(kind),
         }
     }
 }
 
-impl Diag<InfererDiagDataCtx> for InfererDiag {
-    fn emit(&self, ctx: &InfererDiagDataCtx) -> Diagnostic {
-        use InfererDiagErrorKind as Err;
-        use InfererDiagKind::*;
+impl Diag<InferDiagDataCtx> for InferDiag {
+    fn emit(&self, ctx: &InferDiagDataCtx) -> Diagnostic {
+        use InferDiagErrorKind as Err;
+        use InferDiagKind::*;
 
-        let InfererDiagDataCtx { .. } = *ctx;
+        let InferDiagDataCtx { .. } = *ctx;
 
         let mut diag = Diagnostic::new(
             self.span,
@@ -130,9 +130,9 @@ impl Diag<InfererDiagDataCtx> for InfererDiag {
                 }),
 
                 Error(kind) => {
-                    let code = (unsafe { *(&self.kind as *const InfererDiagKind as *const u8) })
+                    let code = (unsafe { *(&self.kind as *const InferDiagKind as *const u8) })
                         as u16
-                        + InfererDiagCtx::RESOLVER_ERROR_OFFSET;
+                        + InferDiagCtx::RESOLVER_ERROR_OFFSET;
 
                     DiagnosticKind::Error(
                         code,

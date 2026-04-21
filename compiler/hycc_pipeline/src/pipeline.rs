@@ -118,8 +118,6 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    dbg!(&session.interner);
-
     let mut resolver = Resolver::new(&mut collector.scope_ctx, &collector.definitions);
 
     resolver.resolve(&hir);
@@ -144,6 +142,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer = TyInferer::new();
+    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolver.resolved);
     ty_inferer.infer(&hir);
+
+    // dbg!(&ty_inferer.tctx);
 }

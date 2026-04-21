@@ -63,6 +63,8 @@ dependencies = [
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_span",
+ "hycc_ty",
+ "hycc_util",
 ]
 
 [[package]]

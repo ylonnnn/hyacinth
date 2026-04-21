@@ -9,7 +9,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(func) => self.resolve_fn(&func),
-            HirItemKind::VarDecl(decl) => self.resolve_var_decl(&decl),
+            HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
         }
     }
 
@@ -47,10 +47,18 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         Ok(())
     }
 
-    pub(crate) fn resolve_var_decl(&mut self, decl: &HirVarDecl) -> ResolveResult {
+    pub(crate) fn resolve_var_decl(&mut self, var_decl: &HirItem) -> ResolveResult {
+        let HirItemKind::VarDecl(decl) = &var_decl.kind else {
+            unreachable!()
+        };
+
         if let Some(ty) = decl.ty {
-            if let Err(Some(diag)) = self.resolve_ty(&ty) {
-                self.dctx.add(diag);
+            match self.resolve_ty(&ty) {
+                Ok(ty_id) => self.tctx.attach_to_hir(var_decl.id, ty_id),
+                Err(Some(diag)) => {
+                    self.dctx.add(diag);
+                }
+                _ => {}
             }
         }
 

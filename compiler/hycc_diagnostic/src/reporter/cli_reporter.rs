@@ -120,6 +120,10 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let s_kind_indent = "=".bright_black().repeat(indentation.saturating_sub(2));
         let indent = " ".repeat(indentation);
 
+        let Ok(cwd) = std::env::current_dir() else {
+            panic!("failed to retrieve the current directory")
+        };
+
         format!(
             " {s_kind_indent} {}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
             s_kind.to_string().style(&sev_color).bold(),
@@ -129,7 +133,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
             ),
             self.highlight(message, sev_color),
             "----->".bright_black(),
-            source.identifier.1,
+            &source.identifier.1.replace(cwd.to_str().unwrap(), "")[1..],
             start.clone(),
             emphasis = self
                 .emphasize(source, sev_color, (start, end))

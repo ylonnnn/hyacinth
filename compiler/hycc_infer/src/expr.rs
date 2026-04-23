@@ -1,7 +1,8 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability,
-    expr::{HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr},
+    def::DefKind,
+    expr::{HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirStructExpr},
 };
 use hycc_ty::{
     context::TyId,
@@ -24,6 +25,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             HirExprKind::Unary(unary) => todo!("infer unary"),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
+            HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),
         }
     }
 
@@ -78,5 +80,54 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         }
 
         Ok(self.tctx.make_array_ty(el_ty_id))
+    }
+
+    pub(crate) fn infer_struct_expr(&mut self, strct: &HirStructExpr) -> InferResult<TyId> {
+        // TODO: move the path type resolution of path of this struct expr 
+        let Some(def_id) = self.resolved.get(&strct.path.id) else {
+            unreachable!()
+        };
+
+        let def = self.definitions.get(*def_id);
+        let ty_id = self.tctx.get_ty_of_hir(def.hir_id).unwrap();
+        dbg!(ty_id);
+
+        let DefKind::Struct(strct_def) = &def.kind else {
+            unreachable!()
+        };
+
+        for field in &strct.fields {
+            let Some(idx) = strct_def.field_map.get(&field.ident.ident) else {
+                todo!(
+                    "throw error: struct {:?} has no field {:?}",
+                    self.tctx.get(ty_id),
+                    field.ident.ident
+                );
+            };
+
+            let t_field_ty_id = self.tctx.get_ty_of_hir(strct_def.fields[*idx].ty).unwrap();
+            let field_ty_id = match self.infer_expr(&field.val) {
+                Ok(ty_id) => ty_id,
+                Err(Some(diag)) => {
+                    self.dctx.add(diag);
+                    continue;
+                }
+                _ => continue,
+            };
+
+            if !self.tctx.unify_ty(t_field_ty_id, field_ty_id) {
+                return Err(Some(InferDiag::error(
+                    field.val.span,
+                    InferDiagErrorKind::TypeMismatch {
+                        expected: t_field_ty_id,
+                        received: field_ty_id,
+                    },
+                )));
+            }
+
+            println!("expected: {t_field_ty_id:?}, received: {field_ty_id:?}");
+        }
+
+        Ok(ty_id)
     }
 }

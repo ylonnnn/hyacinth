@@ -3,7 +3,7 @@ use hycc_ast::Mutability;
 
 use crate::{
     block::HirBlock,
-    expr::HirExpr,
+    expr::{HirExpr, HirStructExprField},
     item::{HirFnParam, HirItem, HirStructField},
     path::{HirIdent, HirPath, HirRawIdent},
     stmt::HirStmt,
@@ -40,6 +40,8 @@ pub enum HirNode<'h> {
 
     StructField(HirStructField<'h>),
     FnParam(HirFnParam<'h>),
+
+    StructExprField(HirStructExprField<'h>),
 }
 
 #[derive(Debug)]
@@ -66,6 +68,7 @@ impl<'h> HirTable<'h> {
             HirNode::RawIdent(node) => &mut node.id,
             HirNode::StructField(node) => &mut node.id,
             HirNode::FnParam(node) => &mut node.id,
+            HirNode::StructExprField(node) => &mut node.id,
         };
 
         (*n_id = id, id).1

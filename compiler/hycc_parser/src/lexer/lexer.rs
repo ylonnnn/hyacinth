@@ -46,6 +46,9 @@ impl<'s> Lexer<'s> {
                     reserved.insert(Box::from(kind.to_string()), kind);
                 }
 
+                reserved.insert(Box::from("true"), TokenKind::Bool);
+                reserved.insert(Box::from("false"), TokenKind::Bool);
+
                 reserved
             },
         }

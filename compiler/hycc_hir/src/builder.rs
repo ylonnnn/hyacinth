@@ -1,6 +1,6 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
-    expr::{ArrayExpr, RefExpr, Unary},
+    expr::{ArrayExpr, RefExpr, StructExpr, StructExprField, Unary},
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
@@ -14,7 +14,8 @@ use crate::{
     HirNode, HirTable,
     block::HirBlock,
     expr::{
-        BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirUnary, UnaryOp,
+        BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirStructExpr,
+        HirStructExprField, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -240,6 +241,9 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             }
 
             ExprKind::Array(array) => HirExprKind::Array(Box::new(self.lower_array_expr(&array))),
+            ExprKind::Struct(strct) => {
+                HirExprKind::Struct(Box::new(self.lower_struct_expr(&strct)))
+            }
         };
 
         if let HirNode::Expr(expr) = self
@@ -378,6 +382,36 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 .collect(),
             span: expr.span,
         }
+    }
+
+    fn lower_struct_expr(&mut self, expr: &StructExpr) -> HirStructExpr<'h> {
+        HirStructExpr {
+            path: self.lower_path(&expr.path),
+            fields: self.lower_struct_expr_fields(&expr.fields),
+            span: expr.span,
+        }
+    }
+
+    fn lower_struct_expr_fields(
+        &mut self,
+        fields: &[StructExprField],
+    ) -> Vec<&'h HirStructExprField<'h>> {
+        fields
+            .iter()
+            .map(|field| {
+                if let HirNode::StructExprField(field) =
+                    self.hir_table
+                        .add(HirNode::StructExprField(HirStructExprField::new(
+                            self.lower_raw_ident(&field.ident),
+                            self.lower_expr(&field.val),
+                        )))
+                {
+                    field
+                } else {
+                    unreachable!()
+                }
+            })
+            .collect()
     }
 
     fn lower_ty(&mut self, ty: &Ty) -> &'h HirTy<'h> {

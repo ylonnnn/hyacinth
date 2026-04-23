@@ -1,4 +1,7 @@
-use crate::{HirId, HirMutability, path::HirPath};
+use crate::{
+    HirId, HirMutability,
+    path::{HirPath, HirRawIdent},
+};
 
 use hycc_ast::expr::ExprEvaluatability;
 use hycc_span::Span;
@@ -17,6 +20,7 @@ pub enum HirExprKind<'h> {
     Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
 
     Array(Box<HirArrayExpr<'h>>),
+    Struct(Box<HirStructExpr<'h>>),
 }
 
 type HirExprEvaluatability = ExprEvaluatability;
@@ -109,4 +113,28 @@ pub enum BinaryOp {
 pub struct HirArrayExpr<'h> {
     pub elements: Vec<&'h HirExpr<'h>>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirStructExpr<'h> {
+    pub path: &'h HirPath<'h>,
+    pub fields: Vec<&'h HirStructExprField<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirStructExprField<'h> {
+    pub id: HirId,
+    pub ident: &'h HirRawIdent,
+    pub val: &'h HirExpr<'h>,
+}
+
+impl<'h> HirStructExprField<'h> {
+    pub fn new(ident: &'h HirRawIdent, expr: &'h HirExpr<'h>) -> Self {
+        Self {
+            id: HirId::Invalid,
+            ident,
+            val: expr,
+        }
+    }
 }

@@ -42,6 +42,22 @@ impl<'s, 'd> Resolver<'s, 'd> {
 
                 Ok(())
             }
+
+            HirExprKind::Struct(strct) => {
+                s.expect_space(DefSpace::Type, |s| {
+                    if let Err(Some(diag)) = s.resolve_path(&strct.path) {
+                        s.dctx.add(diag);
+                    }
+                });
+
+                for field in &strct.fields {
+                    if let Err(Some(diag)) = s.resolve_expr(&field.val) {
+                        s.dctx.add(diag);
+                    }
+                }
+
+                Ok(())
+            }
         })
     }
 }

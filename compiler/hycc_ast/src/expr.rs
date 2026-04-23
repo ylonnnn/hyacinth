@@ -16,6 +16,7 @@ pub enum ExprKind {
     Assign(Box<Expr>, Box<Expr>),
 
     Array(Box<ArrayExpr>),
+    Struct(Box<StructExpr>),
 }
 
 impl ExprKind {
@@ -32,6 +33,7 @@ impl ExprKind {
             Self::Assign(left, right) => left.span.merge(&right.span),
 
             Self::Array(array) => array.span,
+            Self::Struct(strct) => strct.span,
         }
     }
 
@@ -51,6 +53,13 @@ impl ExprKind {
                 .elements
                 .iter()
                 .map(|el| el.eval)
+                .reduce(|acc, eval| acc.infer(&eval))
+                .unwrap_or_else(|| ExprEvaluatability::CompileTime),
+
+            Self::Struct(strct) => strct
+                .fields
+                .iter()
+                .map(|f| f.val.eval)
                 .reduce(|acc, eval| acc.infer(&eval))
                 .unwrap_or_else(|| ExprEvaluatability::CompileTime),
         }
@@ -126,4 +135,17 @@ impl Unary {
 pub struct ArrayExpr {
     pub elements: Vec<Expr>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructExpr {
+    pub path: Path,
+    pub fields: Vec<StructExprField>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructExprField {
+    pub ident: Token,
+    pub val: Box<Expr>,
 }

@@ -1,6 +1,6 @@
 use hycc_ast::{
-    Expr, ExprKind, Mutability,
-    expr::{ArrayExpr, RefExpr},
+    Expr, ExprKind, Mutability, Path,
+    expr::{ArrayExpr, RefExpr, StructExpr, StructExprField},
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
@@ -31,6 +31,8 @@ impl<'s> Parser<'s> {
         use ExprInfixBindingPower::*;
 
         match kind {
+            TokenKind::LeftBrace => Some((Default as u8, Default as u8)),
+
             TokenKind::PlusEq
             | TokenKind::MinusEq
             | TokenKind::StarEq
@@ -115,7 +117,7 @@ impl<'s> Parser<'s> {
             };
 
             let rbp = match Self::expr_infix_binding_power_of(tok.kind) {
-                Some((_, rbp)) if min_bp < rbp => rbp,
+                Some((_, rbp)) if min_bp <= rbp => rbp,
                 _ => break,
             };
 
@@ -145,9 +147,18 @@ impl<'s> Parser<'s> {
                 self.next_nonlf_token().unwrap().clone(),
             ))),
 
-            TokenKind::Ident(..) => Ok(Expr::new(ExprKind::Path(Box::new(
-                self.parse_path(PathKind::Expr)?,
-            )))),
+            TokenKind::Ident(..) => {
+                let path = self.parse_path(PathKind::Expr)?;
+
+                if let Some(tailing) = self.peek_nonlf_token()
+                    && tailing.kind == TokenKind::LeftBrace
+                {
+                    let strct = self.parse_struct_expr(path)?;
+                    Ok(Expr::new(ExprKind::Struct(Box::new(strct))))
+                } else {
+                    Ok(Expr::new(ExprKind::Path(Box::new(path))))
+                }
+            }
 
             TokenKind::Ampersand => {
                 let span = self.next_nonlf_token().unwrap().span;
@@ -350,5 +361,65 @@ impl<'s> Parser<'s> {
                 Ok(array)
             },
         )
+    }
+
+    // PATH { FIELD* }
+    // PATH { (IDENT : EXPR)* }
+    pub fn parse_struct_expr(&mut self, path: Path) -> ParseResult<StructExpr> {
+        let Some(tg) = self.next_nonlf() else {
+            unreachable!()
+        };
+
+        let span = path.span.merge(&tg.span());
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
+        let n = data.len();
+        let mut strct = StructExpr {
+            path,
+            fields: Vec::new(),
+            span,
+        };
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> ParseResult<()> {
+                let mut expect = true;
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        strct.fields.push(s.parse_struct_expr_field()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(())
+            },
+        )?;
+
+        Ok(strct)
+    }
+
+    // IDENT : EXPR
+    pub fn parse_struct_expr_field(&mut self) -> ParseResult<StructExprField> {
+        // IDENT
+        let ident = self.parse_raw_ident()?;
+
+        // :
+        self.require_abs_exact_nonlf(TokenKind::Colon)?;
+
+        // EXPR
+        let val = Box::new(self.parse_expr(0)?);
+
+        Ok(StructExprField { ident, val })
     }
 }

@@ -95,7 +95,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         ))?;
 
         let ty_id = self.tctx.make_adt_ty(def_id);
-        self.tctx.attach_to_def(def_id, ty_id);
+        self.tctx.attach_to_hir(struct_item.id, ty_id);
 
         let DefKind::Struct(def) = &mut self.definitions.get_mut(def_id).kind else {
             bug!("struct definition is expected to be defined after definition")

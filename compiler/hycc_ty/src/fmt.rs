@@ -2,20 +2,34 @@ use hycc_hir::def::DefinitionTable;
 use hycc_symbol::SymbolInterner;
 use hycc_util::ternary;
 
-use crate::ty::{InferKind, IntTy, TyKind};
+use crate::{
+    context::{TyCtx, TyId},
+    ty::{InferKind, IntTy, TyKind},
+};
 
 #[derive(Debug)]
-pub struct TyFormatter<'d, 'i> {
+pub struct TyFormatter<'t, 'd, 'i> {
+    pub tctx: &'t TyCtx,
     definitions: &'d DefinitionTable,
     interner: &'i SymbolInterner,
 }
 
-impl<'d, 'i> TyFormatter<'d, 'i> {
-    pub fn new(definitions: &'d DefinitionTable, interner: &'i SymbolInterner) -> Self {
+impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
+    pub fn new(
+        tctx: &'t TyCtx,
+        definitions: &'d DefinitionTable,
+        interner: &'i SymbolInterner,
+    ) -> Self {
         Self {
+            tctx,
             definitions,
             interner,
         }
+    }
+
+    pub fn fmt_id(&self, id: TyId) -> String {
+        let kind = self.tctx.get(id);
+        self.fmt(&kind)
     }
 
     pub fn fmt(&self, kind: &TyKind) -> String {
@@ -31,6 +45,14 @@ impl<'d, 'i> TyFormatter<'d, 'i> {
             TyKind::Bool => format!("bool"),
             TyKind::Char => format!("char"),
             TyKind::String => format!("str"),
+
+            TyKind::Array(ty_id) => {
+                format!("[<size>]{}", self.fmt_id(*ty_id))
+            }
+
+            TyKind::Slice(ty_id) => {
+                format!("[]{}", self.fmt_id(*ty_id))
+            }
 
             TyKind::Adt(def_id) => {
                 // TODO: add generic arguments

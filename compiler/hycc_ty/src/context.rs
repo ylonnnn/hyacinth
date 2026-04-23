@@ -164,6 +164,8 @@ impl TyCtx {
             BuiltinTyKind::Bool => self.make_bool_ty(),
             BuiltinTyKind::Char => self.make_char_ty(),
             BuiltinTyKind::String => self.make_string_ty(),
+
+            BuiltinTyKind::Infer => self.make_inferred_ty(InferKind::Any),
         }
     }
 
@@ -189,6 +191,14 @@ impl TyCtx {
 
     pub fn make_string_ty(&mut self) -> TyId {
         self.intern(TyKind::String)
+    }
+
+    pub fn make_array_ty(&mut self, inner_ty: TyId) -> TyId {
+        self.intern(TyKind::Array(inner_ty))
+    }
+
+    pub fn make_slice_ty(&mut self, inner_ty: TyId) -> TyId {
+        self.intern(TyKind::Slice(inner_ty))
     }
 
     pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {

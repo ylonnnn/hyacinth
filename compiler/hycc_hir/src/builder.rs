@@ -4,7 +4,7 @@ use hycc_ast::{
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
-    ty::Array,
+    ty::{Array, Slice},
 };
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
@@ -20,7 +20,7 @@ use crate::{
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirStmt, HirStmtKind},
-    ty::{HirArray, HirTy, HirTyKind},
+    ty::{HirArray, HirSlice, HirTy, HirTyKind},
 };
 
 #[derive(Debug)]
@@ -360,6 +360,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         let kind = match &ty.kind {
             TyKind::Path(path) => HirTyKind::Path(self.lower_path(&path)),
             TyKind::Array(arr) => HirTyKind::Array(Box::new(self.lower_array(&arr))),
+            TyKind::Slice(slice) => HirTyKind::Slice(Box::new(self.lower_slice(&slice))),
             TyKind::Unit(span) => HirTyKind::Unit(*span),
         };
 
@@ -367,6 +368,13 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             ty
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_slice(&mut self, slice: &Slice) -> HirSlice<'h> {
+        HirSlice {
+            ty: self.lower_ty(&slice.ty),
+            span: slice.span,
         }
     }
 

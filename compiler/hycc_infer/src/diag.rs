@@ -12,8 +12,7 @@ use hycc_ty::{
 
 #[derive(Debug)]
 pub struct InferDiagDataCtx<'t, 'd, 'i> {
-    tctx: &'t TyCtx,
-    fmt: TyFormatter<'d, 'i>,
+    fmt: TyFormatter<'t, 'd, 'i>,
 }
 
 impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
@@ -23,8 +22,7 @@ impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
         interner: &'i SymbolInterner,
     ) -> Self {
         Self {
-            tctx,
-            fmt: TyFormatter::new(definitions, interner),
+            fmt: TyFormatter::new(&tctx, &definitions, &interner),
         }
     }
 }
@@ -120,9 +118,9 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
         use InferDiagErrorKind as Err;
         use InferDiagKind::*;
 
-        let InferDiagDataCtx { tctx, fmt, .. } = ctx;
+        let InferDiagDataCtx { fmt, .. } = ctx;
 
-        let mut diag = Diagnostic::new(
+        let diag = Diagnostic::new(
             self.span,
             match &self.kind {
                 Note(kind) => DiagnosticKind::Note(match kind {
@@ -142,13 +140,10 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                         code,
                         match kind {
                             Err::TypeMismatch { expected, received } => {
-                                let (expected, received) =
-                                    (tctx.get(*expected), tctx.get(*received));
-
                                 format!(
                                     "expected type `{}`, received type `{}`.",
-                                    fmt.fmt(&expected),
-                                    fmt.fmt(&received)
+                                    fmt.fmt_id(*expected),
+                                    fmt.fmt_id(*received)
                                 )
                             }
                         },

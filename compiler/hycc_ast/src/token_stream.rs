@@ -50,7 +50,7 @@ impl TokenStream {
     }
 
     pub fn eof(&self, absolute: bool) -> bool {
-        self.offset >= ((self.data.len().saturating_sub(1)).saturating_sub(!absolute as usize))
+        self.offset >= self.data.len().saturating_sub(!absolute as usize)
     }
 
     pub fn adjust(&mut self) {

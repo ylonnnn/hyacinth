@@ -2,7 +2,10 @@ use hycc_ast::{
     Ty, TyKind,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
+    ty::{Array, Slice},
 };
+use hycc_diagnostic::DiagnosticContext;
+use hycc_util::bug;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
 
@@ -30,6 +33,53 @@ impl<'s> Parser<'s> {
             TokenKind::LeftParen => {
                 // TODO: allow the parser to diverge from a grouped type, or a tuple
                 self.parse_grouped_ty()
+            }
+
+            TokenKind::LeftBracket => {
+                let Some(TokenGraph::Collection { data, .. }) = self.next_nonlf() else {
+                    unreachable!()
+                };
+
+                let n = data.len();
+                let op = data.first().unwrap().underlying().unwrap().clone();
+
+                let size = self.use_stream(
+                    TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                    |s| {
+                        let expr = s.parse_expr(0);
+                        if let Some(tg) = s.peek_nonlf() {
+                            return Err(Some(ParserDiag::unexpected_token(
+                                tg.underlying().unwrap().clone(),
+                            )));
+                        }
+
+                        Ok(match expr {
+                            Ok(expr) => Some(expr),
+                            Err(diag) => {
+                                if let Some(diag) = diag {
+                                    s.dctx.add(diag);
+                                }
+
+                                None
+                            }
+                        })
+                    },
+                )?;
+
+                let ty = Box::new(self.parse_ty()?);
+                let span = op.span.merge(&ty.span);
+
+                let kind = if let Some(size) = size {
+                    TyKind::Array(Box::new(Array {
+                        size: Box::new(size),
+                        ty,
+                        span,
+                    }))
+                } else {
+                    TyKind::Slice(Box::new(Slice { ty, span }))
+                };
+
+                Ok(Ty::new(kind))
             }
 
             TokenKind::Ident(kind) => {
@@ -61,23 +111,16 @@ impl<'s> Parser<'s> {
 
             // TODO: improve
             TokenKind::Eq | TokenKind::Comma => {
+                // return Err(None);
                 todo!(
                     "perhaps you forgot the type, or did not mean to explicitly add the type annotation"
                 );
             }
 
-            _ => {
-                // self.dctx.add(errors::unexpected_token(
-                //     self.source,
-                //     &tok,
-                //     Some("expected type"),
-                // ));
-
-                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
-                    tok.clone(),
-                    "type",
-                )))
-            }
+            _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                tok.clone(),
+                "type",
+            ))),
         }?;
 
         // let Some(tok) = self.peek_nonlf_token() else {

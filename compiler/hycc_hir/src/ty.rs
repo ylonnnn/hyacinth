@@ -5,7 +5,10 @@ use crate::{HirId, expr::HirExpr, path::HirPath};
 #[derive(Debug, Clone)]
 pub enum HirTyKind<'h> {
     Path(&'h HirPath<'h>),
+
     Array(Box<HirArray<'h>>),
+    Slice(Box<HirSlice<'h>>),
+
     Unit(Span),
 }
 
@@ -29,6 +32,12 @@ impl<'h> HirTy<'h> {
 #[derive(Debug, Clone)]
 pub struct HirArray<'h> {
     pub size: &'h HirExpr<'h>,
+    pub ty: &'h HirTy<'h>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirSlice<'h> {
     pub ty: &'h HirTy<'h>,
     pub span: Span,
 }

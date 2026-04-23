@@ -117,6 +117,8 @@ pub enum BuiltinTyKind {
 
     Char,
     String,
+
+    Infer,
 }
 
 #[derive(Debug, Clone)]

@@ -102,6 +102,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             ("bool", BuiltinTyKind::Bool),
             ("char", BuiltinTyKind::Char),
             ("str", BuiltinTyKind::String),
+            ("_", BuiltinTyKind::Infer),
         ] {
             let ty = self.tctx.make_builtin_ty(&b_ty);
             let def = Definition::builtin(

@@ -15,6 +15,9 @@ pub enum TyKind {
     Char,
     String,
 
+    Array(TyId /* TODO: constant size*/),
+    Slice(TyId),
+
     Adt(DefId),
 
     Infer(TyVarId, InferKind),

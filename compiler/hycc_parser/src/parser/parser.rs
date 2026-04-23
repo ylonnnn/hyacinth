@@ -11,12 +11,19 @@ use crate::parser::diag::{
     ParserDiag, ParserDiagCtx, ParserDiagErrorKind, UnexpectedTokenExpectation,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseLevel {
+    Global,
+    Local,
+}
+
 #[derive(Debug)]
 pub struct Parser<'s> {
     pub(super) stream: TokenStream,
     pub dctx: ParserDiagCtx,
     pub(super) source: &'s Source,
 
+    pub(super) level: ParseLevel,
     pub(super) petal_stack: Vec<String>,
 }
 
@@ -29,6 +36,7 @@ impl<'s> Parser<'s> {
             dctx: ParserDiagCtx::new(),
             source,
 
+            level: ParseLevel::Global,
             petal_stack: Vec::new(),
         }
     }

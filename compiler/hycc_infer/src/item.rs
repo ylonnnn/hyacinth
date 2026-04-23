@@ -1,5 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct, HirVarDecl};
+use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_util::bug;
 
 use crate::{
@@ -33,12 +33,10 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     }
 
     pub(crate) fn infer_fn(&mut self, func: &HirFn) -> InferResult {
-        self.delve(|s| {
-            // TODO: allow infer_block to return its equivalent TyId
-            if let Err(Some(diag)) = s.infer_block(&func.body) {
-                s.dctx.add(diag);
-            }
-        });
+        // TODO: allow infer_block to return its equivalent TyId
+        if let Err(Some(diag)) = self.infer_block(&func.body) {
+            self.dctx.add(diag);
+        }
 
         Ok(())
     }
@@ -48,21 +46,13 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             unreachable!()
         };
 
-        let ty = if let Some(ty) = decl.ty {
+        let ty = decl.ty.map(|ty| {
             let Some(ty_id) = self.tctx.get_ty_of_hir(ty.id) else {
                 bug!("var decl ty hir is not attached to a TyId: {:?}", ty.id)
             };
 
-            Some(ty_id)
-        } else {
-            if self.level.is_global() {
-                todo!(
-                    "throw error: type annotations are required for global variable declarations"
-                );
-            }
-
-            None
-        };
+            ty_id
+        });
 
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;

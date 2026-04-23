@@ -1,5 +1,3 @@
-use std::path::{self, PathBuf};
-
 use hycc_ast::{
     Expr, Item, ItemKind, Ty,
     item::{
@@ -11,11 +9,13 @@ use hycc_ast::{
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_session::config;
+use hycc_util::ternary;
+use std::path::{self, PathBuf};
 
 use crate::parser::{
     Parser,
     diag::{ParserDiag, ParserDiagErrorKind},
-    parser::ParseResult,
+    parser::{ParseLevel, ParseResult},
     path::PathKind,
 };
 
@@ -427,11 +427,16 @@ impl<'s> Parser<'s> {
 
         self.require_terminator()?;
 
-        // Validate variable declaration composition
-        if ty.is_none() && val.is_none() {
+        // Validate variable declaration
+        if (ty.is_none() && val.is_none())
+            || (self.level == ParseLevel::Global && (ty.is_none() || val.is_none()))
+        {
             return Err(Some(ParserDiag::error(
                 ident.span,
-                ParserDiagErrorKind::InvalidVarDecl { ident },
+                ParserDiagErrorKind::InvalidVarDecl {
+                    ident,
+                    level: self.level,
+                },
             )));
         }
 

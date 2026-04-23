@@ -10,6 +10,8 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_util::ternary;
 
+use crate::parser::parser::ParseLevel;
+
 #[derive(Debug, Clone)]
 pub struct ParserDiagDataCtx<'s> {
     pub registry: &'s SourceRegistry,
@@ -132,6 +134,7 @@ pub enum ParserDiagErrorKind {
 
     InvalidVarDecl {
         ident: Token,
+        level: ParseLevel,
     },
 
     UnrecognizedPetalFile {
@@ -246,9 +249,10 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         )
                     }
 
-                    Err::InvalidVarDecl { ident } => {
+                    Err::InvalidVarDecl { ident, level } => {
                         let message = format!(
-                            "invalid variable declaration for `{}`.",
+                            "invalid {}variable declaration for `{}`.",
+                            ternary!(*level == ParseLevel::Global, "top-level ", ""),
                             ident.view(&source.data)
                         );
 
@@ -276,8 +280,12 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
             },
 
             Error(kind) => match kind {
-                Err::InvalidVarDecl { .. } => {
-                    diag.detail(diag.span, DiagnosticKind::Note(format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")));
+                Err::InvalidVarDecl { level, .. } => {
+                    diag.detail(diag.span, DiagnosticKind::Note( 
+                            ternary!(*level == ParseLevel::Global, 
+                                format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."), 
+                                format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
+                    )));
                 }
 
                 Err::UnrecognizedPetalFile { path } => {

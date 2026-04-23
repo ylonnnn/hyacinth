@@ -5,7 +5,6 @@ use hycc_ast::{
     ty::{Array, Ref, Slice},
 };
 use hycc_diagnostic::DiagnosticContext;
-use hycc_util::bug;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
 
@@ -37,15 +36,21 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ampersand => {
                 let span = self.next_nonlf_token().unwrap().span;
-
-                // self.expect_exact_nonlf(TokenKind::Mut)
+                let mutability = if self
+                    .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
+                    .0
+                {
+                    Mutability::Mutable
+                } else {
+                    Mutability::Immutable
+                };
 
                 let ty = Box::new(self.parse_ty()?);
 
                 Ok(Ty::new(TyKind::Ref(Box::new(Ref {
                     span: span.merge(&ty.span),
                     ty,
-                    mutability: Mutability::Immutable,
+                    mutability,
                 }))))
             }
 

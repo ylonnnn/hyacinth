@@ -69,9 +69,9 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
             }
 
             TyKind::Infer(_, kind) => match kind {
-                InferKind::Any => String::from("_"),
-                InferKind::Int => String::from("integer"),
-                InferKind::Float => String::from("float"),
+                InferKind::Any => String::from("{unknown}"),
+                InferKind::Int => String::from("{int}"),
+                InferKind::Float => String::from("{float}"),
             },
 
             TyKind::Param(def_id) => {

@@ -1,7 +1,7 @@
 use hycc_ast::{
     Expr, ExprKind, Mutability,
     expr::{ArrayExpr, RefExpr},
-    token::{Token, TokenGraph, TokenKind},
+    token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_util::ternary;
@@ -151,15 +151,21 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ampersand => {
                 let span = self.next_nonlf_token().unwrap().span;
+                let mutability = if self
+                    .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
+                    .0
+                {
+                    Mutability::Mutable
+                } else {
+                    Mutability::Immutable
+                };
 
-                // self.expect_exact_nonlf(TokenKind::Mut)
-    
                 let expr = self.parse_expr(0)?;
 
                 Ok(Expr::new(ExprKind::RefExpr(Box::new(RefExpr {
                     span: span.merge(&expr.span),
                     expr: Box::new(expr),
-                    mutability: Mutability::Immutable,
+                    mutability,
                 }))))
             }
 

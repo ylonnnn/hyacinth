@@ -119,6 +119,8 @@ pub enum TokenIdentKind {
 
     Fn,
     Let,
+
+    Mut,
 }
 
 #[repr(u8)]
@@ -208,9 +210,18 @@ impl Display for TokenKind {
                 Self::Char { .. } => "char",
                 Self::String { .. } => "string",
                 Self::Ident(kind) => match kind {
+                    TokenIdentKind::Pub => "pub",
+
+                    TokenIdentKind::Petal => "petal",
+
+                    TokenIdentKind::Struct => "struct",
+
                     TokenIdentKind::Fn => "fn",
                     TokenIdentKind::Let => "let",
-                    _ => "ident",
+
+                    TokenIdentKind::Mut => "mut",
+
+                    TokenIdentKind::Normal => "ident",
                 },
 
                 Self::MacroIdent => "macro ident",

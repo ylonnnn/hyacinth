@@ -7,7 +7,7 @@ use hycc_ast::{
 };
 use hycc_source::source::Source;
 use hycc_span::Span;
-use hycc_util::{hashmap, is_ascii_digit, ternary};
+use hycc_util::{is_ascii_digit, ternary};
 
 use crate::lexer::diag::{LexerDiagCtx, LexerDiagErrorKind};
 
@@ -20,7 +20,7 @@ pub struct Lexer<'s> {
     pub dctx: LexerDiagCtx,
 
     offset: u32,
-    reserved: HashMap<&'static str, TokenKind>,
+    reserved: HashMap<Box<str>, TokenKind>,
 }
 
 impl<'s> Lexer<'s> {
@@ -29,17 +29,24 @@ impl<'s> Lexer<'s> {
             source,
             dctx: LexerDiagCtx::new(),
             offset: 0,
-            reserved: hashmap! {
-                "pub" => TokenKind::Ident(TokenIdentKind::Pub),
+            reserved: {
+                let mut reserved = HashMap::<Box<str>, TokenKind>::new();
 
-                "petal" => TokenKind::Ident(TokenIdentKind::Petal),
+                for ident in [
+                    //
+                    TokenIdentKind::Pub,
+                    TokenIdentKind::Petal,
+                    TokenIdentKind::Struct,
+                    TokenIdentKind::Fn,
+                    TokenIdentKind::Let,
+                    TokenIdentKind::Struct,
+                    TokenIdentKind::Mut,
+                ] {
+                    let kind = TokenKind::Ident(ident);
+                    reserved.insert(Box::from(kind.to_string()), kind);
+                }
 
-                "struct" => TokenKind::Ident(TokenIdentKind::Struct),
-
-                "fn" => TokenKind::Ident(TokenIdentKind::Fn),
-                "let" => TokenKind::Ident(TokenIdentKind::Let),
-
-                "true", "false" => TokenKind::Bool,
+                reserved
             },
         }
     }

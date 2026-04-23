@@ -2,7 +2,10 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct, HirVarDecl};
 use hycc_util::bug;
 
-use crate::inferer::{InferResult, TyInferer};
+use crate::{
+    diag::{InferDiag, InferDiagErrorKind},
+    inferer::{InferResult, TyInferer},
+};
 
 impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_item(&mut self, item: &HirItem) -> InferResult {
@@ -64,7 +67,15 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;
             if let Some(ty) = ty {
-                self.tctx.unify_ty(ty, expr_ty);
+                if !self.tctx.unify_ty(ty, expr_ty) {
+                    return Err(Some(InferDiag::error(
+                        expr.span,
+                        InferDiagErrorKind::TypeMismatch {
+                            expected: ty,
+                            received: expr_ty,
+                        },
+                    )));
+                }
             }
 
             let resolved_ty = self.tctx.resolve_ty(expr_ty);

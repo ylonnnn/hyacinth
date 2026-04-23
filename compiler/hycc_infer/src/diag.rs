@@ -2,27 +2,29 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
+use hycc_hir::def::DefinitionTable;
 use hycc_span::Span;
+use hycc_symbol::SymbolInterner;
+use hycc_ty::{
+    context::{TyCtx, TyId},
+    fmt::TyFormatter,
+};
 
 #[derive(Debug)]
-pub struct InferDiagDataCtx {
-    // pub interner: &'i SymbolInterner,
-    // pub definitions: &'d DefinitionTable,
-    // pub hir_table: &'t HirTable<'h>,
-    // pub scope_ctx: &'s ScopeCtx,
+pub struct InferDiagDataCtx<'t, 'd, 'i> {
+    tctx: &'t TyCtx,
+    fmt: TyFormatter<'d, 'i>,
 }
 
-impl InferDiagDataCtx {
-    pub fn new(// interner: &'i SymbolInterner,
-        // definitions: &'d DefinitionTable,
-        // hir_table: &'t HirTable<'h>,
-        // scope_ctx: &'s ScopeCtx,
+impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
+    pub fn new(
+        tctx: &'t TyCtx,
+        definitions: &'d DefinitionTable,
+        interner: &'i SymbolInterner,
     ) -> Self {
         Self {
-            // interner,
-            // definitions,
-            // hir_table,
-            // scope_ctx,
+            tctx,
+            fmt: TyFormatter::new(definitions, interner),
         }
     }
 }
@@ -56,7 +58,7 @@ impl InferDiagCtx {
     }
 }
 
-impl DiagnosticContext<InferDiagDataCtx, InferDiag> for InferDiagCtx {
+impl<'t, 'd, 'i> DiagnosticContext<InferDiagDataCtx<'t, 'd, 'i>, InferDiag> for InferDiagCtx {
     fn data(&self) -> &Vec<InferDiag> {
         &self.0
     }
@@ -69,7 +71,7 @@ impl DiagnosticContext<InferDiagDataCtx, InferDiag> for InferDiagCtx {
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: InferDiagDataCtx) {
+    fn emit(&self, target: &mut DiagnosticCtx, ctx: InferDiagDataCtx<'t, 'd, 'i>) {
         for diag in self.data() {
             target.add(diag.emit(&ctx));
         }
@@ -87,7 +89,9 @@ pub enum InferDiagKind {
 pub enum InferDiagWarningKind {}
 
 #[derive(Debug, Clone)]
-pub enum InferDiagErrorKind {}
+pub enum InferDiagErrorKind {
+    TypeMismatch { expected: TyId, received: TyId },
+}
 
 #[derive(Debug, Clone)]
 pub struct InferDiag {
@@ -111,12 +115,12 @@ impl InferDiag {
     }
 }
 
-impl Diag<InferDiagDataCtx> for InferDiag {
-    fn emit(&self, ctx: &InferDiagDataCtx) -> Diagnostic {
+impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
+    fn emit(&self, ctx: &InferDiagDataCtx<'t, 'd, 'i>) -> Diagnostic {
         use InferDiagErrorKind as Err;
         use InferDiagKind::*;
 
-        let InferDiagDataCtx { .. } = *ctx;
+        let InferDiagDataCtx { tctx, fmt, .. } = ctx;
 
         let mut diag = Diagnostic::new(
             self.span,
@@ -137,7 +141,16 @@ impl Diag<InferDiagDataCtx> for InferDiag {
                     DiagnosticKind::Error(
                         code,
                         match kind {
-                            _ => "".into(),
+                            Err::TypeMismatch { expected, received } => {
+                                let (expected, received) =
+                                    (tctx.get(*expected), tctx.get(*received));
+
+                                format!(
+                                    "expected type `{}`, received type `{}`.",
+                                    fmt.fmt(&expected),
+                                    fmt.fmt(&received)
+                                )
+                            }
                         },
                     )
                 }

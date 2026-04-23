@@ -6,7 +6,7 @@ use hycc_hir::{
     def::{DefId, DefinitionTable},
     item::HirPetal,
 };
-use hycc_ty::context::{TyCtx, TyId};
+use hycc_ty::context::TyCtx;
 
 use crate::diag::{InferDiag, InferDiagCtx};
 

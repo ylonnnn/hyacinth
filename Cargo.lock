@@ -63,6 +63,7 @@ dependencies = [
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_span",
+ "hycc_symbol",
  "hycc_ty",
  "hycc_util",
 ]
@@ -154,6 +155,7 @@ version = "0.1.0"
 dependencies = [
  "hycc_hir",
  "hycc_span",
+ "hycc_symbol",
  "hycc_util",
 ]
 

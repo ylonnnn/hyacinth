@@ -8,7 +8,7 @@ use hycc_diagnostic::{
     reporter::{CLIReporter, DiagnosticReporter},
 };
 use hycc_hir::{HirTable, builder::HirBuilder, item::HirPetal};
-use hycc_infer::inferer::TyInferer;
+use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
 use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
@@ -143,7 +143,14 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     }
 
     let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolver.resolved);
-    ty_inferer.infer(&hir);
 
-    // dbg!(&ty_inferer.tctx);
+    ty_inferer.infer(&hir);
+    ty_inferer.dctx.emit(
+        &mut session.dctx,
+        InferDiagDataCtx::new(&ty_inferer.tctx, &definitions, &session.interner),
+    );
+
+    if session.dctx.error_occurred() {
+        return;
+    }
 }

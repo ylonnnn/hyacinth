@@ -49,6 +49,10 @@ impl TyCtx {
         &self.storage[ty_id.unwrap()]
     }
 
+    pub fn get_mut(&mut self, ty_id: TyId) -> &mut TyKind {
+        &mut self.storage[ty_id.unwrap()]
+    }
+
     pub fn fresh_var(&mut self) -> TyVarId {
         self.vars.push(TyVar::Unbound);
         TyVarId(self.vars.len() - 1)
@@ -95,7 +99,9 @@ impl TyCtx {
         let b = self.resolve_var(b);
 
         match (&self.vars[a.unwrap()], &self.vars[b.unwrap()]) {
-            (TyVar::Bound(a_ty), TyVar::Bound(b_ty)) => self.unify_ty(*a_ty, *b_ty),
+            (TyVar::Bound(a_ty), TyVar::Bound(b_ty)) => {
+                self.unify_ty(*a_ty, *b_ty);
+            }
             (_, TyVar::Bound(v)) => self.bind_var(a, *v),
             (TyVar::Bound(v), _) => self.bind_var(b, *v),
             (TyVar::Unbound, TyVar::Unbound) => self.vars[a.unwrap()] = TyVar::Linked(b),
@@ -105,9 +111,9 @@ impl TyCtx {
         }
     }
 
-    pub fn unify_ty(&mut self, a: TyId, b: TyId) {
+    pub fn unify_ty(&mut self, a: TyId, b: TyId) -> bool {
         if a == b {
-            return;
+            return true;
         }
 
         let a_ty = &self.storage[a.unwrap()];
@@ -121,11 +127,10 @@ impl TyCtx {
                 self.bind_var(*v_id, b)
             }
             // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
-            (a, b) => {
-                // println!("{a:?} {b:?}")
-                panic!("type mismatch: {a:?} {b:?}");
-            }
-        }
+            (_, _) => return false,
+        };
+
+        true
     }
 
     pub fn attach_to_hir(&mut self, hir_id: HirId, ty_id: TyId) {

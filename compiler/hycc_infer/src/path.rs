@@ -12,8 +12,14 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
         let def = self.definitions.get(*def_id);
         let Some(ty_id) = self.tctx.get_ty_of_hir(def.hir_id) else {
-            bug!("hir id {:?} of def does not have a ty_id attached", def.hir_id);
+            bug!(
+                "hir id {:?} of def does not have a ty_id attached",
+                def.hir_id
+            );
         };
+
+        let ty_id = self.tctx.resolve_ty(ty_id);
+        self.tctx.attach_to_hir(def.hir_id, ty_id);
 
         Ok(ty_id)
     }

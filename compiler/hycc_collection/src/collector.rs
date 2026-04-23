@@ -54,12 +54,16 @@ impl<'t, 'h> Collector<'t, 'h> {
         // Integers
         for signed in [true, false] {
             let prefix = ternary!(signed, "i", "u");
-            for width in [8, 16, 32, 64] {
+            for width in [8, 16, 32, 64, u8::MAX] {
                 let b_ty = BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed));
                 let ty = self.tctx.make_builtin_ty(&b_ty);
 
                 let def = Definition::builtin(
-                    interner.intern(&format!("{}{}", prefix, width.to_string())),
+                    interner.intern(&format!(
+                        "{}{}",
+                        prefix,
+                        ternary!(width == u8::MAX, "size".into(), width.to_string())
+                    )),
                     BuiltinKind::Ty(b_ty),
                     DefAccessibility::Pub,
                 );
@@ -72,16 +76,46 @@ impl<'t, 'h> Collector<'t, 'h> {
                     _ => {}
                 }
             }
+        }
 
-            // Pointer Size Integer
+        // Float
+        for width in [8, 16, 32, 64] {
+            let b_ty = BuiltinTyKind::Float(width);
+            let ty = self.tctx.make_builtin_ty(&b_ty);
+
             let def = Definition::builtin(
-                interner.intern(&format!("{}size", prefix)),
-                BuiltinKind::Ty(BuiltinTyKind::Int(BuiltinIntTy::Size(signed))),
+                interner.intern(&format!("f{}", width.to_string())),
+                BuiltinKind::Ty(b_ty),
                 DefAccessibility::Pub,
             );
 
-            if let Err(Some(diag)) = self.define(def) {
-                self.dctx.add(diag);
+            match self.define(def) {
+                Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                Err(Some(diag)) => {
+                    self.dctx.add(diag);
+                }
+                _ => {}
+            }
+        }
+
+        for (name, b_ty) in [
+            ("bool", BuiltinTyKind::Bool),
+            ("char", BuiltinTyKind::Char),
+            ("str", BuiltinTyKind::String),
+        ] {
+            let ty = self.tctx.make_builtin_ty(&b_ty);
+            let def = Definition::builtin(
+                interner.intern(name),
+                BuiltinKind::Ty(b_ty),
+                DefAccessibility::Pub,
+            );
+
+            match self.define(def) {
+                Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                Err(Some(diag)) => {
+                    self.dctx.add(diag);
+                }
+                _ => {}
             }
         }
     }

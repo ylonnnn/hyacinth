@@ -15,24 +15,12 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     }
 
     pub(crate) fn infer_literal(&mut self, lit: &HirLiteral) -> InferResult<TyId> {
-        match &lit {
-            HirLiteral::Int { .. } => Ok(self.tctx.make_inferred_ty(InferKind::Int)),
-
-            HirLiteral::Float(_) => {
-                todo!("infer float")
-            }
-
-            HirLiteral::Bool(_) => {
-                todo!("infer bool")
-            }
-
-            HirLiteral::Char(_) => {
-                todo!("infer char")
-            }
-
-            HirLiteral::String(_) => {
-                todo!("infer string")
-            }
-        }
+        Ok(match &lit {
+            HirLiteral::Int { .. } => self.tctx.make_inferred_ty(InferKind::Int),
+            HirLiteral::Float(_) => self.tctx.make_inferred_ty(InferKind::Float),
+            HirLiteral::Bool(_) => self.tctx.make_bool_ty(),
+            HirLiteral::Char(_) => self.tctx.make_char_ty(),
+            HirLiteral::String(_) => self.tctx.make_string_ty(),
+        })
     }
 }

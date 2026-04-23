@@ -41,6 +41,14 @@ impl<'s> Parser<'s> {
         }
     }
 
+    pub fn eos(&self) -> bool {
+        if let Some(tok) = self.peek_nonlf_token() {
+            tok.kind == TokenKind::Eos || tok.kind == TokenKind::Eof
+        } else {
+            true
+        }
+    }
+
     pub fn adjust_to_nonlf(&mut self) {
         self.stream
             .adjustn(self.stream.first_not_offset(&[TokenKind::LnFeed]) + 1);

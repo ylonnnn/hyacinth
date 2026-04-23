@@ -60,6 +60,15 @@ pub enum TokenGraph {
 }
 
 impl TokenGraph {
+    pub fn span(&self) -> Span {
+        match self {
+            Self::Node(token) => token.span,
+            Self::Collection { data, .. } => {
+                data.first().unwrap().span().merge(&data.last().unwrap().span())
+            }
+        }
+    }
+
     pub fn underlying(&self) -> Option<&Token> {
         match self {
             Self::Node(token) => Some(token),
@@ -196,6 +205,7 @@ pub enum TokenKind {
     #[default]
     Invalid,
     Eof,
+    Eos,
 }
 
 impl Display for TokenKind {
@@ -277,6 +287,7 @@ impl Display for TokenKind {
 
                 Self::Invalid => "Invalid",
                 Self::Eof => "EOF",
+                Self::Eos => "EOS",
             }
         )
     }

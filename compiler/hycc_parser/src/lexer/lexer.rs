@@ -352,11 +352,16 @@ impl<'s> Lexer<'s> {
     ) -> TokenGraph {
         let mut eof = true;
         while let Some(c) = self.peek() {
+            let end = condition(c);
             if let Some(tg) = self.tokenize_graph() {
+                if end {
+                    collection.push(TokenGraph::Node(token!(TokenKind::Eos, tg.span())));
+                }
+
                 collection.push(tg);
             }
 
-            if condition(c) {
+            if end {
                 eof = false;
                 break;
             }
@@ -374,9 +379,9 @@ impl<'s> Lexer<'s> {
         collection: Vec<TokenGraph>,
     ) -> TokenGraph {
         let (op, cl) = pair;
+        let mut token_graph = self.tokenize_collection(|c| c == cl, collection);
 
-        let token_graph = self.tokenize_collection(|c| c == cl, collection);
-        if let TokenGraph::Collection { data, eof } = &token_graph {
+        if let TokenGraph::Collection { data, eof } = &mut token_graph {
             // If the collection reached the eof, the delimeter
             // collection is not closed.
             if *eof {
@@ -388,12 +393,6 @@ impl<'s> Lexer<'s> {
                     op_tok.span,
                     LexerDiagErrorKind::UnclosedDelimeterCollection { op, cl },
                 );
-
-                // self.dctx.error(
-                //     DiagnosticErrorKind::UnclosedDelimeterCollection.into(),
-                //     &format!("missing closing `{}` for `{}`.", cl as char, op as char,),
-                //     op_tok.span.clone(),
-                // );
             }
 
             token_graph

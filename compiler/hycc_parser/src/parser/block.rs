@@ -37,11 +37,7 @@ impl<'s> Parser<'s> {
                     span,
                 };
 
-                if s.stream.is_empty() {
-                    return Ok(data);
-                }
-
-                while !s.stream.at_eof() {
+                while !s.eos() {
                     match s.parse_stmt_with_recovery() {
                         Ok(stmt) => data.stmts.push(stmt),
                         Err(diag) => {

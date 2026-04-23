@@ -1,5 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct, HirVarDecl};
+use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 

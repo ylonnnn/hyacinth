@@ -9,7 +9,6 @@ use hycc_ast::{
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_session::config;
-use hycc_util::ternary;
 use std::path::{self, PathBuf};
 
 use crate::parser::{
@@ -233,23 +232,19 @@ impl<'s> Parser<'s> {
     // { (FIELD (, FIELD)?)* }
     // { (IDENT : TY (, IDENT : TY)?)* }
     pub fn parse_struct_fields(&mut self) -> ParseResult<StructFieldList> {
-        let TokenGraph::Collection { data, .. } = self.require_exact_nonlf(TokenKind::LeftBrace)?
-        else {
+        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftBrace) else {
             return Err(None);
         };
 
-        let close = data.last().unwrap().underlying().unwrap().clone();
+        let span = tg.span();
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
         let n = data.len();
-        let span = data
-            .first()
-            .unwrap()
-            .underlying()
-            .unwrap()
-            .span
-            .merge(&close.span);
 
         self.use_stream(
-            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
             |s| -> ParseResult<StructFieldList> {
                 let mut fields = StructFieldList {
                     list: Vec::new(),
@@ -257,7 +252,7 @@ impl<'s> Parser<'s> {
                 };
 
                 let mut expect = true;
-                while !s.expect_exact_nonlf(close.kind).0 {
+                while !s.eos() {
                     if !expect {
                         s.require_exact_nonlf(TokenKind::Comma)?;
                     }
@@ -312,7 +307,7 @@ impl<'s> Parser<'s> {
         let ident = self.parse_raw_ident();
 
         // (PARAM (, PARAM)*)
-        let params = self.parse_fn_param_list();
+        let params = self.parse_fn_param_list()?;
 
         // ->
         let mut ret_ty = Option::<Ty>::None;
@@ -328,7 +323,7 @@ impl<'s> Parser<'s> {
 
         Ok(Fn {
             ident: ident?,
-            params: params?,
+            params,
             ret_ty: ret_ty.map(Box::new),
             body: body?,
         })
@@ -336,23 +331,18 @@ impl<'s> Parser<'s> {
 
     // (PARAM (, PARAM)*)
     pub fn parse_fn_param_list(&mut self) -> ParseResult<FnParamList> {
-        let TokenGraph::Collection { data, .. } = self.require_exact_nonlf(TokenKind::LeftParen)?
-        else {
+        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
             return Err(None);
         };
 
-        let close = data.last().unwrap().underlying().unwrap().clone();
-        let n = data.len();
-        let span = data
-            .first()
-            .unwrap()
-            .underlying()
-            .unwrap()
-            .span
-            .merge(&close.span);
+        let span = tg.span();
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
 
+        let n = data.len();
         self.use_stream(
-            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
             |s| {
                 let mut params = FnParamList {
                     span: span,
@@ -360,7 +350,7 @@ impl<'s> Parser<'s> {
                 };
 
                 let mut expect = true;
-                while !s.expect_exact_nonlf(close.kind).0 {
+                while !s.eos() {
                     if !expect {
                         s.require_exact_nonlf(TokenKind::Comma)?;
                     }

@@ -137,7 +137,7 @@ impl<'s> Parser<'s> {
                         return;
                     }
 
-                    while !s.stream.at_eof() {
+                    while !s.eos() {
                         match s.parse_item_with_recovery() {
                             Ok(item) => petal.items.push(item),
                             Err(diag) => {

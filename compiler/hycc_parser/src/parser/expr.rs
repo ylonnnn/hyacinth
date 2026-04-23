@@ -1,7 +1,8 @@
 use hycc_ast::{
     Expr, ExprKind,
-    token::{Token, TokenKind},
-    token_stream::{TokenConsumptionKind, TokenMatchExpectation},
+    expr::ArrayExpr,
+    token::{Token, TokenGraph, TokenKind},
+    token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_util::ternary;
 
@@ -148,6 +149,10 @@ impl<'s> Parser<'s> {
                 self.parse_path(PathKind::Expr)?,
             )))),
 
+            TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Array(Box::new(
+                self.parse_array_expr()?,
+            )))),
+
             _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
                 token.clone(),
                 "expr prefix",
@@ -190,7 +195,7 @@ impl<'s> Parser<'s> {
             | TokenKind::Tilde
             | TokenKind::Caret => {
                 let Some(token) = self.next_nonlf_token() else {
-                    return Err((left, None));
+                    return Err((left, None)); // TODO: throw error: missing right-hand side expression
                 };
 
                 let right = match self.parse_expr(min_bp) {
@@ -216,7 +221,7 @@ impl<'s> Parser<'s> {
                 // mergeable kinds such as these.
                 // TokenKind::GreaterEq | TokenKind::GreaterGreater
                 let Some(lead) = self.next_nonlf_token() else {
-                    return Err((left, None));
+                    unreachable!()
                 };
 
                 let Some(trailing) = self.peek_nonlf_token() else {
@@ -261,7 +266,7 @@ impl<'s> Parser<'s> {
             | TokenKind::SlashEq
             | TokenKind::PercentEq => {
                 if self.next_nonlf_token().is_none() {
-                    return Err((left, None));
+                    return Err((left, None)); // TODO: throw error: missing right-hand side expression
                 };
 
                 let right = match self.parse_expr(min_bp) {
@@ -280,5 +285,50 @@ impl<'s> Parser<'s> {
                 )),
             )),
         }
+    }
+
+    pub fn parse_array_expr(&mut self) -> ParseResult<ArrayExpr> {
+        let Some(TokenGraph::Collection { data, .. }) = self.next_nonlf() else {
+            unreachable!()
+        };
+
+        let close = data.last().unwrap().underlying().unwrap().clone();
+        let n = data.len();
+        let span = data
+            .first()
+            .unwrap()
+            .underlying()
+            .unwrap()
+            .span
+            .merge(&close.span);
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
+            |s| -> ParseResult<ArrayExpr> {
+                let mut array = ArrayExpr {
+                    elements: Vec::new(),
+                    span,
+                };
+                let mut expect = true;
+
+                while !s.expect_exact_nonlf(close.kind).0 {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        array.elements.push(s.parse_expr(0)?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(array)
+            },
+        )
     }
 }

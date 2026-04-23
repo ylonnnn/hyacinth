@@ -121,16 +121,20 @@ impl TyCtx {
 
         match (&a_ty, &b_ty) {
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
-                self.bind_var(*v_id, a)
+                self.bind_var(*v_id, a);
+                true
             }
             (TyKind::Infer(v_id, kind), other) if kind.compatible(&other) => {
-                self.bind_var(*v_id, b)
+                self.bind_var(*v_id, b);
+                true
             }
-            // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
-            (_, _) => return false,
-        };
 
-        true
+            (TyKind::Array(a_inner), TyKind::Array(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+            (TyKind::Slice(a_inner), TyKind::Slice(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+
+            // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+            (_, _) => false,
+        }
     }
 
     pub fn attach_to_hir(&mut self, hir_id: HirId, ty_id: TyId) {

@@ -7,9 +7,13 @@ use hycc_span::Span;
 pub enum ExprKind {
     Path(Box<Path>),
     Literal(Token),
+
     Binary(Token, Box<Expr>, Box<Expr>),
     Unary(Box<Unary>),
+
     Assign(Box<Expr>, Box<Expr>),
+
+    Array(Box<ArrayExpr>),
 }
 
 impl ExprKind {
@@ -17,9 +21,13 @@ impl ExprKind {
         match self {
             Self::Path(path) => path.span,
             Self::Literal(expr) => expr.span,
+
             Self::Binary(_, left, right) => left.span.merge(&right.span),
             Self::Unary(expr) => expr.span(),
+
             Self::Assign(left, right) => left.span.merge(&right.span),
+
+            Self::Array(array) => array.span,
         }
     }
 
@@ -27,9 +35,18 @@ impl ExprKind {
         match self {
             Self::Path(..) => ExprEvaluatability::Unknown,
             Self::Literal(..) => ExprEvaluatability::CompileTime,
+
             Self::Binary(_, left, right) => left.eval.infer(&right.eval),
             Self::Unary(expr) => expr.eval(),
+
             Self::Assign(..) => ExprEvaluatability::RunTime,
+
+            Self::Array(array) => array
+                .elements
+                .iter()
+                .map(|el| el.eval)
+                .reduce(|acc, eval| acc.infer(&eval))
+                .unwrap_or_else(|| ExprEvaluatability::CompileTime),
         }
     }
 }
@@ -90,4 +107,10 @@ impl Unary {
             Self::Pre(_, expr) | Self::Post(_, expr) => expr.eval,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrayExpr {
+    pub elements: Vec<Expr>,
+    pub span: Span,
 }

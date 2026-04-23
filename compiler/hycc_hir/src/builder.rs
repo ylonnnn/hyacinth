@@ -1,6 +1,6 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
-    expr::Unary,
+    expr::{ArrayExpr, Unary},
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
@@ -13,7 +13,7 @@ use hycc_util::{digit_value, ternary};
 use crate::{
     HirNode, HirTable,
     block::HirBlock,
-    expr::{BinaryOp, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
+    expr::{BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
         HirStructField, HirStructFieldList, HirVarDecl,
@@ -233,8 +233,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 HirExprKind::Assign(self.lower_expr(assignee), self.lower_expr(expr))
             }
 
-            #[allow(unreachable_patterns)]
-            _ => todo!(),
+            ExprKind::Array(array) => HirExprKind::Array(Box::new(self.lower_array_expr(&array))),
         };
 
         if let HirNode::Expr(expr) = self
@@ -353,6 +352,17 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 },
                 self.lower_expr(&expr),
             ),
+        }
+    }
+
+    fn lower_array_expr(&mut self, expr: &ArrayExpr) -> HirArrayExpr<'h> {
+        HirArrayExpr {
+            elements: expr
+                .elements
+                .iter()
+                .map(|el| self.lower_expr(&el))
+                .collect(),
+            span: expr.span,
         }
     }
 

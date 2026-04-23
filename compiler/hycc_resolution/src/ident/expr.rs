@@ -28,6 +28,16 @@ impl<'s, 'd> Resolver<'s, 'd> {
 
                 s.resolve_expr(&expr)
             }
+
+            HirExprKind::Array(array) => {
+                for expr in &array.elements {
+                    if let Err(Some(diag)) = s.resolve_expr(&expr) {
+                        s.dctx.add(diag);
+                    }
+                }
+
+                Ok(())
+            }
         })
     }
 }

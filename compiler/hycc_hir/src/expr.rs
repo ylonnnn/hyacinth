@@ -8,9 +8,13 @@ use hycc_span::Span;
 pub enum HirExprKind<'h> {
     Path(&'h HirPath<'h>),
     Literal(Box<HirLiteral>),
+
     Binary(BinaryOp, &'h HirExpr<'h>, &'h HirExpr<'h>),
     Unary(Box<HirUnary<'h>>),
+
     Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
+
+    Array(Box<HirArrayExpr<'h>>),
 }
 
 type HirExprEvaluatability = ExprEvaluatability;
@@ -90,4 +94,10 @@ pub enum BinaryOp {
     BitwiseXor,
     BitwiseLShift,
     BitwiseRShift,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirArrayExpr<'h> {
+    pub elements: Vec<&'h HirExpr<'h>>,
+    pub span: Span,
 }

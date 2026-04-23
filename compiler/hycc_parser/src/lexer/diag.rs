@@ -79,8 +79,8 @@ pub enum LexerDiagWarningKind {}
 #[derive(Debug, Clone)]
 pub enum LexerDiagErrorKind {
     InvalidNumericLiteralDigit { digit: u8, base: u8 },
-    InvalidNumericLiteralPrefix,
-    DanglingNumericLiteralPrefix,
+    InvalidNumericLiteralprefix,
+    DanglingNumericLiteralprefix,
     InvalidLiteral,
     UnterminatedCharSeq,
     InvalidCharSeq { enclosing: u8, len: (usize, usize) },
@@ -117,13 +117,13 @@ impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
                         *digit as char, *base
                     ),
 
-                    Err::InvalidNumericLiteralPrefix => format!(
+                    Err::InvalidNumericLiteralprefix => format!(
                         "invalid numeric literal prefix `{}`.",
                         &source.data[(self.span.offset as usize)
                             ..=((self.span.offset + self.span.len as u32) as usize)]
                     ),
 
-                    Err::DanglingNumericLiteralPrefix => {
+                    Err::DanglingNumericLiteralprefix => {
                         format!(
                             "dangling umeric literal prefix `{}`.",
                             &source.data[(self.span.offset as usize)

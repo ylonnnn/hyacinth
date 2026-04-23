@@ -1,10 +1,11 @@
 use hycc_span::Span;
 
-use crate::{HirId, expr::HirExpr, path::HirPath};
+use crate::{HirId, HirMutability, expr::HirExpr, path::HirPath};
 
 #[derive(Debug, Clone)]
 pub enum HirTyKind<'h> {
     Path(&'h HirPath<'h>),
+    Ref(Box<HirRef<'h>>),
 
     Array(Box<HirArray<'h>>),
     Slice(Box<HirSlice<'h>>),
@@ -27,6 +28,13 @@ impl<'h> HirTy<'h> {
             span,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirRef<'h> {
+    pub ty: &'h HirTy<'h>,
+    pub mutability: HirMutability,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

@@ -1,6 +1,13 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::expr::{HirArrayExpr, HirExpr, HirExprKind, HirLiteral};
-use hycc_ty::{context::TyId, ty::InferKind};
+use hycc_hir::{
+    HirMutability,
+    expr::{HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr},
+};
+use hycc_ty::{
+    context::TyId,
+    ty::{InferKind, RefMutability},
+};
+use hycc_util::ternary;
 
 use crate::{
     diag::{InferDiag, InferDiagErrorKind},
@@ -11,6 +18,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
         match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
+            HirExprKind::RefExpr(reference) => self.infer_ref_expr(&reference),
             HirExprKind::Literal(lit) => self.infer_literal(&lit),
             HirExprKind::Binary(op, left, right) => todo!("infer binary"),
             HirExprKind::Unary(unary) => todo!("infer unary"),
@@ -27,6 +35,17 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             HirLiteral::Char(_) => self.tctx.make_char_ty(),
             HirLiteral::String(_) => self.tctx.make_string_ty(),
         })
+    }
+
+    pub(crate) fn infer_ref_expr(&mut self, reference: &HirRefExpr) -> InferResult<TyId> {
+        let inner_ty = self.infer_expr(&reference.expr)?;
+        let mutability = ternary!(
+            reference.mutability == HirMutability::Mutable,
+            RefMutability::Mutable,
+            RefMutability::Immutable
+        );
+
+        Ok(self.tctx.make_ref_ty(inner_ty, mutability))
     }
 
     pub(crate) fn infer_array_expr(&mut self, array: &HirArrayExpr) -> InferResult<TyId> {

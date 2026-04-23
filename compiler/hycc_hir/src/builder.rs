@@ -1,10 +1,10 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
-    expr::{ArrayExpr, Unary},
+    expr::{ArrayExpr, RefExpr, Unary},
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
-    ty::{Array, Slice},
+    ty::{Array, Ref, Slice},
 };
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
@@ -13,14 +13,16 @@ use hycc_util::{digit_value, ternary};
 use crate::{
     HirNode, HirTable,
     block::HirBlock,
-    expr::{BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirUnary, UnaryOp},
+    expr::{
+        BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirUnary, UnaryOp,
+    },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
         HirStructField, HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirStmt, HirStmtKind},
-    ty::{HirArray, HirSlice, HirTy, HirTyKind},
+    ty::{HirArray, HirRef, HirSlice, HirTy, HirTyKind},
 };
 
 #[derive(Debug)]
@@ -222,6 +224,10 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     fn lower_expr(&mut self, expr: &Expr) -> &'h HirExpr<'h> {
         let kind = match &expr.kind {
             ExprKind::Path(path) => HirExprKind::Path(self.lower_path(&path)),
+            ExprKind::RefExpr(reference) => {
+                HirExprKind::RefExpr(Box::new(self.lower_ref_expr(&reference)))
+            }
+
             ExprKind::Literal(lit) => HirExprKind::Literal(Box::new(self.lower_literal(lit))),
             ExprKind::Binary(op, left, right) => {
                 let (op, left, right) = self.lower_binary(op, left, right);
@@ -243,6 +249,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             expr
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_ref_expr(&mut self, reference: &RefExpr) -> HirRefExpr<'h> {
+        HirRefExpr {
+            expr: self.lower_expr(&reference.expr),
+            mutability: reference.mutability,
+            span: reference.span,
         }
     }
 
@@ -369,6 +383,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     fn lower_ty(&mut self, ty: &Ty) -> &'h HirTy<'h> {
         let kind = match &ty.kind {
             TyKind::Path(path) => HirTyKind::Path(self.lower_path(&path)),
+            TyKind::Ref(reference) => HirTyKind::Ref(Box::new(self.lower_ref(&reference))),
+
             TyKind::Array(arr) => HirTyKind::Array(Box::new(self.lower_array(&arr))),
             TyKind::Slice(slice) => HirTyKind::Slice(Box::new(self.lower_slice(&slice))),
             TyKind::Unit(span) => HirTyKind::Unit(*span),
@@ -378,6 +394,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             ty
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_ref(&mut self, reference: &Ref) -> HirRef<'h> {
+        HirRef {
+            ty: self.lower_ty(&reference.ty),
+            mutability: reference.mutability,
+            span: reference.span,
         }
     }
 

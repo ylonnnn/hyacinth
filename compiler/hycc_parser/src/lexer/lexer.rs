@@ -217,11 +217,11 @@ impl<'s> Lexer<'s> {
         if base == u8::MAX {
             self.dctx.error(
                 (start, 2, src_id).into(),
-                LexerDiagErrorKind::InvalidNumericLiteralPrefix,
+                LexerDiagErrorKind::InvalidNumericLiteralprefix,
             );
 
             // self.dctx.error(
-            //     DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+            //     DiagnosticErrorKind::InvalidNumericLiteralprefix.into(),
             //     &format!(
             //         "invalid numeric literal prefix `{}`.",
             //         &source[(start as usize)..=(self.offset as usize)]
@@ -240,11 +240,11 @@ impl<'s> Lexer<'s> {
         if _start == self.offset && base != 10 {
             self.dctx.error(
                 (start, (_start - start) as u16, src_id).into(),
-                LexerDiagErrorKind::DanglingNumericLiteralPrefix,
+                LexerDiagErrorKind::DanglingNumericLiteralprefix,
             );
 
             // self.dctx.error(
-            //     DiagnosticErrorKind::InvalidNumericLiteralPrefix.into(),
+            //     DiagnosticErrorKind::InvalidNumericLiteralprefix.into(),
             //     &format!(
             //         "dangling numeric literal prefix `{}`.",
             //         &source[(start as usize)..(self.offset as usize)]

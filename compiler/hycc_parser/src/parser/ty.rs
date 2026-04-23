@@ -1,8 +1,8 @@
 use hycc_ast::{
-    Ty, TyKind,
+    Mutability, Ty, TyKind,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
-    ty::{Array, Slice},
+    ty::{Array, Ref, Slice},
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_util::bug;
@@ -33,6 +33,20 @@ impl<'s> Parser<'s> {
             TokenKind::LeftParen => {
                 // TODO: allow the parser to diverge from a grouped type, or a tuple
                 self.parse_grouped_ty()
+            }
+
+            TokenKind::Ampersand => {
+                let span = self.next_nonlf_token().unwrap().span;
+
+                // self.expect_exact_nonlf(TokenKind::Mut)
+
+                let ty = Box::new(self.parse_ty()?);
+
+                Ok(Ty::new(TyKind::Ref(Box::new(Ref {
+                    span: span.merge(&ty.span),
+                    ty,
+                    mutability: Mutability::Immutable,
+                }))))
             }
 
             TokenKind::LeftBracket => {

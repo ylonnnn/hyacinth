@@ -1,4 +1,4 @@
-use crate::{HirId, path::HirPath};
+use crate::{HirId, HirMutability, path::HirPath};
 
 use hycc_ast::expr::ExprEvaluatability;
 use hycc_span::Span;
@@ -7,6 +7,8 @@ use hycc_span::Span;
 #[derive(Debug, Clone)]
 pub enum HirExprKind<'h> {
     Path(&'h HirPath<'h>),
+    RefExpr(Box<HirRefExpr<'h>>),
+
     Literal(Box<HirLiteral>),
 
     Binary(BinaryOp, &'h HirExpr<'h>, &'h HirExpr<'h>),
@@ -36,6 +38,13 @@ impl<'h> HirExpr<'h> {
             eval,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirRefExpr<'h> {
+    pub expr: &'h HirExpr<'h>,
+    pub mutability: HirMutability,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

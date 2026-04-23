@@ -1,10 +1,11 @@
-use crate::{Expr, Path};
+use crate::{Expr, Mutability, Path};
 
 use hycc_span::Span;
 
 #[derive(Debug, Clone)]
 pub enum TyKind {
     Path(Box<Path>),
+    Ref(Box<Ref>),
 
     Array(Box<Array>),
     Slice(Box<Slice>),
@@ -16,6 +17,7 @@ impl TyKind {
     pub fn span(&self) -> Span {
         match self {
             Self::Path(path) => path.span,
+            Self::Ref(reference) => reference.span,
             Self::Array(arr) => arr.span,
             Self::Slice(slice) => slice.span,
             Self::Unit(span) => *span,
@@ -36,6 +38,13 @@ impl Ty {
             kind,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Ref {
+    pub ty: Box<Ty>,
+    pub mutability: Mutability,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

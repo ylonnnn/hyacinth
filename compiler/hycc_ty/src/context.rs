@@ -6,7 +6,7 @@ use hycc_hir::{
 };
 use hycc_util::bug;
 
-use crate::ty::{InferKind, IntTy, TyKind, TyVar};
+use crate::ty::{InferKind, IntTy, RefMutability, TyKind, TyVar};
 
 #[derive(Debug)]
 pub struct TyCtx {
@@ -131,6 +131,10 @@ impl TyCtx {
 
             (TyKind::Array(a_inner), TyKind::Array(b_inner)) => self.unify_ty(*a_inner, *b_inner),
             (TyKind::Slice(a_inner), TyKind::Slice(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+            (TyKind::Ref(a_inner, a_mut), TyKind::Ref(b_inner, b_mut)) => match &a_mut {
+                RefMutability::Immutable => self.unify_ty(*a_inner, *b_inner),
+                RefMutability::Mutable => *a_mut == *b_mut && self.unify_ty(*a_inner, *b_inner),
+            },
 
             // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
             (_, _) => false,
@@ -203,6 +207,10 @@ impl TyCtx {
 
     pub fn make_slice_ty(&mut self, inner_ty: TyId) -> TyId {
         self.intern(TyKind::Slice(inner_ty))
+    }
+
+    pub fn make_ref_ty(&mut self, inner_ty: TyId, mutability: RefMutability) -> TyId {
+        self.intern(TyKind::Ref(inner_ty, mutability))
     }
 
     pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {

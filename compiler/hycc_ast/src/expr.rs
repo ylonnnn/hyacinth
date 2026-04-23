@@ -1,4 +1,4 @@
-use crate::{Path, token::Token};
+use crate::{Mutability, Path, token::Token};
 
 use hycc_span::Span;
 
@@ -6,6 +6,8 @@ use hycc_span::Span;
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     Path(Box<Path>),
+    RefExpr(Box<RefExpr>),
+
     Literal(Token),
 
     Binary(Token, Box<Expr>, Box<Expr>),
@@ -20,6 +22,8 @@ impl ExprKind {
     pub fn span(&self) -> Span {
         match self {
             Self::Path(path) => path.span,
+            Self::RefExpr(reference) => reference.span,
+
             Self::Literal(expr) => expr.span,
 
             Self::Binary(_, left, right) => left.span.merge(&right.span),
@@ -34,6 +38,8 @@ impl ExprKind {
     pub fn eval(&self) -> ExprEvaluatability {
         match self {
             Self::Path(..) => ExprEvaluatability::Unknown,
+            Self::RefExpr(reference) => reference.expr.eval,
+
             Self::Literal(..) => ExprEvaluatability::CompileTime,
 
             Self::Binary(_, left, right) => left.eval.infer(&right.eval),
@@ -86,6 +92,13 @@ impl Expr {
             kind,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct RefExpr {
+    pub expr: Box<Expr>,
+    pub mutability: Mutability,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

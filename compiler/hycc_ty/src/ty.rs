@@ -3,6 +3,12 @@ use hycc_span::Span;
 
 use crate::context::{TyId, TyVarId};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RefMutability {
+    Mutable,
+    Immutable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Unit,
@@ -17,6 +23,8 @@ pub enum TyKind {
 
     Array(TyId /* TODO: constant size*/),
     Slice(TyId),
+
+    Ref(TyId, RefMutability),
 
     Adt(DefId),
 

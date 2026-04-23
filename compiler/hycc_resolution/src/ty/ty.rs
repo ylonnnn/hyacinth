@@ -1,5 +1,9 @@
-use hycc_hir::ty::{HirTy, HirTyKind};
-use hycc_ty::context::TyId;
+use hycc_hir::{
+    HirMutability,
+    ty::{HirTy, HirTyKind},
+};
+use hycc_ty::{context::TyId, ty::RefMutability};
+use hycc_util::ternary;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
@@ -7,6 +11,16 @@ impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
         let ty_id = match &ty.kind {
             HirTyKind::Path(path) => self.resolve_path(&path),
+            HirTyKind::Ref(reference) => {
+                let inner_ty = self.resolve_ty(&reference.ty)?;
+                let mutability = ternary!(
+                    reference.mutability == HirMutability::Mutable,
+                    RefMutability::Mutable,
+                    RefMutability::Immutable
+                );
+
+                Ok(self.tctx.make_ref_ty(inner_ty, mutability))
+            }
 
             HirTyKind::Array(array) => {
                 // TODO: construct the correct array ty

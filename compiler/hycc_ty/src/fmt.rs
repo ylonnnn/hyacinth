@@ -4,7 +4,7 @@ use hycc_util::ternary;
 
 use crate::{
     context::{TyCtx, TyId},
-    ty::{InferKind, IntTy, TyKind},
+    ty::{InferKind, IntTy, RefMutability, TyKind},
 };
 
 #[derive(Debug)]
@@ -52,6 +52,14 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
 
             TyKind::Slice(ty_id) => {
                 format!("[]{}", self.fmt_id(*ty_id))
+            }
+
+            TyKind::Ref(ty_id, mutability) => {
+                format!(
+                    "&{}{}",
+                    ternary!(*mutability == RefMutability::Mutable, "mut ", ""),
+                    self.fmt_id(*ty_id)
+                )
             }
 
             TyKind::Adt(def_id) => {

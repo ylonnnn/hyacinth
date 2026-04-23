@@ -50,7 +50,7 @@ impl Display for DiagnosticCode {
 // #[derive(Debug)]
 // pub enum DiagnosticErrorKind {
 //     UnknownCharacter = 400,
-//     InvalidNumericLiteralPrefix,
+//     InvalidNumericLiteralprefix,
 //     InvalidNumericLiteralDigit,
 //     UnterminatedCharacterSequence,
 //     InvalidCharacterSequence,

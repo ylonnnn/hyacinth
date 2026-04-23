@@ -1,4 +1,5 @@
 use hycc_arena::typed::TypedArena;
+use hycc_ast::Mutability;
 
 use crate::{
     block::HirBlock,
@@ -18,6 +19,8 @@ pub mod item;
 pub mod path;
 pub mod stmt;
 pub mod ty;
+
+pub type HirMutability = Mutability;
 
 #[derive(Debug)]
 pub enum HirNode<'h> {

@@ -1,5 +1,5 @@
 use hycc_ast::{
-    Expr, ExprKind, Mutability, Path,
+    Expr, ExprKind, Identifier, Mutability, Path,
     expr::{ArrayExpr, RefExpr, StructExpr, StructExprField},
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
@@ -367,8 +367,8 @@ impl<'s> Parser<'s> {
         )
     }
 
-    // PATH { FIELD* }
-    // PATH { (IDENT : EXPR)* }
+    // PATH { (FIELD (, FIELD)?)* }
+    // PATH { (IDENT : EXPR (, IDENT : EXPR)?)* }
     pub fn parse_struct_expr(&mut self, path: Path) -> ParseResult<StructExpr> {
         let Some(tg) = self.next_nonlf() else {
             unreachable!()
@@ -413,13 +413,25 @@ impl<'s> Parser<'s> {
         Ok(strct)
     }
 
+    // IDENT
     // IDENT : EXPR
     pub fn parse_struct_expr_field(&mut self) -> ParseResult<StructExprField> {
         // IDENT
         let ident = self.parse_raw_ident()?;
 
         // :
-        self.require_abs_exact_nonlf(TokenKind::Colon)?;
+        if !self.expect_exact_nonlf(TokenKind::Colon).0 {
+            return Ok(StructExprField {
+                val: Box::new(Expr::new(ExprKind::Path(Box::new(Path::new(vec![
+                    Identifier {
+                        ident: ident.clone(),
+                        span: ident.span,
+                        arguments: None,
+                    },
+                ]))))),
+                ident,
+            });
+        }
 
         // EXPR
         let val = Box::new(self.parse_expr(0)?);

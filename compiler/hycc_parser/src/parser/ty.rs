@@ -66,7 +66,11 @@ impl<'s> Parser<'s> {
                     TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
                     |s| {
                         let expr = s.parse_expr(0);
-                        if let Some(tg) = s.peek_nonlf() {
+                        if !s.eos() {
+                            let Some(tg) = s.peek_nonlf() else {
+                                unreachable!()
+                            };
+
                             return Err(Some(ParserDiag::unexpected_token(
                                 tg.underlying().unwrap().clone(),
                             )));

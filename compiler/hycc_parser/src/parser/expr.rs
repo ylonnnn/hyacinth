@@ -319,22 +319,19 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_array_expr(&mut self) -> ParseResult<ArrayExpr> {
-        let Some(TokenGraph::Collection { data, .. }) = self.next_nonlf() else {
+        let Some(tg) = self.next_nonlf() else {
             unreachable!()
         };
 
-        let close = data.last().unwrap().underlying().unwrap().clone();
+        let span = tg.span();
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
         let n = data.len();
-        let span = data
-            .first()
-            .unwrap()
-            .underlying()
-            .unwrap()
-            .span
-            .merge(&close.span);
 
         self.use_stream(
-            TokenStream::new(data.into_iter().skip(1).take(n - 1).collect()),
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
             |s| -> ParseResult<ArrayExpr> {
                 let mut array = ArrayExpr {
                     elements: Vec::new(),
@@ -342,7 +339,7 @@ impl<'s> Parser<'s> {
                 };
                 let mut expect = true;
 
-                while !s.expect_exact_nonlf(close.kind).0 {
+                while !s.eos() {
                     if !expect {
                         s.require_exact_nonlf(TokenKind::Comma)?;
                     }

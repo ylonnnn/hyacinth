@@ -105,6 +105,8 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             unreachable!()
         };
 
+        // TODO: track fields to determine missing ones
+        let mut field_mask = 0_u64;
         for field in &strct.fields {
             let Some(idx) = strct_def.field_map.get(&field.ident.ident) else {
                 self.dctx.add(InferDiag::error(
@@ -117,6 +119,8 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
 
                 continue;
             };
+
+            field_mask |= 1 << idx;
 
             let t_field = &strct_def.fields[*idx];
             let t_field_ty_id = self.tctx.get_ty_of_hir(t_field.ty).unwrap();
@@ -146,6 +150,27 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
                     },
                 ));
             }
+        }
+
+        let mut m = 0_u64;
+        m |= 1 << 1;
+        m |= 1 << 3;
+
+        println!("{m:b}");
+
+        let t = 3;
+        let bit = (m >> t) & 1;
+        println!("{bit:b}");
+
+        let missing_mask = !field_mask & ((1 << strct_def.fields.len()) - 1);
+        if missing_mask != 0 {
+            return Err(Some(InferDiag::error(
+                strct.span,
+                InferDiagErrorKind::MissingFields {
+                    field_mask: missing_mask,
+                    def_id: *def_id,
+                },
+            )));
         }
 
         Ok(ty_id)

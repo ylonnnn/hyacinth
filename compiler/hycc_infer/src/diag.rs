@@ -104,6 +104,11 @@ pub enum InferDiagErrorKind {
         field: Symbol,
         struct_def: DefId,
     },
+
+    MissingFields {
+        field_mask: u64,
+        def_id: DefId,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -177,6 +182,28 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     "cannot recognize field `{}` from struct `{}`.",
                                     fmt.interner.get(*field),
                                     fmt.interner.get(def.name),
+                                )
+                            }
+
+                            Err::MissingFields { field_mask, def_id } => {
+                                let def = fmt.definitions.get(*def_id);
+                                let DefKind::Struct(strct) = &def.kind else {
+                                    unreachable!()
+                                };
+
+                                let missing_fields = strct
+                                    .fields
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(i, _)| ((field_mask >> i) & 1) == 1)
+                                    .map(|(_, field)| format!("`{}`", fmt.interner.get(field.name)))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+
+                                format!(
+                                    "missing fields in initializer of `{}`: {}",
+                                    fmt.interner.get(def.name),
+                                    missing_fields
                                 )
                             }
                         },

@@ -152,16 +152,6 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             }
         }
 
-        let mut m = 0_u64;
-        m |= 1 << 1;
-        m |= 1 << 3;
-
-        println!("{m:b}");
-
-        let t = 3;
-        let bit = (m >> t) & 1;
-        println!("{bit:b}");
-
         let missing_mask = !field_mask & ((1 << strct_def.fields.len()) - 1);
         if missing_mask != 0 {
             return Err(Some(InferDiag::error(

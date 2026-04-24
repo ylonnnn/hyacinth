@@ -38,17 +38,22 @@ impl<'d, 's> CLIReporter<'d, 's> {
         let (start, end) = &position_range;
         let digit_n = ((end.line as f32).log10().floor() as usize) + 1;
 
-        source
+        let n = end.line - start.line;
+
+        let emphasized = source
             .data
             .lines()
             .zip(1_u32..)
             .skip((start.line - 1) as usize)
             .take((end.line.saturating_sub(start.line) + 1) as usize)
             .enumerate()
-            .filter(|(i, (_, _))| {
-                *i <= 2 || (*i >= end.line as usize - 2 && *i <= end.line as usize)
+            .filter_map(|(i, pair)| {
+                ternary!(
+                    n <= 5 || (i <= 2 || (i >= end.line as usize - 2 && i < end.line as usize)),
+                    Some(pair),
+                    None
+                )
             })
-            .map(|(i, (line, num))| (ternary!(i == 2, "...", line), num))
             .flat_map(|(line, num)| {
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                 let dig_n = ((num as f32).log10().floor() as usize) + 1;
@@ -82,10 +87,21 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     ),
                 ]
             })
-            .enumerate()
-            .filter(|(i, _)| *i != 4)
-            .map(|(i, line)| ternary!(i == 5, "  ...".bright_blue().bold(), line))
-            .collect()
+            .collect::<Vec<_>>();
+
+        let n = emphasized.len();
+        let mid = (n / 2) - 1;
+
+        ternary!(
+            (n / 2) < 5,
+            emphasized,
+            emphasized
+                .into_iter()
+                .enumerate()
+                .filter(|(i, _)| *i != mid)
+                .map(|(i, line)| ternary!(i == mid + 1, "  ...".bright_blue().bold(), line))
+                .collect()
+        )
     }
 
     pub fn highlight(&self, message: &String, severity_color: &'static str) -> String {

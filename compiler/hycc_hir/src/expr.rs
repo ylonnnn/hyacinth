@@ -137,4 +137,8 @@ impl<'h> HirStructExprField<'h> {
             val: expr,
         }
     }
+
+    pub fn span(&self) -> Span {
+        self.ident.span.merge(&self.val.span)
+    }
 }

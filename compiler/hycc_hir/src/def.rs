@@ -84,6 +84,31 @@ pub enum DefKind {
 }
 
 impl DefKind {
+    pub fn article(&self) -> &'static str {
+        match self {
+            Self::Builtin(_)
+            | Self::Petal
+            | Self::Fn(_)
+            | Self::FnParam
+            | Self::Struct(_)
+            | Self::Var => "a",
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Builtin(_) => "built-in",
+            Self::Petal => "petal",
+
+            Self::Fn(_) => "function",
+            Self::FnParam => "function parameter",
+
+            Self::Struct(_) => "struct",
+
+            Self::Var => "variable",
+        }
+    }
+
     pub fn space(&self) -> DefSpace {
         if let Self::Builtin(kind) = self {
             return match &kind {

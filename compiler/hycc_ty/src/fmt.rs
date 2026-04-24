@@ -10,8 +10,8 @@ use crate::{
 #[derive(Debug)]
 pub struct TyFormatter<'t, 'd, 'i> {
     pub tctx: &'t TyCtx,
-    definitions: &'d DefinitionTable,
-    interner: &'i SymbolInterner,
+    pub definitions: &'d DefinitionTable,
+    pub interner: &'i SymbolInterner,
 }
 
 impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {

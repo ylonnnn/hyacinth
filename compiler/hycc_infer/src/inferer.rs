@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirId,
+    HirId, HirTable,
     def::{DefId, DefinitionTable},
     item::HirPetal,
 };
@@ -11,21 +11,23 @@ use hycc_ty::context::TyCtx;
 use crate::diag::{InferDiag, InferDiagCtx};
 
 #[derive(Debug)]
-pub struct TyInferer<'t, 'd, 'r> {
+pub struct TyInferer<'t, 'd, 'r, 'h> {
     pub dctx: InferDiagCtx,
     pub tctx: &'t mut TyCtx,
 
     pub(crate) definitions: &'d DefinitionTable,
     pub(crate) resolved: &'r HashMap<HirId, DefId>,
+    pub(crate) hir_table: &'h HirTable<'h>,
 }
 
 pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
 
-impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
     pub fn new(
         tctx: &'t mut TyCtx,
         definitions: &'d DefinitionTable,
         resolved: &'r HashMap<HirId, DefId>,
+        hir_table: &'h HirTable<'h>,
     ) -> Self {
         Self {
             dctx: InferDiagCtx::new(),
@@ -33,6 +35,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
             definitions,
             resolved,
+            hir_table,
         }
     }
 

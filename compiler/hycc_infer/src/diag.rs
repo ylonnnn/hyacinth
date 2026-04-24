@@ -2,13 +2,14 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
-use hycc_hir::def::DefinitionTable;
+use hycc_hir::def::{DefId, DefKind, DefinitionTable};
 use hycc_span::Span;
-use hycc_symbol::SymbolInterner;
+use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     context::{TyCtx, TyId},
     fmt::TyFormatter,
 };
+use hycc_util::bug;
 
 #[derive(Debug)]
 pub struct InferDiagDataCtx<'t, 'd, 'i> {
@@ -88,7 +89,21 @@ pub enum InferDiagWarningKind {}
 
 #[derive(Debug, Clone)]
 pub enum InferDiagErrorKind {
-    TypeMismatch { expected: TyId, received: TyId },
+    TypeMismatch {
+        ann_span: Span,
+        expected: TyId,
+        received: TyId,
+    },
+
+    InvalidNonStructInstantiation {
+        name: Symbol,
+        def_id: DefId,
+    },
+
+    UnrecognizedField {
+        field: Symbol,
+        struct_def: DefId,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -120,7 +135,7 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
 
         let InferDiagDataCtx { fmt, .. } = ctx;
 
-        let diag = Diagnostic::new(
+        let mut diag = Diagnostic::new(
             self.span,
             match &self.kind {
                 Note(kind) => DiagnosticKind::Note(match kind {
@@ -139,11 +154,29 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                     DiagnosticKind::Error(
                         code,
                         match kind {
-                            Err::TypeMismatch { expected, received } => {
+                            Err::TypeMismatch {
+                                expected, received, ..
+                            } => {
                                 format!(
                                     "expected type `{}`, received type `{}`.",
                                     fmt.fmt_id(*expected),
                                     fmt.fmt_id(*received)
+                                )
+                            }
+
+                            Err::InvalidNonStructInstantiation { name, .. } => {
+                                format!(
+                                    "cannot instantiate non-struct definition `{}`.",
+                                    fmt.interner.get(*name)
+                                )
+                            }
+
+                            Err::UnrecognizedField { field, struct_def } => {
+                                let def = fmt.definitions.get(*struct_def);
+                                format!(
+                                    "cannot recognize field `{}` from struct `{}`.",
+                                    fmt.interner.get(*field),
+                                    fmt.interner.get(def.name),
                                 )
                             }
                         },
@@ -163,10 +196,53 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
             },
 
             Error(kind) => match kind {
-                #[allow(unreachable_patterns)]
+                Err::TypeMismatch { ann_span, .. } => {
+                    if ann_span.src_id.is_valid() {
+                        diag.detail(
+                            *ann_span,
+                            DiagnosticKind::Note(format!("expected due to the type annotation.")),
+                        );
+                    }
+                }
+
+                Err::InvalidNonStructInstantiation { name, def_id } => {
+                    let def = fmt.definitions.get(*def_id);
+
+                    diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "`{}` is defined here as {} `{}`",
+                            fmt.interner.get(*name),
+                            def.kind.article(),
+                            def.kind.kind()
+                        )),
+                    );
+                }
+
+                Err::UnrecognizedField { struct_def, .. } => {
+                    let def = fmt.definitions.get(*struct_def);
+                    let DefKind::Struct(struct_def) = &def.kind else {
+                        bug!("struct_def is expected to be a valid def_id of a struct definition")
+                    };
+
+                    diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "struct `{}` has the following fields: {}",
+                            fmt.interner.get(def.name),
+                            struct_def
+                                .fields
+                                .iter()
+                                .map(|field| format!("`{}`", fmt.interner.get(field.name)))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )),
+                    );
+                }
+
                 _ => {}
             },
-        }
+        };
 
         diag
     }

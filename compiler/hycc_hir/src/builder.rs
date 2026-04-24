@@ -134,7 +134,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                         self.lower_raw_ident(&field.ident),
                         self.lower_ty(&field.ty),
                         field.accessibility,
-                        field.ident.span,
+                        field.ident.span.merge(&field.ty.span),
                     )))
             {
                 data.push(field);

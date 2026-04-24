@@ -1,5 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_span::Span;
 use hycc_util::bug;
 
 use crate::{
@@ -7,7 +8,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
     pub(crate) fn infer_item(&mut self, item: &HirItem) -> InferResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
@@ -61,6 +62,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                     return Err(Some(InferDiag::error(
                         expr.span,
                         InferDiagErrorKind::TypeMismatch {
+                            ann_span: decl.ty.unwrap().span,
                             expected: ty,
                             received: expr_ty,
                         },

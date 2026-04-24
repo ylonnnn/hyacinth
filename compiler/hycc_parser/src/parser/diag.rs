@@ -140,6 +140,8 @@ pub enum ParserDiagErrorKind {
     UnrecognizedPetalFile {
         path: PathBuf,
     },
+
+    InvalidStructFieldCount(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -267,6 +269,10 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                                 &config::HYC_PATH_SEP_TOK_KIND.to_string()
                             )
                         )
+                    }
+
+                    Err::InvalidStructFieldCount(n) => {
+                        format!("structs cannot have more than `{}` fields, found `{}`.", config::HYC_STRUCT_FIELD_LIMIT, n)
                     }
                 },
             ),

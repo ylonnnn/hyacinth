@@ -11,3 +11,5 @@ pub const HYC_FILE_EXT: &str = file_ext!();
 pub const HYC_DIR_PETAL_FILE: &str = concat!("petal", ".", file_ext!());
 
 pub const HYC_PATH_SEP_TOK_KIND: TokenKind = TokenKind::ColonColon;
+
+pub const HYC_STRUCT_FIELD_LIMIT: usize = 64;

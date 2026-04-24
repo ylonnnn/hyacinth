@@ -44,6 +44,11 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .zip(1_u32..)
             .skip((start.line - 1) as usize)
             .take((end.line.saturating_sub(start.line) + 1) as usize)
+            .enumerate()
+            .filter(|(i, (_, _))| {
+                *i <= 2 || (*i >= end.line as usize - 2 && *i <= end.line as usize)
+            })
+            .map(|(i, (line, num))| (ternary!(i == 2, "...", line), num))
             .flat_map(|(line, num)| {
                 let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                 let dig_n = ((num as f32).log10().floor() as usize) + 1;
@@ -77,6 +82,9 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     ),
                 ]
             })
+            .enumerate()
+            .filter(|(i, _)| *i != 4)
+            .map(|(i, line)| ternary!(i == 5, "  ...".bright_blue().bold(), line))
             .collect()
     }
 

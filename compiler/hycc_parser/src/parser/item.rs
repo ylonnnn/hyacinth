@@ -218,15 +218,18 @@ impl<'s> Parser<'s> {
     // struct IDENT { (IDENT : TY (, IDENT : TY)?)* }
     pub fn parse_struct(&mut self) -> ParseResult<Struct> {
         // IDENT
-        let ident = self.parse_raw_ident();
+        let ident = self.parse_raw_ident()?;
 
         // FIELDS
-        let fields = self.parse_struct_fields();
-
-        Ok(Struct {
-            ident: ident?,
-            fields: fields?,
-        })
+        let fields = self.parse_struct_fields()?;
+        if fields.list.len() > config::HYC_STRUCT_FIELD_LIMIT {
+            Err(Some(ParserDiag::error(
+                fields.span,
+                ParserDiagErrorKind::InvalidStructFieldCount(fields.list.len() as u8),
+            )))
+        } else {
+            Ok(Struct { ident, fields })
+        }
     }
 
     // { (FIELD (, FIELD)?)* }

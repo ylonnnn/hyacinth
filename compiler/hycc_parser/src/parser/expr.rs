@@ -4,6 +4,7 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
+use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
@@ -107,8 +108,9 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_expr(&mut self, min_bp: u8) -> ParseResult<Expr> {
-        let Ok(mut prefix) = self.parse_prefix_expr() else {
-            return Err(None);
+        let mut prefix = match self.parse_prefix_expr() {
+            Ok(prefix) => prefix,
+            err => return err,
         };
 
         while !self.stream.at_eof() {
@@ -123,8 +125,13 @@ impl<'s> Parser<'s> {
 
             match self.parse_infix_expr(prefix, rbp) {
                 Ok(infix) => prefix = infix,
-                Err((left, _)) => {
+                Err((left, diag)) => {
                     prefix = left;
+
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+
                     break;
                 }
             };
@@ -186,7 +193,7 @@ impl<'s> Parser<'s> {
 
             _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
                 token.clone(),
-                "expr prefix",
+                "expr",
             ))),
         }
     }
@@ -226,12 +233,12 @@ impl<'s> Parser<'s> {
             | TokenKind::Tilde
             | TokenKind::Caret => {
                 let Some(token) = self.next_nonlf_token() else {
-                    return Err((left, None)); // TODO: throw error: missing right-hand side expression
+                    todo!("throw error: missing right-hand side expression")
                 };
 
                 let right = match self.parse_expr(min_bp) {
                     Ok(right) => right,
-                    Err(matched) => return Err((left, matched)),
+                    Err(diag) => return Err((left, diag)),
                 };
 
                 Ok(Expr::new(ExprKind::Binary(

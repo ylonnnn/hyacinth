@@ -109,6 +109,11 @@ pub enum InferDiagErrorKind {
         field_mask: u64,
         def_id: DefId,
     },
+
+    FieldReinitialization {
+        field: Symbol,
+        earlier_span: Span,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +211,13 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     missing_fields
                                 )
                             }
+
+                            Err::FieldReinitialization { field, .. } => {
+                                format!(
+                                    "field `{}` has already been initialized.",
+                                    fmt.interner.get(*field)
+                                )
+                            }
                         },
                     )
                 }
@@ -263,6 +275,19 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 .map(|field| format!("`{}`", fmt.interner.get(field.name)))
                                 .collect::<Vec<_>>()
                                 .join(", ")
+                        )),
+                    );
+                }
+
+                Err::FieldReinitialization {
+                    field,
+                    earlier_span,
+                } => {
+                    diag.detail(
+                        *earlier_span,
+                        DiagnosticKind::Note(format!(
+                            "earlier initialization of `{}`.",
+                            fmt.interner.get(*field)
                         )),
                     );
                 }

@@ -2,7 +2,10 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability, HirNode,
     def::DefKind,
-    expr::{HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirStructExpr},
+    expr::{
+        HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirStructExpr,
+        HirStructExprField,
+    },
 };
 use hycc_span::Span;
 use hycc_ty::{
@@ -105,8 +108,9 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             unreachable!()
         };
 
-        // TODO: track fields to determine missing ones
         let mut field_mask = 0_u64;
+        let mut initialized: Vec<Option<&HirStructExprField>> = vec![None; strct_def.fields.len()];
+
         for field in &strct.fields {
             let Some(idx) = strct_def.field_map.get(&field.ident.ident) else {
                 self.dctx.add(InferDiag::error(
@@ -120,7 +124,21 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
                 continue;
             };
 
+            // Field is already initialized
+            if (field_mask >> idx) & 1 == 1 {
+                self.dctx.add(InferDiag::error(
+                    field.span(),
+                    InferDiagErrorKind::FieldReinitialization {
+                        field: field.ident.ident,
+                        earlier_span: initialized[*idx].unwrap().span(),
+                    },
+                ));
+
+                continue;
+            }
+
             field_mask |= 1 << idx;
+            initialized[*idx] = Some(&field);
 
             let t_field = &strct_def.fields[*idx];
             let t_field_ty_id = self.tctx.get_ty_of_hir(t_field.ty).unwrap();

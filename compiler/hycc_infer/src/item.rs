@@ -1,6 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_span::Span;
+use hycc_ty::context::TyId;
 use hycc_util::bug;
 
 use crate::{
@@ -57,6 +58,8 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
 
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;
+            let var_ty: TyId;
+
             if let Some(ty) = ty {
                 if !self.tctx.unify_ty(ty, expr_ty) {
                     return Err(Some(InferDiag::error(
@@ -68,10 +71,13 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
                         },
                     )));
                 }
+
+                var_ty = ty;
+            } else {
+                var_ty = self.tctx.resolve_ty(expr_ty);
             }
 
-            let resolved_ty = self.tctx.resolve_ty(expr_ty);
-            self.tctx.attach_to_hir(var_decl.id, resolved_ty);
+            self.tctx.attach_to_hir(var_decl.id, var_ty);
         }
 
         Ok(())

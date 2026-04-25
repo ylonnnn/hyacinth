@@ -82,6 +82,39 @@ impl TyCtx {
         };
 
         match &ty {
+            TyKind::Array(inner_ty) => {
+                let inner_ty = *inner_ty;
+                let inner_ty_id = self.resolve_ty(inner_ty);
+
+                if inner_ty == inner_ty_id {
+                    ty_id
+                } else {
+                    self.intern(TyKind::Array(inner_ty_id))
+                }
+            }
+
+            TyKind::Slice(inner_ty) => {
+                let inner_ty = *inner_ty;
+                let inner_ty_id = self.resolve_ty(inner_ty);
+
+                if inner_ty == inner_ty_id {
+                    ty_id
+                } else {
+                    self.intern(TyKind::Slice(inner_ty_id))
+                }
+            }
+
+            TyKind::Ref(inner_ty, mutability) => {
+                let (inner_ty, mutability) = (*inner_ty, *mutability);
+                let inner_ty_id = self.resolve_ty(inner_ty);
+
+                if inner_ty == inner_ty_id {
+                    ty_id
+                } else {
+                    self.intern(TyKind::Ref(inner_ty_id, mutability))
+                }
+            }
+
             TyKind::Infer(var_id, _) => {
                 let root = self.resolve_var(*var_id);
                 match &self.vars[root.unwrap()] {
@@ -118,6 +151,8 @@ impl TyCtx {
 
         let a_ty = &self.storage[a.unwrap()];
         let b_ty = &self.storage[b.unwrap()];
+
+        println!("{a_ty:?} | {b_ty:?}");
 
         match (&a_ty, &b_ty) {
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {

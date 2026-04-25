@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
@@ -6,9 +6,12 @@ use hycc_hir::{
     def::{DefId, DefinitionTable},
     item::HirPetal,
 };
-use hycc_ty::context::TyCtx;
+use hycc_ty::{
+    context::{TyCtx, TyId},
+    ty::{InferKind, Ty, TyKind},
+};
 
-use crate::diag::{InferDiag, InferDiagCtx};
+use crate::diag::{InferDiag, InferDiagCtx, InferDiagErrorKind};
 
 #[derive(Debug)]
 pub struct TyInferer<'t, 'd, 'r, 'h> {

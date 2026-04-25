@@ -8,8 +8,9 @@ use hycc_hir::{
     item::HirPetal,
 };
 use hycc_scope::{ScopeCtx, ScopeId};
+use hycc_span::Span;
 use hycc_symbol::SymbolInterner;
-use hycc_ty::context::TyCtx;
+use hycc_ty::{context::TyCtx, ty::Ty};
 use hycc_util::ternary;
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
@@ -56,7 +57,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             let prefix = ternary!(signed, "i", "u");
             for width in [8, 16, 32, 64, u8::MAX] {
                 let b_ty = BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed));
-                let ty = self.tctx.make_builtin_ty(&b_ty);
+                let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
                 let def = Definition::builtin(
                     interner.intern(&format!(
@@ -81,7 +82,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         // Float
         for width in [8, 16, 32, 64] {
             let b_ty = BuiltinTyKind::Float(width);
-            let ty = self.tctx.make_builtin_ty(&b_ty);
+            let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
             let def = Definition::builtin(
                 interner.intern(&format!("f{}", width.to_string())),
@@ -104,7 +105,7 @@ impl<'t, 'h> Collector<'t, 'h> {
             ("str", BuiltinTyKind::String),
             ("_", BuiltinTyKind::Infer),
         ] {
-            let ty = self.tctx.make_builtin_ty(&b_ty);
+            let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
             let def = Definition::builtin(
                 interner.intern(name),
                 BuiltinKind::Ty(b_ty),

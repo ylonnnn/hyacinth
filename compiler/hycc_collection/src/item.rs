@@ -4,6 +4,7 @@ use hycc_hir::{
     item::{HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
+use hycc_ty::ty::Ty;
 use hycc_util::{bug, ternary};
 
 use crate::collector::{CollectResult, CollectionLevel, Collector};
@@ -94,8 +95,8 @@ impl<'t, 'h> Collector<'t, 'h> {
             struct_item.accessibility,
         ))?;
 
-        let ty_id = self.tctx.make_adt_ty(def_id);
-        self.tctx.attach_to_hir(struct_item.id, ty_id);
+        let ty = Ty::new(self.tctx.make_adt_ty(def_id), struct_item.span);
+        self.tctx.attach_to_hir(struct_item.id, ty);
 
         let DefKind::Struct(def) = &mut self.definitions.get_mut(def_id).kind else {
             bug!("struct definition is expected to be defined after definition")

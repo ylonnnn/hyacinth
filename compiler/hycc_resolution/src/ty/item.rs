@@ -1,5 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_ty::ty::Ty;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
@@ -54,7 +55,9 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
         if let Some(ty) = decl.ty {
             match self.resolve_ty(&ty) {
-                Ok(ty_id) => self.tctx.attach_to_hir(var_decl.id, ty_id),
+                Ok(ty_id) => self
+                    .tctx
+                    .attach_to_hir(var_decl.id, Ty::new(ty_id, ty.span)),
                 Err(Some(diag)) => {
                     self.dctx.add(diag);
                 }

@@ -8,6 +8,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     context::{TyCtx, TyId},
     fmt::TyFormatter,
+    ty::Ty,
 };
 use hycc_util::bug;
 
@@ -114,6 +115,8 @@ pub enum InferDiagErrorKind {
         field: Symbol,
         earlier_span: Span,
     },
+
+    UnresolvedTy(Ty),
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +220,13 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     "field `{}` has already been initialized.",
                                     fmt.interner.get(*field)
                                 )
+                            }
+
+                            Err::UnresolvedTy(ty) => {
+                                let Ty { id, span } = ty;
+
+                                // format!("{}", fmt.fmt_id(id))
+                                format!("")
                             }
                         },
                     )

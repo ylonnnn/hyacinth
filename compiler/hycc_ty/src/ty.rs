@@ -32,6 +32,18 @@ pub enum TyKind {
     Param(DefId),
 }
 
+#[derive(Debug, Clone)]
+pub struct Ty {
+    pub id: TyId,
+    pub span: Span,
+}
+
+impl Ty {
+    pub fn new(id: TyId, span: Span) -> Self {
+        Self { id, span }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InferKind {
     Any,
@@ -53,12 +65,6 @@ impl InferKind {
 pub enum IntTy {
     Fixed(u8, bool),
     Size(bool),
-}
-
-#[derive(Debug, Clone)]
-pub struct Ty {
-    pub kind: TyKind,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

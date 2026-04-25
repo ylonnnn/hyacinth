@@ -6,7 +6,7 @@ use hycc_hir::{
 };
 use hycc_util::bug;
 
-use crate::ty::{InferKind, IntTy, RefMutability, TyKind, TyVar};
+use crate::ty::{InferKind, IntTy, RefMutability, Ty, TyKind, TyVar};
 
 #[derive(Debug)]
 pub struct TyCtx {
@@ -15,8 +15,8 @@ pub struct TyCtx {
 
     vars: Vec<TyVar>,
 
-    node_ty_map: HashMap<HirId, TyId>,
-    def_ty_map: HashMap<DefId, TyId>,
+    node_ty_map: HashMap<HirId, Ty>,
+    def_ty_map: HashMap<DefId, Ty>,
 }
 
 impl TyCtx {
@@ -51,6 +51,10 @@ impl TyCtx {
 
     pub fn get_mut(&mut self, ty_id: TyId) -> &mut TyKind {
         &mut self.storage[ty_id.unwrap()]
+    }
+
+    pub fn hir_ids(&self) -> Vec<HirId> {
+        self.node_ty_map.keys().cloned().collect()
     }
 
     pub fn fresh_var(&mut self) -> TyVarId {
@@ -117,6 +121,7 @@ impl TyCtx {
 
             TyKind::Infer(var_id, _) => {
                 let root = self.resolve_var(*var_id);
+
                 match &self.vars[root.unwrap()] {
                     TyVar::Bound(ty_id) => self.resolve_ty(*ty_id),
                     _ => ty_id,
@@ -152,8 +157,6 @@ impl TyCtx {
         let a_ty = &self.storage[a.unwrap()];
         let b_ty = &self.storage[b.unwrap()];
 
-        println!("{a_ty:?} | {b_ty:?}");
-
         match (&a_ty, &b_ty) {
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
                 self.bind_var(*v_id, a);
@@ -176,20 +179,28 @@ impl TyCtx {
         }
     }
 
-    pub fn attach_to_hir(&mut self, hir_id: HirId, ty_id: TyId) {
-        self.node_ty_map.insert(hir_id, ty_id);
+    pub fn attach_to_hir(&mut self, hir_id: HirId, ty: Ty) {
+        self.node_ty_map.insert(hir_id, ty);
     }
 
-    pub fn get_ty_of_hir(&self, hir_id: HirId) -> Option<TyId> {
-        self.node_ty_map.get(&hir_id).map(|t| *t)
+    pub fn get_ty_of_hir(&self, hir_id: HirId) -> Option<&Ty> {
+        self.node_ty_map.get(&hir_id)
     }
 
-    pub fn attach_to_def(&mut self, def_id: DefId, ty_id: TyId) {
-        self.def_ty_map.insert(def_id, ty_id);
+    pub fn get_mut_ty_of_hir(&mut self, hir_id: HirId) -> Option<&mut Ty> {
+        self.node_ty_map.get_mut(&hir_id)
     }
 
-    pub fn get_ty_of_def(&self, def_id: DefId) -> Option<TyId> {
-        self.def_ty_map.get(&def_id).map(|t| *t)
+    pub fn attach_to_def(&mut self, def_id: DefId, ty: Ty) {
+        self.def_ty_map.insert(def_id, ty);
+    }
+
+    pub fn get_ty_of_def(&self, def_id: DefId) -> Option<&Ty> {
+        self.def_ty_map.get(&def_id)
+    }
+
+    pub fn get_mut_ty_of_def(&mut self, def_id: DefId) -> Option<&mut Ty> {
+        self.def_ty_map.get_mut(&def_id)
     }
 
     pub fn make_builtin_ty(&mut self, kind: &BuiltinTyKind) -> TyId {

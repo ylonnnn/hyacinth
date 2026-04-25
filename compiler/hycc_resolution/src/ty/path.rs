@@ -1,5 +1,5 @@
 use hycc_hir::path::HirPath;
-use hycc_ty::context::TyId;
+use hycc_ty::{context::TyId, ty::Ty};
 use hycc_util::bug;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
@@ -11,7 +11,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         };
 
         let ty_id = self.def_to_ty(*def_id, path.span)?;
-        self.tctx.attach_to_hir(path.id, ty_id);
+        self.tctx.attach_to_hir(path.id, Ty::new(ty_id, path.span));
 
         Ok(ty_id)
     }

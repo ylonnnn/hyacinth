@@ -48,7 +48,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
     pub(crate) fn def_to_ty(&mut self, def_id: DefId, span: Span) -> ResolveResult<TyId> {
         let def = self.definitions.get(def_id);
-        let ty_id = match &def.kind {
+        let ty = match &def.kind {
             DefKind::Builtin(BuiltinKind::Ty(_)) => self.tctx.get_ty_of_def(def_id).unwrap(),
             DefKind::Struct(_) => self.tctx.get_ty_of_hir(def.hir_id).unwrap(),
 
@@ -60,6 +60,6 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             _ => unreachable!(),
         };
 
-        Ok(ty_id)
+        Ok(ty.id)
     }
 }

@@ -2,7 +2,10 @@ use hycc_hir::{
     HirMutability,
     ty::{HirTy, HirTyKind},
 };
-use hycc_ty::{context::TyId, ty::RefMutability};
+use hycc_ty::{
+    context::TyId,
+    ty::{RefMutability, Ty},
+};
 use hycc_util::ternary;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
@@ -37,7 +40,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             HirTyKind::Unit(_) => Ok(self.tctx.make_unit_ty()),
         }?;
 
-        self.tctx.attach_to_hir(ty.id, ty_id);
+        self.tctx.attach_to_hir(ty.id, Ty::new(ty_id, ty.span));
         Ok(ty_id)
     }
 }

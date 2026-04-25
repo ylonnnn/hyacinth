@@ -11,15 +11,12 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
         };
 
         let def = self.definitions.get(*def_id);
-        let Some(ty_id) = self.tctx.get_ty_of_hir(def.hir_id) else {
-            bug!(
-                "hir id {:?} of def does not have a ty_id attached",
-                def.hir_id
-            );
+        let Some(mut ty) = self.tctx.get_ty_of_hir(def.hir_id).cloned() else {
+            bug!("hir id {:?} of def does not have a ty attached", def.hir_id);
         };
 
-        let ty_id = self.tctx.resolve_ty(ty_id);
-        self.tctx.attach_to_hir(def.hir_id, ty_id);
+        let ty_id = (ty.id = self.tctx.resolve_ty(ty.id), ty.id).1;
+        self.tctx.attach_to_hir(def.hir_id, ty);
 
         Ok(ty_id)
     }

@@ -93,7 +93,7 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
         };
 
         let def = self.definitions.get(*def_id);
-        if let DefKind::Petal = &def.kind {
+        let DefKind::Struct(strct_def) = &def.kind else {
             return Err(Some(InferDiag::error(
                 strct.path.span,
                 InferDiagErrorKind::InvalidNonStructInstantiation {
@@ -101,11 +101,6 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
                     def_id: *def_id,
                 },
             )));
-        }
-
-        let ty_id = self.tctx.get_ty_of_hir(def.hir_id).unwrap();
-        let DefKind::Struct(strct_def) = &def.kind else {
-            unreachable!()
         };
 
         let mut field_mask = 0_u64;
@@ -140,30 +135,25 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             field_mask |= 1 << idx;
             initialized[*idx] = Some(&field);
 
-            let t_field = &strct_def.fields[*idx];
-            let t_field_ty_id = self.tctx.get_ty_of_hir(t_field.ty).unwrap();
-
             let field_ty_id = match self.infer_expr(&field.val) {
                 Ok(ty_id) => ty_id,
                 Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
-
+                    diag.map(|diag| self.dctx.add(diag));
                     continue;
                 }
             };
 
-            if !self.tctx.unify_ty(t_field_ty_id, field_ty_id) {
-                let HirNode::Ty(t_field_ty) = self.hir_table.get(t_field.ty) else {
-                    unreachable!()
-                };
+            let Some(t_field_ty) = self.tctx.get_ty_of_hir(strct_def.fields[*idx].ty).cloned()
+            else {
+                unreachable!()
+            };
 
+            if !self.tctx.unify_ty(t_field_ty.id, field_ty_id) {
                 self.dctx.add(InferDiag::error(
                     field.val.span,
                     InferDiagErrorKind::TypeMismatch {
                         ann_span: t_field_ty.span,
-                        expected: t_field_ty_id,
+                        expected: t_field_ty.id,
                         received: field_ty_id,
                     },
                 ));
@@ -181,6 +171,6 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             )));
         }
 
-        Ok(ty_id)
+        Ok(self.tctx.get_ty_of_hir(def.hir_id).unwrap().id)
     }
 }

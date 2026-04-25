@@ -1,6 +1,6 @@
 use crate::{
     HirId, HirMutability,
-    path::{HirPath, HirRawIdent},
+    path::{HirIdent, HirPath, HirRawIdent},
 };
 
 use hycc_ast::expr::ExprEvaluatability;
@@ -21,6 +21,9 @@ pub enum HirExprKind<'h> {
 
     Array(Box<HirArrayExpr<'h>>),
     Struct(Box<HirStructExpr<'h>>),
+
+    FieldAccess(Box<HirFieldAccess<'h>>),
+    MethodCall(Box<HirMethodCall<'h>>),
 }
 
 type HirExprEvaluatability = ExprEvaluatability;
@@ -110,6 +113,12 @@ pub enum BinaryOp {
 }
 
 #[derive(Debug, Clone)]
+pub struct HirCallArguments<'h> {
+    pub data: Vec<&'h HirExpr<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct HirArrayExpr<'h> {
     pub elements: Vec<&'h HirExpr<'h>>,
     pub span: Span,
@@ -141,4 +150,17 @@ impl<'h> HirStructExprField<'h> {
     pub fn span(&self) -> Span {
         self.ident.span.merge(&self.val.span)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFieldAccess<'h> {
+    pub leading: &'h HirExpr<'h>,
+    pub field: &'h HirRawIdent,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirMethodCall<'h> {
+    pub receiver: &'h HirExpr<'h>,
+    pub callee: &'h HirIdent<'h>,
+    pub arguments: HirCallArguments<'h>,
 }

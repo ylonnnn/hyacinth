@@ -58,6 +58,28 @@ impl<'s, 'd> Resolver<'s, 'd> {
 
                 Ok(())
             }
+
+            HirExprKind::FieldAccess(access) => {
+                if let Err(Some(diag)) = s.resolve_expr(&access.leading) {
+                    s.dctx.add(diag);
+                }
+
+                Ok(())
+            }
+
+            HirExprKind::MethodCall(call) => {
+                if let Err(Some(diag)) = s.resolve_expr(&call.receiver) {
+                    s.dctx.add(diag);
+                }
+
+                for argument in &call.arguments.data {
+                    if let Err(Some(diag)) = s.resolve_expr(&argument) {
+                        s.dctx.add(diag);
+                    }
+                }
+
+                Ok(())
+            }
         })
     }
 }

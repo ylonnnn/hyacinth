@@ -1,6 +1,9 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
-    expr::{ArrayExpr, RefExpr, StructExpr, StructExprField, Unary},
+    expr::{
+        ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
+        Unary,
+    },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
@@ -14,8 +17,8 @@ use crate::{
     HirNode, HirTable,
     block::HirBlock,
     expr::{
-        BinaryOp, HirArrayExpr, HirExpr, HirExprKind, HirLiteral, HirRefExpr, HirStructExpr,
-        HirStructExprField, HirUnary, UnaryOp,
+        BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess, HirLiteral,
+        HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -244,6 +247,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             ExprKind::Struct(strct) => {
                 HirExprKind::Struct(Box::new(self.lower_struct_expr(&strct)))
             }
+
+            ExprKind::FieldAccess(access) => {
+                HirExprKind::FieldAccess(Box::new(self.lower_field_access(&access)))
+            }
+
+            ExprKind::MethodCall(call) => {
+                HirExprKind::MethodCall(Box::new(self.lower_method_call(&call)))
+            }
         };
 
         if let HirNode::Expr(expr) = self
@@ -373,6 +384,17 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         }
     }
 
+    fn lower_call_arguments(&mut self, call_args: &CallArguments) -> HirCallArguments<'h> {
+        HirCallArguments {
+            data: call_args
+                .data
+                .iter()
+                .map(|arg| self.lower_expr(arg))
+                .collect(),
+            span: call_args.span,
+        }
+    }
+
     fn lower_array_expr(&mut self, expr: &ArrayExpr) -> HirArrayExpr<'h> {
         HirArrayExpr {
             elements: expr
@@ -412,6 +434,21 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 }
             })
             .collect()
+    }
+
+    fn lower_field_access(&mut self, access: &FieldAccess) -> HirFieldAccess<'h> {
+        HirFieldAccess {
+            leading: self.lower_expr(&access.leading),
+            field: self.lower_raw_ident(&access.field),
+        }
+    }
+
+    fn lower_method_call(&mut self, call: &MethodCall) -> HirMethodCall<'h> {
+        HirMethodCall {
+            receiver: self.lower_expr(&call.receiver),
+            callee: self.lower_ident(&call.callee),
+            arguments: self.lower_call_arguments(&call.arguments),
+        }
     }
 
     fn lower_ty(&mut self, ty: &Ty) -> &'h HirTy<'h> {

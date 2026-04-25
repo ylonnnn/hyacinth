@@ -1,4 +1,4 @@
-use crate::{Mutability, Path, token::Token};
+use crate::{Identifier, Mutability, Path, token::Token};
 
 use hycc_span::Span;
 
@@ -17,6 +17,9 @@ pub enum ExprKind {
 
     Array(Box<ArrayExpr>),
     Struct(Box<StructExpr>),
+
+    FieldAccess(Box<FieldAccess>),
+    MethodCall(Box<MethodCall>),
 }
 
 impl ExprKind {
@@ -34,6 +37,9 @@ impl ExprKind {
 
             Self::Array(array) => array.span,
             Self::Struct(strct) => strct.span,
+
+            Self::FieldAccess(access) => access.leading.span.merge(&access.field.span),
+            Self::MethodCall(call) => call.receiver.span.merge(&call.arguments.span),
         }
     }
 
@@ -62,6 +68,9 @@ impl ExprKind {
                 .map(|f| f.val.eval)
                 .reduce(|acc, eval| acc.infer(&eval))
                 .unwrap_or_else(|| ExprEvaluatability::CompileTime),
+
+            Self::FieldAccess(_) => ExprEvaluatability::CompileTime,
+            Self::MethodCall(_) => ExprEvaluatability::CompileTime,
         }
     }
 }
@@ -132,6 +141,12 @@ impl Unary {
 }
 
 #[derive(Debug, Clone)]
+pub struct CallArguments {
+    pub data: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct ArrayExpr {
     pub elements: Vec<Expr>,
     pub span: Span,
@@ -148,4 +163,17 @@ pub struct StructExpr {
 pub struct StructExprField {
     pub ident: Token,
     pub val: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldAccess {
+    pub leading: Box<Expr>,
+    pub field: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodCall {
+    pub receiver: Box<Expr>,
+    pub callee: Identifier,
+    pub arguments: CallArguments,
 }

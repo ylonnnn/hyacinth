@@ -1,6 +1,8 @@
 use hycc_ast::{
     Expr, ExprKind, Identifier, Mutability, Path,
-    expr::{ArrayExpr, RefExpr, StructExpr, StructExprField},
+    expr::{
+        ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
+    },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
@@ -315,6 +317,51 @@ impl<'s> Parser<'s> {
                 Ok(Expr::new(ExprKind::Assign(Box::new(left), Box::new(right))))
             }
 
+            TokenKind::Dot => {
+                self.adjust_to_nonlf();
+
+                let ident = match self.parse_ident(PathKind::Expr) {
+                    Ok(ident) => ident,
+                    Err(diag) => return Err((left, diag)),
+                };
+
+                // If the identifier consists of arguments, it is guaranteed
+                // to be a method call.
+                let kind = if ident.arguments.is_some() {
+                    let arguments = match self.parse_fn_call_arguments() {
+                        Ok(arguments) => arguments,
+                        Err(diag) => return Err((left, diag)),
+                    };
+
+                    ExprKind::MethodCall(Box::new(MethodCall {
+                        receiver: Box::new(left),
+                        callee: ident,
+                        arguments,
+                    }))
+                } else {
+                    // If the next token is a `LeftParen`, it is a method call
+                    if self.expect_preserved_exact_nonlf(TokenKind::LeftParen).0 {
+                        let arguments = match self.parse_fn_call_arguments() {
+                            Ok(arguments) => arguments,
+                            Err(diag) => return Err((left, diag)),
+                        };
+
+                        ExprKind::MethodCall(Box::new(MethodCall {
+                            receiver: Box::new(left),
+                            callee: ident,
+                            arguments,
+                        }))
+                    } else {
+                        ExprKind::FieldAccess(Box::new(FieldAccess {
+                            leading: Box::new(left),
+                            field: ident.ident,
+                        }))
+                    }
+                };
+
+                Ok(Expr::new(kind))
+            }
+
             _ => Err((
                 left,
                 Some(ParserDiag::unexpected_token_expected_arbitrary(
@@ -323,6 +370,46 @@ impl<'s> Parser<'s> {
                 )),
             )),
         }
+    }
+
+    pub fn parse_fn_call_arguments(&mut self) -> ParseResult<CallArguments> {
+        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let span = tg.span();
+
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
+        let n = data.len();
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> ParseResult<CallArguments> {
+                let mut args = CallArguments {
+                    data: Vec::new(),
+                    span,
+                };
+                let mut expect = true;
+
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        args.data.push(s.parse_expr(0)?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(args)
+            },
+        )
     }
 
     pub fn parse_array_expr(&mut self) -> ParseResult<ArrayExpr> {

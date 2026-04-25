@@ -131,7 +131,7 @@ pub enum BuiltinKind {
     Ty(BuiltinTyKind),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltinTyKind {
     Unit,
 
@@ -146,7 +146,7 @@ pub enum BuiltinTyKind {
     Infer,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuiltinIntTy {
     Fixed(u8, bool),
     Size(bool),

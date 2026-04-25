@@ -162,13 +162,13 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
 
         let missing_mask = !field_mask & ((1 << strct_def.fields.len()) - 1);
         if missing_mask != 0 {
-            return Err(Some(InferDiag::error(
+            self.dctx.add(InferDiag::error(
                 strct.span,
                 InferDiagErrorKind::MissingFields {
                     field_mask: missing_mask,
                     def_id: *def_id,
                 },
-            )));
+            ));
         }
 
         Ok(self.tctx.get_ty_of_hir(def.hir_id).unwrap().id)

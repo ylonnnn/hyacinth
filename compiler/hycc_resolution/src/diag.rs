@@ -99,6 +99,7 @@ pub enum ResolverDiagWarningKind {}
 pub enum ResolverDiagErrorKind {
     UnrecognizedSymbol(Symbol, DefSpace),
     InvalidPetalResolution(Symbol, DefId),
+    InvalidInference,
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +163,10 @@ impl<'i, 'd> Diag<ResolverDiagDataCtx<'i, 'd>> for ResolverDiag {
 
                             Err::InvalidPetalResolution(name, _) => {
                                 format!("cannot resolve petal `{}` as type.", interner.get(*name))
+                            }
+
+                            Err::InvalidInference => {
+                                format!("cannot infer type in this context.")
                             }
                         },
                     )

@@ -57,6 +57,17 @@ impl TyCtx {
         self.node_ty_map.keys().cloned().collect()
     }
 
+    pub fn hir_tys(&self) -> Vec<(HirId, &Ty)> {
+        self.node_ty_map
+            .iter()
+            .map(|(hir_id, ty)| (*hir_id, ty))
+            .collect()
+    }
+
+    pub fn def_ids(&self) -> Vec<DefId> {
+        self.def_ty_map.keys().cloned().collect()
+    }
+
     pub fn fresh_var(&mut self) -> TyVarId {
         self.vars.push(TyVar::Unbound);
         TyVarId(self.vars.len() - 1)
@@ -265,7 +276,23 @@ impl TyCtx {
 
     pub fn make_inferred_ty(&mut self, kind: InferKind) -> TyId {
         let var_id = self.fresh_var();
-        self.intern(TyKind::Infer(var_id, kind))
+        self.storage.push(TyKind::Infer(var_id, kind));
+        TyId(self.storage.len() - 1)
+    }
+
+    pub fn is_inferred(&self, ty_id: TyId) -> bool {
+        let kind = self.get(ty_id);
+
+        match kind {
+            TyKind::Infer(_, InferKind::Any) => true,
+
+            TyKind::Array(inner) => self.is_inferred(*inner),
+            TyKind::Slice(inner) => self.is_inferred(*inner),
+
+            TyKind::Ref(inner, _) => self.is_inferred(*inner),
+
+            _ => false,
+        }
     }
 }
 

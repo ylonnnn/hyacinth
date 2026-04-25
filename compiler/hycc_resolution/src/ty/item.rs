@@ -2,7 +2,11 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_ty::ty::Ty;
 
-use crate::{ResolveResult, ty::resolver::TyResolver};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagErrorKind},
+    ty::resolver::TyResolver,
+};
 
 impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
@@ -26,7 +30,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
     pub(crate) fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {
         for field in &strct.fields.list {
-            if let Err(Some(diag)) = self.resolve_ty(&field.ty) {
+            if let Err(Some(diag)) = self.resolve_as_non_inferable_ty(&field.ty) {
                 self.dctx.add(diag);
             }
         }

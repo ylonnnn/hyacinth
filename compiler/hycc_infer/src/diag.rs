@@ -223,10 +223,9 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                             }
 
                             Err::UnresolvedTy(ty) => {
-                                let Ty { id, span } = ty;
+                                let Ty { id, .. } = ty;
 
-                                // format!("{}", fmt.fmt_id(id))
-                                format!("")
+                                format!("unresolved type `{}`.", fmt.fmt_id(*id))
                             }
                         },
                     )
@@ -298,6 +297,15 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                         DiagnosticKind::Note(format!(
                             "earlier initialization of `{}`.",
                             fmt.interner.get(*field)
+                        )),
+                    );
+                }
+
+                Err::UnresolvedTy(ty) => {
+                    diag.detail(
+                        ty.span,
+                        DiagnosticKind::Note(String::from(
+                            "requires `type annotation` or be used in a context with `known type`.",
                         )),
                     );
                 }

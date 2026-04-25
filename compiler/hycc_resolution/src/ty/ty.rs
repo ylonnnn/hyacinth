@@ -8,7 +8,7 @@ use hycc_ty::{
 };
 use hycc_util::ternary;
 
-use crate::{ResolveResult, ty::resolver::TyResolver};
+use crate::{ResolveResult, diag::{ResolverDiag, ResolverDiagErrorKind}, ty::resolver::TyResolver};
 
 impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
@@ -42,5 +42,17 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
         self.tctx.attach_to_hir(ty.id, Ty::new(ty_id, ty.span));
         Ok(ty_id)
+    }
+
+    pub fn resolve_as_non_inferable_ty(&mut self, ty: &HirTy) -> ResolveResult {
+        let ty_id = self.resolve_ty(&ty)?;
+        if !self.tctx.is_inferred(ty_id) {
+            Ok(())
+        } else {
+            Err(Some(ResolverDiag::error(
+                ty.span,
+                ResolverDiagErrorKind::InvalidInference,
+            )))
+        }
     }
 }

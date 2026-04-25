@@ -103,7 +103,6 @@ impl<'t, 'h> Collector<'t, 'h> {
             ("bool", BuiltinTyKind::Bool),
             ("char", BuiltinTyKind::Char),
             ("str", BuiltinTyKind::String),
-            ("_", BuiltinTyKind::Infer),
         ] {
             let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
             let def = Definition::builtin(
@@ -119,6 +118,14 @@ impl<'t, 'h> Collector<'t, 'h> {
                 }
                 _ => {}
             }
+        }
+
+        if let Err(Some(diag)) = self.define(Definition::builtin(
+            interner.intern("_"),
+            BuiltinKind::Ty(BuiltinTyKind::Infer),
+            DefAccessibility::Pub,
+        )) {
+            self.dctx.add(diag);
         }
     }
 

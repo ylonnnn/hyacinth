@@ -65,6 +65,10 @@ impl<'s> Parser<'s> {
                 let size = self.use_stream(
                     TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
                     |s| {
+                        if s.eos() {
+                            return Ok(None);
+                        }
+
                         let expr = s.parse_expr(0);
                         if !s.eos() {
                             let Some(tg) = s.peek_nonlf() else {

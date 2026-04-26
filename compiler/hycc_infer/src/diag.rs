@@ -2,7 +2,10 @@ use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
-use hycc_hir::def::{DefId, DefKind, DefinitionTable};
+use hycc_hir::{
+    def::{DefId, DefKind, DefinitionTable},
+    expr::HirFieldAccessFieldKind,
+};
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
@@ -102,7 +105,7 @@ pub enum InferDiagErrorKind {
     },
 
     UnrecognizedField {
-        field: Symbol,
+        field: HirFieldAccessFieldKind,
         ty_id: TyId,
     },
 
@@ -201,7 +204,11 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                             Err::UnrecognizedField { field, ty_id } => {
                                 format!(
                                     "cannot recognize field `{}` from type `{}`.",
-                                    fmt.interner.get(*field),
+                                    match &field {
+                                        HirFieldAccessFieldKind::Ident(ident) =>
+                                            fmt.interner.get(*ident).into(),
+                                        HirFieldAccessFieldKind::Index(idx) => idx.to_string(),
+                                    },
                                     fmt.fmt_id(*ty_id),
                                 )
                             }

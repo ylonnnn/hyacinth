@@ -5,6 +5,7 @@ use crate::{
 
 use hycc_ast::expr::ExprEvaluatability;
 use hycc_span::Span;
+use hycc_symbol::Symbol;
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
@@ -57,7 +58,7 @@ pub struct HirRefExpr<'h> {
 
 #[derive(Debug, Clone)]
 pub enum HirLiteral {
-    Int { data: u64, is_negative: bool },
+    Int(u64),
     Float(f64),
     Bool(bool),
     Char(u8),
@@ -159,10 +160,22 @@ impl<'h> HirStructExprField<'h> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum HirFieldAccessFieldKind {
+    Ident(Symbol),
+    Index(usize),
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFieldAccessField {
+    pub kind: HirFieldAccessFieldKind,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct HirFieldAccess<'h> {
     pub leading: &'h HirExpr<'h>,
-    pub field: &'h HirRawIdent,
+    pub field: HirFieldAccessField,
 }
 
 #[derive(Debug, Clone)]

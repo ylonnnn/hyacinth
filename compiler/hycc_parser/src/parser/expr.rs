@@ -323,6 +323,14 @@ impl<'s> Parser<'s> {
             TokenKind::Dot => {
                 self.adjust_to_nonlf();
 
+                // Field access for tuples or any integer fields
+                if let (true, Some(tg)) = self.expect_similar_nonlf(TokenKind::Int { base: 64 }) {
+                    return Ok(Expr::new(ExprKind::FieldAccess(Box::new(FieldAccess {
+                        leading: Box::new(left),
+                        field: tg.underlying().unwrap().clone(),
+                    }))));
+                }
+
                 let ident = match self.parse_ident(PathKind::Expr) {
                     Ok(ident) => ident,
                     Err(diag) => return Err((left, diag)),

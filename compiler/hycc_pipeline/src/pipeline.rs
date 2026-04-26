@@ -144,6 +144,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     let mut ty_inferer = TyInferer::new(
         &mut ty_resolver.tctx,
+        &session.interner,
         &definitions,
         &resolver.resolved,
         &hir_table,

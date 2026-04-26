@@ -11,15 +11,15 @@ use hycc_ast::{
 };
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
-use hycc_util::{digit_value, ternary};
+use hycc_util::{bug, digit_value, ternary};
 
 use crate::{
     HirNode, HirTable,
     block::HirBlock,
     expr::{
-        BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess, HirLiteral,
-        HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary,
-        UnaryOp,
+        BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess,
+        HirFieldAccessField, HirFieldAccessFieldKind, HirLiteral, HirMethodCall, HirRefExpr,
+        HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -283,8 +283,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
         match &lit.kind {
             TokenKind::Int { base } | TokenKind::Float { base } => {
-                let is_negative = view.as_bytes()[0] == b'-';
-                let view = ternary!(*base != 10, &view[(2 + (is_negative as usize))..], view);
+                let view = ternary!(*base != 10, &view[2..], view);
                 let mut split = view.split(".");
                 let (integral, fractional) = (split.next().unwrap(), split.next());
 
@@ -303,10 +302,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
                     HirLiteral::Float(val)
                 } else {
-                    HirLiteral::Int {
-                        data: val as u64,
-                        is_negative,
-                    }
+                    HirLiteral::Int(val as u64)
                 }
             }
 
@@ -450,9 +446,27 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
     }
 
     fn lower_field_access(&mut self, access: &FieldAccess) -> HirFieldAccess<'h> {
+        let field = HirFieldAccessField {
+            span: access.field.span,
+            kind: match &access.field.kind {
+                TokenKind::Ident(_) => {
+                    HirFieldAccessFieldKind::Ident(self.lower_raw_ident(&access.field).ident)
+                }
+                TokenKind::Int { .. } => {
+                    let HirLiteral::Int(data) = self.lower_literal(&access.field) else {
+                        bug!("fields can only be identifiers or integers")
+                    };
+
+                    HirFieldAccessFieldKind::Index(data as usize)
+                }
+
+                _ => bug!("fields can only be identifiers or integers"),
+            },
+        };
+
         HirFieldAccess {
             leading: self.lower_expr(&access.leading),
-            field: self.lower_raw_ident(&access.field),
+            field,
         }
     }
 

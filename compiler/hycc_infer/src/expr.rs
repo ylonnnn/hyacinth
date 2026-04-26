@@ -3,8 +3,9 @@ use hycc_hir::{
     HirMutability,
     def::DefKind,
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirLiteral, HirRefExpr, HirStructExpr,
-        HirStructExprField, HirTupleExpr,
+        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField,
+        HirFieldAccessFieldKind, HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField,
+        HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -19,7 +20,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
+impl<'t, 'i, 'd, 'r, 'h> TyInferer<'t, 'i, 'd, 'r, 'h> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
         match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
@@ -200,23 +201,38 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
         let init_lead_ty_id = self.infer_expr(&access.leading)?;
         let mut lead_ty_id = init_lead_ty_id;
 
+        let err = Err(Some(InferDiag::error(
+            access.field.span,
+            InferDiagErrorKind::UnrecognizedField {
+                field: access.field.kind,
+                ty_id: init_lead_ty_id,
+            },
+        )));
+
         loop {
             let lead_ty_kind = self.tctx.get(lead_ty_id);
             match &lead_ty_kind {
+                TyKind::Tuple(tup) => {
+                    return if let HirFieldAccessFieldKind::Index(idx) = &access.field.kind
+                        && *idx < tup.len()
+                    {
+                        Ok(tup[*idx])
+                    } else {
+                        err
+                    };
+                }
+
                 TyKind::Adt(def_id) => {
                     let def = self.definitions.get(*def_id);
                     let DefKind::Struct(struct_def) = &def.kind else {
                         unreachable!()
                     };
 
-                    let Some(field) = struct_def.field_map.get(&access.field.ident) else {
-                        return Err(Some(InferDiag::error(
-                            access.field.span,
-                            InferDiagErrorKind::UnrecognizedField {
-                                field: access.field.ident,
-                                ty_id: init_lead_ty_id,
-                            },
-                        )));
+                    let Some(field) = (match &access.field.kind {
+                        HirFieldAccessFieldKind::Ident(ident) => struct_def.field_map.get(&ident),
+                        _ => None,
+                    }) else {
+                        return err;
                     };
 
                     let field = &struct_def.fields[*field];
@@ -231,15 +247,7 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
                     lead_ty_id = *ty_id;
                 }
 
-                _ => {
-                    return Err(Some(InferDiag::error(
-                        access.field.span,
-                        InferDiagErrorKind::UnrecognizedField {
-                            field: access.field.ident,
-                            ty_id: init_lead_ty_id,
-                        },
-                    )));
-                }
+                _ => return err,
             }
         }
     }

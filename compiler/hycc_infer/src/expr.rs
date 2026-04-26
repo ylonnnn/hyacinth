@@ -1,10 +1,10 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirMutability, HirNode,
+    HirMutability,
     def::DefKind,
     expr::{
         HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirLiteral, HirRefExpr, HirStructExpr,
-        HirStructExprField,
+        HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -29,6 +29,7 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
             HirExprKind::Unary(unary) => todo!("infer unary"),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
+            HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
             HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
             HirExprKind::MethodCall(call) => todo!("infer method call"),
@@ -87,6 +88,25 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
         }
 
         Ok(self.tctx.make_array_ty(el_ty_id))
+    }
+
+    pub(crate) fn infer_tuple_expr(&mut self, tup: &HirTupleExpr) -> InferResult<TyId> {
+        let mut tys = Vec::new();
+
+        for el in &tup.elements {
+            match self.infer_expr(&el) {
+                Ok(ty_id) => tys.push(ty_id),
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+
+                    continue;
+                }
+            }
+        }
+
+        Ok(self.tctx.make_tuple_ty(tys.into()))
     }
 
     pub(crate) fn infer_struct_expr(&mut self, strct: &HirStructExpr) -> InferResult<TyId> {

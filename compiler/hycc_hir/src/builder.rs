@@ -2,7 +2,7 @@ use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::{
         ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
-        Unary,
+        TupleExpr, Unary,
     },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
@@ -18,7 +18,8 @@ use crate::{
     block::HirBlock,
     expr::{
         BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess, HirLiteral,
-        HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField, HirUnary, UnaryOp,
+        HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary,
+        UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -244,6 +245,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             }
 
             ExprKind::Array(array) => HirExprKind::Array(Box::new(self.lower_array_expr(&array))),
+            ExprKind::Tuple(tup) => HirExprKind::Tuple(Box::new(self.lower_tuple_expr(&tup))),
             ExprKind::Struct(strct) => {
                 HirExprKind::Struct(Box::new(self.lower_struct_expr(&strct)))
             }
@@ -397,6 +399,17 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
     fn lower_array_expr(&mut self, expr: &ArrayExpr) -> HirArrayExpr<'h> {
         HirArrayExpr {
+            elements: expr
+                .elements
+                .iter()
+                .map(|el| self.lower_expr(&el))
+                .collect(),
+            span: expr.span,
+        }
+    }
+
+    fn lower_tuple_expr(&mut self, expr: &TupleExpr) -> HirTupleExpr<'h> {
+        HirTupleExpr {
             elements: expr
                 .elements
                 .iter()

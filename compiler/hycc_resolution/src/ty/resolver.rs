@@ -5,7 +5,6 @@ use hycc_hir::{
     HirId,
     def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},
     item::HirPetal,
-    ty::HirTy,
 };
 use hycc_span::Span;
 use hycc_ty::{

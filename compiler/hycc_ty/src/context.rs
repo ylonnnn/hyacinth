@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use hycc_hir::{
     HirId,
@@ -180,6 +180,13 @@ impl TyCtx {
 
             (TyKind::Array(a_inner), TyKind::Array(b_inner)) => self.unify_ty(*a_inner, *b_inner),
             (TyKind::Slice(a_inner), TyKind::Slice(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+
+            (TyKind::Tuple(a_tys), TyKind::Tuple(b_tys)) => a_tys
+                .clone()
+                .iter()
+                .zip(b_tys.clone().iter())
+                .all(|(a_ty, b_ty)| self.unify_ty(*a_ty, *b_ty)),
+
             (TyKind::Ref(a_inner, a_mut), TyKind::Ref(b_inner, b_mut)) => {
                 let mut_valid = *a_mut == RefMutability::Immutable || *a_mut == *b_mut;
                 mut_valid && self.unify_ty(*a_inner, *b_inner)
@@ -266,7 +273,7 @@ impl TyCtx {
         self.intern(TyKind::Slice(inner_ty))
     }
 
-    pub fn make_tuple_ty(&mut self, tys: Vec<TyId>) -> TyId {
+    pub fn make_tuple_ty(&mut self, tys: Arc<[TyId]>) -> TyId {
         self.intern(TyKind::Tuple(Box::new(tys)))
     }
 

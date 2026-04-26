@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirId, HirTable,
-    def::{DefId, DefKind, DefinitionTable},
+    def::{DefId, DefinitionTable},
     item::HirPetal,
 };
 use hycc_ty::{

@@ -59,7 +59,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
                     }
                 }
 
-                Ok(self.tctx.make_tuple_ty(tys))
+                Ok(self.tctx.make_tuple_ty(tys.into()))
             }
         }?;
 

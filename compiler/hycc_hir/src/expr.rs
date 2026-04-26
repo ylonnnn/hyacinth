@@ -20,6 +20,7 @@ pub enum HirExprKind<'h> {
     Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
 
     Array(Box<HirArrayExpr<'h>>),
+    Tuple(Box<HirTupleExpr<'h>>),
     Struct(Box<HirStructExpr<'h>>),
 
     FieldAccess(Box<HirFieldAccess<'h>>),
@@ -120,6 +121,12 @@ pub struct HirCallArguments<'h> {
 
 #[derive(Debug, Clone)]
 pub struct HirArrayExpr<'h> {
+    pub elements: Vec<&'h HirExpr<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirTupleExpr<'h> {
     pub elements: Vec<&'h HirExpr<'h>>,
     pub span: Span,
 }

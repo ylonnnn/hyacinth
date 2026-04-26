@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hycc_hir::def::DefId;
 use hycc_span::Span;
 
@@ -24,7 +26,7 @@ pub enum TyKind {
     Array(TyId /* TODO: constant size*/),
     Slice(TyId),
 
-    Tuple(Box<Vec<TyId>>),
+    Tuple(Box<Arc<[TyId]>>),
 
     Ref(TyId, RefMutability),
 
@@ -63,6 +65,7 @@ impl InferKind {
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IntTy {
     Fixed(u8, bool),

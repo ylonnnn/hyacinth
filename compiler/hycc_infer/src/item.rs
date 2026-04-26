@@ -1,7 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
-use hycc_span::Span;
-use hycc_ty::{context::TyId, ty::Ty};
+use hycc_ty::ty::Ty;
 use hycc_util::bug;
 
 use crate::{
@@ -58,26 +57,24 @@ impl<'t, 'd, 'r, 'h> TyInferer<'t, 'd, 'r, 'h> {
 
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;
-            let var_ty: Ty;
-
-            if let Some(ty) = ty {
-                if !self.tctx.unify_ty(ty.id, expr_ty) {
-                    return Err(Some(InferDiag::error(
-                        expr.span,
-                        InferDiagErrorKind::TypeMismatch {
-                            ann_span: ty.span,
-                            expected: ty.id,
-                            received: expr_ty,
-                        },
-                    )));
-                }
-
-                var_ty = ty.clone();
+            let (unified, ty) = if let Some(ty) = ty {
+                (self.tctx.unify_ty(ty.id, expr_ty), ty.clone())
             } else {
-                var_ty = Ty::new(self.tctx.resolve_ty(expr_ty), expr.span);
+                (true, Ty::new(self.tctx.resolve_ty(expr_ty), expr.span))
+            };
+
+            if !unified {
+                return Err(Some(InferDiag::error(
+                    expr.span,
+                    InferDiagErrorKind::TypeMismatch {
+                        ann_span: ty.span,
+                        expected: ty.id,
+                        received: expr_ty,
+                    },
+                )));
             }
 
-            self.tctx.attach_to_hir(var_decl.id, var_ty);
+            self.tctx.attach_to_hir(var_decl.id, ty);
         }
 
         Ok(())

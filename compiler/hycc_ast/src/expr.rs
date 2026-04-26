@@ -16,6 +16,7 @@ pub enum ExprKind {
     Assign(Box<Expr>, Box<Expr>),
 
     Array(Box<ArrayExpr>),
+    Tuple(Box<TupleExpr>),
     Struct(Box<StructExpr>),
 
     FieldAccess(Box<FieldAccess>),
@@ -36,6 +37,7 @@ impl ExprKind {
             Self::Assign(left, right) => left.span.merge(&right.span),
 
             Self::Array(array) => array.span,
+            Self::Tuple(tup) => tup.span,
             Self::Struct(strct) => strct.span,
 
             Self::FieldAccess(access) => access.leading.span.merge(&access.field.span),
@@ -56,6 +58,13 @@ impl ExprKind {
             Self::Assign(..) => ExprEvaluatability::RunTime,
 
             Self::Array(array) => array
+                .elements
+                .iter()
+                .map(|el| el.eval)
+                .reduce(|acc, eval| acc.infer(&eval))
+                .unwrap_or_else(|| ExprEvaluatability::CompileTime),
+
+            Self::Tuple(tup) => tup
                 .elements
                 .iter()
                 .map(|el| el.eval)
@@ -148,6 +157,12 @@ pub struct CallArguments {
 
 #[derive(Debug, Clone)]
 pub struct ArrayExpr {
+    pub elements: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct TupleExpr {
     pub elements: Vec<Expr>,
     pub span: Span,
 }

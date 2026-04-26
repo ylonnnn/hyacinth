@@ -2,6 +2,7 @@ use hycc_ast::{
     Expr, ExprKind, Identifier, Mutability, Path,
     expr::{
         ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
+        TupleExpr,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
@@ -193,6 +194,8 @@ impl<'s> Parser<'s> {
                 self.parse_array_expr()?,
             )))),
 
+            TokenKind::LeftParen => self.parse_paren_enclosed_expr(),
+
             _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
                 token.clone(),
                 "expr",
@@ -370,6 +373,52 @@ impl<'s> Parser<'s> {
                 )),
             )),
         }
+    }
+
+    pub fn parse_paren_enclosed_expr(&mut self) -> ParseResult<Expr> {
+        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let span = tg.span();
+
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
+        let n = data.len();
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> ParseResult<Expr> {
+                let mut tup = TupleExpr {
+                    elements: Vec::new(),
+                    span,
+                };
+                let mut expect = true;
+
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        tup.elements.push(s.parse_expr(0)?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(if tup.elements.is_empty() {
+                    todo!("unit expr")
+                } else if tup.elements.len() == 1 {
+                    tup.elements.into_iter().next().unwrap()
+                } else {
+                    Expr::new(ExprKind::Tuple(Box::new(tup)))
+                })
+            },
+        )
     }
 
     pub fn parse_fn_call_arguments(&mut self) -> ParseResult<CallArguments> {

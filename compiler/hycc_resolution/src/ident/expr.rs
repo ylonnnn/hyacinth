@@ -33,15 +33,17 @@ impl<'s, 'd> Resolver<'s, 'd> {
                 s.resolve_expr(&expr)
             }
 
-            HirExprKind::Array(array) => {
-                for expr in &array.elements {
-                    if let Err(Some(diag)) = s.resolve_expr(&expr) {
-                        s.dctx.add(diag);
-                    }
+            HirExprKind::Array(array) => Ok(for expr in &array.elements {
+                if let Err(Some(diag)) = s.resolve_expr(&expr) {
+                    s.dctx.add(diag);
                 }
+            }),
 
-                Ok(())
-            }
+            HirExprKind::Tuple(tup) => Ok(for el in &tup.elements {
+                if let Err(Some(diag)) = s.resolve_expr(&el) {
+                    s.dctx.add(diag);
+                }
+            }),
 
             HirExprKind::Struct(strct) => {
                 s.expect_space(DefSpace::Type, |s| {
@@ -50,21 +52,17 @@ impl<'s, 'd> Resolver<'s, 'd> {
                     }
                 });
 
-                for field in &strct.fields {
+                Ok(for field in &strct.fields {
                     if let Err(Some(diag)) = s.resolve_expr(&field.val) {
                         s.dctx.add(diag);
                     }
-                }
-
-                Ok(())
+                })
             }
 
             HirExprKind::FieldAccess(access) => {
-                if let Err(Some(diag)) = s.resolve_expr(&access.leading) {
+                Ok(if let Err(Some(diag)) = s.resolve_expr(&access.leading) {
                     s.dctx.add(diag);
-                }
-
-                Ok(())
+                })
             }
 
             HirExprKind::MethodCall(call) => {
@@ -72,13 +70,11 @@ impl<'s, 'd> Resolver<'s, 'd> {
                     s.dctx.add(diag);
                 }
 
-                for argument in &call.arguments.data {
+                Ok(for argument in &call.arguments.data {
                     if let Err(Some(diag)) = s.resolve_expr(&argument) {
                         s.dctx.add(diag);
                     }
-                }
-
-                Ok(())
+                })
             }
         })
     }

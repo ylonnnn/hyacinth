@@ -7,7 +7,7 @@ use hycc_ast::{
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
-    ty::{Array, Ref, Slice},
+    ty::{Array, Ref, Slice, Tuple},
 };
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
@@ -26,7 +26,7 @@ use crate::{
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirStmt, HirStmtKind},
-    ty::{HirArray, HirRef, HirSlice, HirTy, HirTyKind},
+    ty::{HirArray, HirRef, HirSlice, HirTuple, HirTy, HirTyKind},
 };
 
 #[derive(Debug)]
@@ -453,12 +453,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
 
     fn lower_ty(&mut self, ty: &Ty) -> &'h HirTy<'h> {
         let kind = match &ty.kind {
+            TyKind::Unit(span) => HirTyKind::Unit(*span),
             TyKind::Path(path) => HirTyKind::Path(self.lower_path(&path)),
             TyKind::Ref(reference) => HirTyKind::Ref(Box::new(self.lower_ref(&reference))),
 
             TyKind::Array(arr) => HirTyKind::Array(Box::new(self.lower_array(&arr))),
             TyKind::Slice(slice) => HirTyKind::Slice(Box::new(self.lower_slice(&slice))),
-            TyKind::Unit(span) => HirTyKind::Unit(*span),
+
+            TyKind::Tuple(tup) => HirTyKind::Tuple(Box::new(self.lower_tuple(&tup))),
         };
 
         if let HirNode::Ty(ty) = self.hir_table.add(HirNode::Ty(HirTy::new(kind, ty.span))) {
@@ -476,6 +478,14 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         }
     }
 
+    fn lower_array(&mut self, arr: &Array) -> HirArray<'h> {
+        HirArray {
+            ty: self.lower_ty(&arr.ty),
+            size: self.lower_expr(&arr.size),
+            span: arr.span,
+        }
+    }
+
     fn lower_slice(&mut self, slice: &Slice) -> HirSlice<'h> {
         HirSlice {
             ty: self.lower_ty(&slice.ty),
@@ -483,11 +493,10 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         }
     }
 
-    fn lower_array(&mut self, arr: &Array) -> HirArray<'h> {
-        HirArray {
-            ty: self.lower_ty(&arr.ty),
-            size: self.lower_expr(&arr.size),
-            span: arr.span,
+    fn lower_tuple(&mut self, tup: &Tuple) -> HirTuple<'h> {
+        HirTuple {
+            data: tup.data.iter().map(|el| self.lower_ty(&el)).collect(),
+            span: tup.span,
         }
     }
 

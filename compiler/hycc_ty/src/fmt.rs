@@ -54,6 +54,16 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 format!("[]{}", self.fmt_id(*ty_id))
             }
 
+            TyKind::Tuple(tys) => {
+                format!(
+                    "({})",
+                    tys.iter()
+                        .map(|ty_id| self.fmt_id(*ty_id))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+
             TyKind::Ref(ty_id, mutability) => {
                 format!(
                     "&{}{}",

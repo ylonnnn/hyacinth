@@ -1,3 +1,4 @@
+use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability,
     ty::{HirTy, HirTyKind},
@@ -8,11 +9,17 @@ use hycc_ty::{
 };
 use hycc_util::ternary;
 
-use crate::{ResolveResult, diag::{ResolverDiag, ResolverDiagErrorKind}, ty::resolver::TyResolver};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagErrorKind},
+    ty::resolver::TyResolver,
+};
 
 impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
         let ty_id = match &ty.kind {
+            HirTyKind::Unit(_) => Ok(self.tctx.make_unit_ty()),
+
             HirTyKind::Path(path) => self.resolve_path(&path),
             HirTyKind::Ref(reference) => {
                 let inner_ty = self.resolve_ty(&reference.ty)?;
@@ -37,7 +44,23 @@ impl<'d, 'r> TyResolver<'d, 'r> {
                 Ok(self.tctx.make_slice_ty(ty_id))
             }
 
-            HirTyKind::Unit(_) => Ok(self.tctx.make_unit_ty()),
+            HirTyKind::Tuple(tup) => {
+                let mut tys = Vec::new();
+                for el in &tup.data {
+                    match self.resolve_ty(&el) {
+                        Ok(ty_id) => tys.push(ty_id),
+                        Err(diag) => {
+                            if let Some(diag) = diag {
+                                self.dctx.add(diag);
+                            }
+
+                            continue;
+                        }
+                    }
+                }
+
+                Ok(self.tctx.make_tuple_ty(tys))
+            }
         }?;
 
         self.tctx.attach_to_hir(ty.id, Ty::new(ty_id, ty.span));

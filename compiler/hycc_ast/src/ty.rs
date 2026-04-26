@@ -4,23 +4,26 @@ use hycc_span::Span;
 
 #[derive(Debug, Clone)]
 pub enum TyKind {
+    Unit(Span),
+
     Path(Box<Path>),
     Ref(Box<Ref>),
 
     Array(Box<Array>),
     Slice(Box<Slice>),
 
-    Unit(Span),
+    Tuple(Box<Tuple>),
 }
 
 impl TyKind {
     pub fn span(&self) -> Span {
         match self {
+            Self::Unit(span) => *span,
             Self::Path(path) => path.span,
             Self::Ref(reference) => reference.span,
             Self::Array(arr) => arr.span,
             Self::Slice(slice) => slice.span,
-            Self::Unit(span) => *span,
+            Self::Tuple(tup) => tup.span,
         }
     }
 }
@@ -57,5 +60,11 @@ pub struct Array {
 #[derive(Debug, Clone)]
 pub struct Slice {
     pub ty: Box<Ty>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Tuple {
+    pub data: Vec<Ty>,
     pub span: Span,
 }

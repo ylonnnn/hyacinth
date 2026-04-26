@@ -266,6 +266,10 @@ impl TyCtx {
         self.intern(TyKind::Slice(inner_ty))
     }
 
+    pub fn make_tuple_ty(&mut self, tys: Vec<TyId>) -> TyId {
+        self.intern(TyKind::Tuple(Box::new(tys)))
+    }
+
     pub fn make_ref_ty(&mut self, inner_ty: TyId, mutability: RefMutability) -> TyId {
         self.intern(TyKind::Ref(inner_ty, mutability))
     }

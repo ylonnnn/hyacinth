@@ -24,6 +24,8 @@ pub enum TyKind {
     Array(TyId /* TODO: constant size*/),
     Slice(TyId),
 
+    Tuple(Box<Vec<TyId>>),
+
     Ref(TyId, RefMutability),
 
     Adt(DefId),

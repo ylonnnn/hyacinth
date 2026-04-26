@@ -2,7 +2,7 @@ use hycc_ast::{
     Mutability, Ty, TyKind,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
-    ty::{Array, Ref, Slice},
+    ty::{Array, Ref, Slice, Tuple},
 };
 use hycc_diagnostic::DiagnosticContext;
 
@@ -31,83 +31,12 @@ impl<'s> Parser<'s> {
         let ty = match tok.kind {
             TokenKind::LeftParen => {
                 // TODO: allow the parser to diverge from a grouped type, or a tuple
-                self.parse_grouped_ty()
+                Ok(Ty::new(self.parse_paren_enclosed_ty()?))
             }
 
-            TokenKind::Ampersand => {
-                let span = self.next_nonlf_token().unwrap().span;
-                let mutability = if self
-                    .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
-                    .0
-                {
-                    Mutability::Mutable
-                } else {
-                    Mutability::Immutable
-                };
+            TokenKind::Ampersand => Ok(Ty::new(TyKind::Ref(Box::new(self.parse_ref_ty()?)))),
 
-                let ty = Box::new(self.parse_ty()?);
-
-                Ok(Ty::new(TyKind::Ref(Box::new(Ref {
-                    span: span.merge(&ty.span),
-                    ty,
-                    mutability,
-                }))))
-            }
-
-            TokenKind::LeftBracket => {
-                let Some(TokenGraph::Collection { data, .. }) = self.next_nonlf() else {
-                    unreachable!()
-                };
-
-                let n = data.len();
-                let op = data.first().unwrap().underlying().unwrap().clone();
-
-                let size = self.use_stream(
-                    TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
-                    |s| {
-                        if s.eos() {
-                            return Ok(None);
-                        }
-
-                        let expr = s.parse_expr(0);
-                        if !s.eos() {
-                            let Some(tg) = s.peek_nonlf() else {
-                                unreachable!()
-                            };
-
-                            return Err(Some(ParserDiag::unexpected_token(
-                                tg.underlying().unwrap().clone(),
-                            )));
-                        }
-
-                        Ok(match expr {
-                            Ok(expr) => Some(expr),
-                            Err(diag) => {
-                                if let Some(diag) = diag {
-                                    s.dctx.add(diag);
-                                }
-
-                                None
-                            }
-                        })
-                    },
-                )?;
-
-                let ty = Box::new(self.parse_ty()?);
-                let span = op.span.merge(&ty.span);
-
-                let kind = if let Some(size) = size {
-                    TyKind::Array(Box::new(Array {
-                        size: Box::new(size),
-                        ty,
-                        span,
-                    }))
-                } else {
-                    TyKind::Slice(Box::new(Slice { ty, span }))
-                };
-
-                Ok(Ty::new(kind))
-            }
+            TokenKind::LeftBracket => Ok(Ty::new(self.parse_array_or_slice_ty()?)),
 
             TokenKind::Ident(kind) => {
                 self.stream.save_offset();
@@ -181,43 +110,129 @@ impl<'s> Parser<'s> {
         Ok(ty)
     }
 
-    pub fn parse_grouped_ty(&mut self) -> ParseResult<Ty> {
-        let data = match self.require_abs_exact_nonlf(TokenKind::LeftParen)? {
-            TokenGraph::Collection { data, .. } => data,
-            _ => Err(None)?,
+    // Parenthesis-enclosed types
+    // e.g. `()`, `(&i32, bool)`
+    pub fn parse_paren_enclosed_ty(&mut self) -> ParseResult<TyKind> {
+        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let span = tg.span();
+
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
         };
 
         let n = data.len();
-        let span = data
-            .first()
-            .unwrap()
-            .underlying()
-            .unwrap()
-            .span
-            .merge(&data.last().unwrap().underlying().unwrap().span);
 
         self.use_stream(
             TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
-            |s| {
-                if s.stream.is_empty() {
-                    return Ok(Ty::new(TyKind::Unit(span)));
+            |s| -> ParseResult<TyKind> {
+                let mut tup = Tuple {
+                    data: Vec::new(),
+                    span,
+                };
+                let mut expect = true;
+
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        tup.data.push(s.parse_ty()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
                 }
 
-                let inner = s.parse_ty();
-                if !s.stream.abs_eof() {
-                    let Some(tok) = s.peek_nonlf_token() else {
-                        return Err(None);
-                    };
-
-                    return Err(Some(ParserDiag::unexpected_token(tok.clone())));
-                }
-
-                inner
+                Ok(if tup.data.is_empty() {
+                    TyKind::Unit(span)
+                } else {
+                    TyKind::Tuple(Box::new(tup))
+                })
             },
         )
     }
 
+    // e.g. `&i32`, `&mut T`, `&mut Test<T>`
+    pub fn parse_ref_ty(&mut self) -> ParseResult<Ref> {
+        let span = self.next_nonlf_token().unwrap().span;
+        let mutability = if self
+            .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
+            .0
+        {
+            Mutability::Mutable
+        } else {
+            Mutability::Immutable
+        };
+
+        let ty = Box::new(self.parse_ty()?);
+
+        Ok(Ref {
+            span: span.merge(&ty.span),
+            ty,
+            mutability,
+        })
+    }
+
+    // e.g. `[]T`, `[][5]i32`, `[8]&u8`
+    pub fn parse_array_or_slice_ty(&mut self) -> ParseResult<TyKind> {
+        let Some(TokenGraph::Collection { data, .. }) = self.next_nonlf() else {
+            unreachable!()
+        };
+
+        let n = data.len();
+        let op = data.first().unwrap().underlying().unwrap().clone();
+
+        let size = self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| {
+                if s.eos() {
+                    return Ok(None);
+                }
+
+                let expr = s.parse_expr(0);
+                if !s.eos() {
+                    let Some(tg) = s.peek_nonlf() else {
+                        unreachable!()
+                    };
+
+                    return Err(Some(ParserDiag::unexpected_token(
+                        tg.underlying().unwrap().clone(),
+                    )));
+                }
+
+                Ok(match expr {
+                    Ok(expr) => Some(expr),
+                    Err(diag) => {
+                        if let Some(diag) = diag {
+                            s.dctx.add(diag);
+                        }
+
+                        None
+                    }
+                })
+            },
+        )?;
+
+        let ty = Box::new(self.parse_ty()?);
+        let span = op.span.merge(&ty.span);
+
+        Ok(if let Some(size) = size {
+            TyKind::Array(Box::new(Array {
+                size: Box::new(size),
+                ty,
+                span,
+            }))
+        } else {
+            TyKind::Slice(Box::new(Slice { ty, span }))
+        })
+    }
+
     // PATH
+    // e.g. `sample::MyTy`, `sample_type::inner_petal::Type<i32>`
     pub fn parse_path_ty(&mut self) -> ParseResult<Ty> {
         Ok(Ty::new(TyKind::Path(Box::new(
             self.parse_path(PathKind::Ty)?,

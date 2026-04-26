@@ -3,9 +3,8 @@ use hycc_hir::{
     HirMutability,
     def::DefKind,
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField,
-        HirFieldAccessFieldKind, HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField,
-        HirTupleExpr,
+        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirLiteral,
+        HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -20,7 +19,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'i, 'd, 'r, 'h> TyInferer<'t, 'i, 'd, 'r, 'h> {
+impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
         match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),

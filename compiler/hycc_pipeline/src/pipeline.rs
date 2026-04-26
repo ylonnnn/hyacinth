@@ -142,13 +142,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer = TyInferer::new(
-        &mut ty_resolver.tctx,
-        &session.interner,
-        &definitions,
-        &resolver.resolved,
-        &hir_table,
-    );
+    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolver.resolved);
 
     ty_inferer.infer(&hir);
     ty_inferer.dctx.emit(

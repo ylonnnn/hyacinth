@@ -103,6 +103,11 @@ pub enum InferDiagErrorKind {
 
     UnrecognizedField {
         field: Symbol,
+        ty_id: TyId,
+    },
+
+    UnrecognizedFieldInitialization {
+        field: Symbol,
         struct_def: DefId,
     },
 
@@ -184,12 +189,20 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
-                            Err::UnrecognizedField { field, struct_def } => {
+                            Err::UnrecognizedFieldInitialization { field, struct_def } => {
                                 let def = fmt.definitions.get(*struct_def);
                                 format!(
                                     "cannot recognize field `{}` from struct `{}`.",
                                     fmt.interner.get(*field),
                                     fmt.interner.get(def.name),
+                                )
+                            }
+
+                            Err::UnrecognizedField { field, ty_id } => {
+                                format!(
+                                    "cannot recognize field `{}` from type `{}`.",
+                                    fmt.interner.get(*field),
+                                    fmt.fmt_id(*ty_id),
                                 )
                             }
 
@@ -267,7 +280,7 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                     );
                 }
 
-                Err::UnrecognizedField { struct_def, .. } => {
+                Err::UnrecognizedFieldInitialization { struct_def, .. } => {
                     let def = fmt.definitions.get(*struct_def);
                     let DefKind::Struct(struct_def) = &def.kind else {
                         bug!("struct_def is expected to be a valid def_id of a struct definition")

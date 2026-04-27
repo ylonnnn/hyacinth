@@ -13,6 +13,8 @@ pub enum TyKind {
     Slice(Box<Slice>),
 
     Tuple(Box<Tuple>),
+
+    Fn(Box<FnTy>),
 }
 
 impl TyKind {
@@ -24,6 +26,7 @@ impl TyKind {
             Self::Array(arr) => arr.span,
             Self::Slice(slice) => slice.span,
             Self::Tuple(tup) => tup.span,
+            Self::Fn(func) => func.span,
         }
     }
 }
@@ -66,5 +69,12 @@ pub struct Slice {
 #[derive(Debug, Clone)]
 pub struct Tuple {
     pub data: Vec<Ty>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct FnTy {
+    pub params: Vec<Ty>,
+    pub ret_ty: Option<Ty>,
     pub span: Span,
 }

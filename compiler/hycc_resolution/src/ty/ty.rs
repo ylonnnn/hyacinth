@@ -61,6 +61,36 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
                 Ok(self.tctx.make_tuple_ty(tys.into()))
             }
+
+            HirTyKind::Fn(func) => {
+                let mut params = Vec::new();
+                for param in &func.params {
+                    match self.resolve_ty(&param) {
+                        Ok(ty_id) => params.push(ty_id),
+                        Err(diag) => {
+                            if let Some(diag) = diag {
+                                self.dctx.add(diag);
+                            }
+
+                            continue;
+                        }
+                    }
+                }
+
+                let mut ret_ty: TyId = self.tctx.make_unit_ty();
+                if let Some(r_ty) = func.ret_ty {
+                    match self.resolve_ty(&r_ty) {
+                        Ok(ty_id) => ret_ty = ty_id,
+                        Err(diag) => {
+                            if let Some(diag) = diag {
+                                self.dctx.add(diag);
+                            }
+                        }
+                    }
+                }
+
+                Ok(self.tctx.make_fn_ty(params.into(), ret_ty))
+            }
         }?;
 
         self.tctx.attach_to_hir(ty.id, Ty::new(ty_id, ty.span));

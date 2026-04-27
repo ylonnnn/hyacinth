@@ -4,7 +4,7 @@ use hycc_hir::{
     HirId,
     def::{BuiltinIntTy, BuiltinTyKind, DefId},
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::ty::{FnTy, InferKind, IntTy, RefMutability, Ty, TyKind, TyVar};
 
@@ -101,33 +101,66 @@ impl TyCtx {
                 let inner_ty = *inner_ty;
                 let inner_ty_id = self.resolve_ty(inner_ty);
 
-                if inner_ty == inner_ty_id {
-                    ty_id
-                } else {
+                ternary!(
+                    inner_ty == inner_ty_id,
+                    ty_id,
                     self.intern(TyKind::Array(inner_ty_id))
-                }
+                )
             }
 
             TyKind::Slice(inner_ty) => {
                 let inner_ty = *inner_ty;
                 let inner_ty_id = self.resolve_ty(inner_ty);
 
-                if inner_ty == inner_ty_id {
-                    ty_id
-                } else {
+                ternary!(
+                    inner_ty == inner_ty_id,
+                    ty_id,
                     self.intern(TyKind::Slice(inner_ty_id))
-                }
+                )
+            }
+
+            TyKind::Tuple(tys) => {
+                let mut updated = false;
+                let tys = tys
+                    .clone()
+                    .iter()
+                    .map(|ty| {
+                        let res = self.resolve_ty(*ty);
+                        updated = updated || *ty != res;
+                        res
+                    })
+                    .collect::<Vec<_>>();
+
+                ternary!(updated, self.make_tuple_ty(tys.into()), ty_id)
             }
 
             TyKind::Ref(inner_ty, mutability) => {
                 let (inner_ty, mutability) = (*inner_ty, *mutability);
                 let inner_ty_id = self.resolve_ty(inner_ty);
 
-                if inner_ty == inner_ty_id {
-                    ty_id
-                } else {
+                ternary!(
+                    inner_ty == inner_ty_id,
+                    ty_id,
                     self.intern(TyKind::Ref(inner_ty_id, mutability))
+                )
+            }
+
+            TyKind::Fn(func) => {
+                let f_ret_ty = func.ret_ty;
+                let f_params = func.params.clone();
+
+                let mut updated = false;
+                let mut params = Vec::new();
+
+                for param in f_params.iter() {
+                    let res = self.resolve_ty(*param);
+                    params.push((res, updated = updated || *param != res).0)
                 }
+
+                let ret_ty = self.resolve_ty(f_ret_ty);
+                updated = updated || f_ret_ty != ret_ty;
+
+                ternary!(updated, self.make_fn_ty(params.into(), ret_ty), ty_id)
             }
 
             TyKind::Infer(var_id, _) => {
@@ -190,6 +223,17 @@ impl TyCtx {
             (TyKind::Ref(a_inner, a_mut), TyKind::Ref(b_inner, b_mut)) => {
                 let mut_valid = *a_mut == RefMutability::Immutable || *a_mut == *b_mut;
                 mut_valid && self.unify_ty(*a_inner, *b_inner)
+            }
+
+            (TyKind::Fn(a_func), TyKind::Fn(b_func)) => {
+                let (a_ret, b_ret) = (a_func.ret_ty, b_func.ret_ty);
+                a_func
+                    .params
+                    .clone()
+                    .iter()
+                    .zip(b_func.params.clone().iter())
+                    .all(|(ap_ty, bp_ty)| self.unify_ty(*ap_ty, *bp_ty))
+                    && self.unify_ty(a_ret, b_ret)
             }
 
             // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),

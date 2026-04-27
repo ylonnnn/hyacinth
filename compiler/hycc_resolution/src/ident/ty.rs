@@ -33,6 +33,22 @@ impl<'s, 'd> Resolver<'s, 'd> {
 
                 Ok(())
             }
+
+            HirTyKind::Fn(func) => {
+                for param in &func.params {
+                    if let Err(Some(diag)) = s.resolve_ty(&param) {
+                        s.dctx.add(diag);
+                    }
+                }
+
+                if let Some(ret_ty) = func.ret_ty {
+                    if let Err(Some(diag)) = s.resolve_ty(&ret_ty) {
+                        s.dctx.add(diag);
+                    }
+                }
+
+                Ok(())
+            }
         })
     }
 }

@@ -13,6 +13,7 @@ pub enum HirTyKind<'h> {
     Slice(Box<HirSlice<'h>>),
 
     Tuple(Box<HirTuple<'h>>),
+    Fn(Box<HirFnTy<'h>>),
 }
 
 #[derive(Debug, Clone)]
@@ -55,5 +56,12 @@ pub struct HirSlice<'h> {
 #[derive(Debug, Clone)]
 pub struct HirTuple<'h> {
     pub data: Vec<&'h HirTy<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFnTy<'h> {
+    pub params: Vec<&'h HirTy<'h>>,
+    pub ret_ty: Option<&'h HirTy<'h>>,
     pub span: Span,
 }

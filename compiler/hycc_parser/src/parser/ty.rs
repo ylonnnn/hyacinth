@@ -2,9 +2,10 @@ use hycc_ast::{
     Mutability, Ty, TyKind,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
-    ty::{Array, Ref, Slice, Tuple},
+    ty::{Array, FnTy, Ref, Slice, Tuple},
 };
 use hycc_diagnostic::DiagnosticContext;
+use hycc_util::ternary;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
 
@@ -59,7 +60,7 @@ impl<'s> Parser<'s> {
 
                 match kind {
                     TokenIdentKind::Fn if ident_ty_kind == IdentLeadTyKind::Fn => {
-                        todo!("parse fn type")
+                        Ok(Ty::new(TyKind::Fn(Box::new(self.parse_fn_ty()?))))
                     }
                     _ => self.parse_path_ty(),
                 }
@@ -228,6 +229,66 @@ impl<'s> Parser<'s> {
             }))
         } else {
             TyKind::Slice(Box::new(Slice { ty, span }))
+        })
+    }
+
+    // e.g. `fn()`, `fn(i32, i32) -> i32`
+    pub fn parse_fn_ty(&mut self) -> ParseResult<FnTy> {
+        // fn
+        let Some(lead) = self.next_nonlf_token() else {
+            unreachable!()
+        };
+
+        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let params_span = tg.span();
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
+        let n = data.len();
+        let params = self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> ParseResult<Vec<Ty>> {
+                let mut params = Vec::new();
+                let mut expect = true;
+
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        params.push(s.parse_ty()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(params)
+            },
+        )?;
+
+        // -> TY
+        let ret_ty = ternary!(
+            self.expect_exact_nonlf(TokenKind::MinusGreater).0,
+            Some(self.parse_ty()?),
+            None
+        );
+
+        let span = lead.span.merge(&ternary!(
+            ret_ty.is_some(),
+            ret_ty.as_ref().unwrap().span,
+            params_span
+        ));
+
+        Ok(FnTy {
+            params,
+            ret_ty,
+            span,
         })
     }
 

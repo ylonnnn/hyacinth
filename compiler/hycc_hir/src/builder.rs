@@ -7,7 +7,7 @@ use hycc_ast::{
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenKind},
-    ty::{Array, Ref, Slice, Tuple},
+    ty::{Array, FnTy, Ref, Slice, Tuple},
 };
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
@@ -27,7 +27,7 @@ use crate::{
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirStmt, HirStmtKind},
-    ty::{HirArray, HirRef, HirSlice, HirTuple, HirTy, HirTyKind},
+    ty::{HirArray, HirFnTy, HirRef, HirSlice, HirTuple, HirTy, HirTyKind},
 };
 
 #[derive(Debug)]
@@ -488,6 +488,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             TyKind::Slice(slice) => HirTyKind::Slice(Box::new(self.lower_slice(&slice))),
 
             TyKind::Tuple(tup) => HirTyKind::Tuple(Box::new(self.lower_tuple(&tup))),
+            TyKind::Fn(func) => HirTyKind::Fn(Box::new(self.lower_fn_ty(&func))),
         };
 
         if let HirNode::Ty(ty) = self.hir_table.add(HirNode::Ty(HirTy::new(kind, ty.span))) {
@@ -524,6 +525,18 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         HirTuple {
             data: tup.data.iter().map(|el| self.lower_ty(&el)).collect(),
             span: tup.span,
+        }
+    }
+
+    fn lower_fn_ty(&mut self, func: &FnTy) -> HirFnTy<'h> {
+        HirFnTy {
+            params: func
+                .params
+                .iter()
+                .map(|param| self.lower_ty(&param))
+                .collect(),
+            ret_ty: func.ret_ty.as_ref().map(|ret_ty| self.lower_ty(&ret_ty)),
+            span: func.span,
         }
     }
 

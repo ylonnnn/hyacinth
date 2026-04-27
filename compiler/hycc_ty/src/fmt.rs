@@ -72,6 +72,18 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 )
             }
 
+            TyKind::Fn(ty) => {
+                format!(
+                    "fn({}) -> {}",
+                    ty.params
+                        .iter()
+                        .map(|param| self.fmt_id(*param))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    self.fmt_id(ty.ret_ty)
+                )
+            }
+
             TyKind::Adt(def_id) => {
                 // TODO: add generic arguments
                 let def = self.definitions.get(*def_id);

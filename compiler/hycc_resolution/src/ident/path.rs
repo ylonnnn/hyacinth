@@ -1,7 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::DefSpace,
-    path::{HirIdent, HirPath},
+    path::{HirIdent, HirIdentArgument, HirPath},
 };
 use hycc_util::{bug, ternary};
 
@@ -48,6 +48,24 @@ impl<'s, 'd> Resolver<'s, 'd> {
                 ResolverDiagErrorKind::UnrecognizedSymbol(ident.ident.ident, space),
             )));
         };
+
+        if let Some(arguments) = &ident.arguments {
+            for argument in &arguments.data {
+                let res = match &argument {
+                    HirIdentArgument::Expr(expr) => {
+                        self.expect_space(DefSpace::Value, |s| s.resolve_expr(&expr))
+                    }
+
+                    HirIdentArgument::Ty(ty) => {
+                        self.expect_space(DefSpace::Type, |s| s.resolve_ty(&ty))
+                    }
+                };
+
+                if let Err(Some(diag)) = res {
+                    self.dctx.add(diag);
+                }
+            }
+        }
 
         self.resolved.insert(ident.id, def_id);
         Ok(())

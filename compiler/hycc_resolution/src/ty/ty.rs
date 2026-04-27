@@ -67,15 +67,15 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         Ok(ty_id)
     }
 
-    pub fn resolve_as_non_inferable_ty(&mut self, ty: &HirTy) -> ResolveResult {
+    pub fn resolve_as_non_inferable_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
         let ty_id = self.resolve_ty(&ty)?;
-        if !self.tctx.is_inferred(ty_id) {
-            Ok(())
-        } else {
+        ternary!(
+            self.tctx.is_inferred(ty_id),
             Err(Some(ResolverDiag::error(
                 ty.span,
                 ResolverDiagErrorKind::InvalidInference,
-            )))
-        }
+            ))),
+            Ok(ty_id)
+        )
     }
 }

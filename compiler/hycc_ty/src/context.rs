@@ -6,7 +6,7 @@ use hycc_hir::{
 };
 use hycc_util::bug;
 
-use crate::ty::{InferKind, IntTy, RefMutability, Ty, TyKind, TyVar};
+use crate::ty::{FnTy, InferKind, IntTy, RefMutability, Ty, TyKind, TyVar};
 
 #[derive(Debug)]
 pub struct TyCtx {
@@ -279,6 +279,10 @@ impl TyCtx {
 
     pub fn make_ref_ty(&mut self, inner_ty: TyId, mutability: RefMutability) -> TyId {
         self.intern(TyKind::Ref(inner_ty, mutability))
+    }
+
+    pub fn make_fn_ty(&mut self, params: Arc<[TyId]>, ret_ty: TyId) -> TyId {
+        self.intern(TyKind::Fn(Box::new(FnTy { params, ret_ty })))
     }
 
     pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {

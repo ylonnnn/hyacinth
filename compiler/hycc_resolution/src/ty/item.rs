@@ -1,5 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::item::{HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_ty::ty::Ty;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
@@ -9,7 +9,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         match &item.kind {
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
-            HirItemKind::Fn(func) => self.resolve_fn(&func),
+            HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
         }
     }
@@ -34,12 +34,40 @@ impl<'d, 'r> TyResolver<'d, 'r> {
         Ok(())
     }
 
-    pub(crate) fn resolve_fn(&mut self, func: &HirFn) -> ResolveResult {
+    pub(crate) fn resolve_fn(&mut self, fn_item: &HirItem) -> ResolveResult {
+        let HirItemKind::Fn(func) = &fn_item.kind else {
+            unreachable!()
+        };
+
+        let mut params = Vec::new();
         for param in &func.params.list {
-            if let Err(Some(diag)) = self.resolve_ty(&param.ty) {
-                self.dctx.add(diag);
+            match self.resolve_as_non_inferable_ty(&param.ty) {
+                Ok(ty_id) => params.push(ty_id),
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+
+                    continue;
+                }
             }
         }
+
+        let mut ret_ty = self.tctx.make_unit_ty();
+        if let Some(r_ty) = &func.ret_ty {
+            match self.resolve_ty(&r_ty) {
+                Ok(ty_id) => ret_ty = ty_id,
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+                }
+            }
+        }
+
+        let fn_ty = self.tctx.make_fn_ty(params.into(), ret_ty);
+        self.tctx
+            .attach_to_hir(fn_item.id, Ty::new(fn_ty, fn_item.span));
 
         if let Err(Some(diag)) = self.resolve_block(&func.body) {
             self.dctx.add(diag);

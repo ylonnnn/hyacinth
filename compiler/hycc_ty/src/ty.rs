@@ -30,6 +30,8 @@ pub enum TyKind {
 
     Ref(TyId, RefMutability),
 
+    Fn(Box<FnTy>),
+
     Adt(DefId),
 
     Infer(TyVarId, InferKind),
@@ -46,6 +48,12 @@ impl Ty {
     pub fn new(id: TyId, span: Span) -> Self {
         Self { id, span }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FnTy {
+    pub params: Arc<[TyId]>,
+    pub ret_ty: TyId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

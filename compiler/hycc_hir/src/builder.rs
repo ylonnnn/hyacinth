@@ -244,6 +244,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 HirExprKind::Assign(self.lower_expr(assignee), self.lower_expr(expr))
             }
 
+            ExprKind::Block(block) => HirExprKind::Block(self.lower_block(&block)),
+
             ExprKind::Array(array) => HirExprKind::Array(Box::new(self.lower_array_expr(&array))),
             ExprKind::Tuple(tup) => HirExprKind::Tuple(Box::new(self.lower_tuple_expr(&tup))),
             ExprKind::Struct(strct) => {

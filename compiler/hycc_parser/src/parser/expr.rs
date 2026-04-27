@@ -181,7 +181,9 @@ impl<'s> Parser<'s> {
                 self.parse_ref_expr()?,
             )))),
 
-            TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Array(Box::new(
+            TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Block(Box::new(self.parse_block()?)))),
+
+            TokenKind::LeftBracket => Ok(Expr::new(ExprKind::Array(Box::new(
                 self.parse_array_expr()?,
             )))),
 

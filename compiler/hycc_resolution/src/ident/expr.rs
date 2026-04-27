@@ -33,6 +33,8 @@ impl<'s, 'd> Resolver<'s, 'd> {
                 s.resolve_expr(&expr)
             }
 
+            HirExprKind::Block(block) => s.resolve_block(&block),
+
             HirExprKind::Array(array) => Ok(for expr in &array.elements {
                 if let Err(Some(diag)) = s.resolve_expr(&expr) {
                     s.dctx.add(diag);

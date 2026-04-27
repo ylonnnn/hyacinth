@@ -1,4 +1,4 @@
-use crate::{Identifier, Mutability, Path, token::Token};
+use crate::{Block, Identifier, Mutability, Path, token::Token};
 
 use hycc_span::Span;
 
@@ -14,6 +14,8 @@ pub enum ExprKind {
     Unary(Box<Unary>),
 
     Assign(Box<Expr>, Box<Expr>),
+
+    Block(Box<Block>),
 
     Array(Box<ArrayExpr>),
     Tuple(Box<TupleExpr>),
@@ -38,6 +40,8 @@ impl ExprKind {
 
             Self::Assign(left, right) => left.span.merge(&right.span),
 
+            Self::Block(block) => block.span,
+
             Self::Array(array) => array.span,
             Self::Tuple(tup) => tup.span,
             Self::Struct(strct) => strct.span,
@@ -60,6 +64,8 @@ impl ExprKind {
             Self::Unary(expr) => expr.eval(),
 
             Self::Assign(..) => ExprEvaluatability::RunTime,
+
+            Self::Block(_) => ExprEvaluatability::Unknown,
 
             Self::Array(array) => array
                 .elements

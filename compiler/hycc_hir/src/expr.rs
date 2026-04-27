@@ -1,5 +1,6 @@
 use crate::{
     HirId, HirMutability,
+    block::HirBlock,
     path::{HirIdent, HirPath, HirRawIdent},
 };
 
@@ -19,6 +20,8 @@ pub enum HirExprKind<'h> {
     Unary(Box<HirUnary<'h>>),
 
     Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
+
+    Block(&'h HirBlock<'h>),
 
     Array(Box<HirArrayExpr<'h>>),
     Tuple(Box<HirTupleExpr<'h>>),

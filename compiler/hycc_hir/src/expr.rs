@@ -24,6 +24,8 @@ pub enum HirExprKind<'h> {
     Tuple(Box<HirTupleExpr<'h>>),
     Struct(Box<HirStructExpr<'h>>),
 
+    FnCall(Box<HirFnCall<'h>>),
+
     FieldAccess(Box<HirFieldAccess<'h>>),
     MethodCall(Box<HirMethodCall<'h>>),
 }
@@ -115,12 +117,6 @@ pub enum BinaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub struct HirCallArguments<'h> {
-    pub data: Vec<&'h HirExpr<'h>>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone)]
 pub struct HirArrayExpr<'h> {
     pub elements: Vec<&'h HirExpr<'h>>,
     pub span: Span,
@@ -158,6 +154,18 @@ impl<'h> HirStructExprField<'h> {
     pub fn span(&self) -> Span {
         self.ident.span.merge(&self.val.span)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirCallArguments<'h> {
+    pub data: Vec<&'h HirExpr<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFnCall<'h> {
+    pub callee: &'h HirExpr<'h>,
+    pub arguments: HirCallArguments<'h>,
 }
 
 #[derive(Debug, Clone, Copy)]

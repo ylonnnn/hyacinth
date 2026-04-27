@@ -1,8 +1,8 @@
 use hycc_ast::{
     Expr, ExprKind, Identifier, Mutability, Path,
     expr::{
-        ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
-        TupleExpr,
+        ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall, RefExpr, StructExpr,
+        StructExprField, TupleExpr,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
@@ -278,6 +278,10 @@ impl<'s> Parser<'s> {
             | TokenKind::SlashEq
             | TokenKind::PercentEq => Ok(Expr::new(self.parse_assign(left)?)),
 
+            TokenKind::LeftParen => Ok(Expr::new(ExprKind::FnCall(Box::new(
+                self.parse_fn_call(left)?,
+            )))),
+
             TokenKind::Dot => Ok(Expr::new(self.parse_field_access_or_method_call(left)?)),
 
             _ => Err((
@@ -545,6 +549,18 @@ impl<'s> Parser<'s> {
         let val = Box::new(self.parse_expr(0)?);
 
         Ok(StructExprField { ident, val })
+    }
+
+    pub fn parse_fn_call(&mut self, left: Expr) -> ParseResult<FnCall, (Expr, Option<ParserDiag>)> {
+        let arguments = match self.parse_fn_call_arguments() {
+            Ok(arguments) => arguments,
+            Err(diag) => return Err((left, diag)),
+        };
+
+        Ok(FnCall {
+            callee: Box::new(left),
+            arguments,
+        })
     }
 
     pub fn parse_field_access_or_method_call(

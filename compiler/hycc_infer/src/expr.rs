@@ -3,8 +3,8 @@ use hycc_hir::{
     HirMutability,
     def::DefKind,
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirLiteral,
-        HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
+        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
+        HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -31,6 +31,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
             HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),
+            HirExprKind::FnCall(call) => self.infer_fn_call(&call),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
             HirExprKind::MethodCall(call) => todo!("infer method call"),
         }
@@ -194,6 +195,56 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         }
 
         Ok(self.tctx.get_ty_of_hir(def.hir_id).unwrap().id)
+    }
+
+    pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {
+        let callee_ty_id = self.infer_expr(&call.callee)?;
+        let TyKind::Fn(fn_ty) = self.tctx.get(callee_ty_id) else {
+            return Err(Some(InferDiag::error(
+                call.callee.span,
+                InferDiagErrorKind::IllegalInvocation(callee_ty_id),
+            )));
+        };
+
+        let (a_len, p_len) = (call.arguments.data.len(), fn_ty.params.len());
+        if a_len != p_len {
+            return Err(Some(InferDiag::error(
+                call.arguments.span,
+                InferDiagErrorKind::InvalidArgumentCount {
+                    expected: p_len as u8,
+                    received: a_len as u8,
+                },
+            )));
+        }
+
+        let ret_ty = fn_ty.ret_ty;
+        let params = fn_ty.params.clone();
+
+        for (arg, param_ty_id) in call.arguments.data.iter().zip(params.iter()) {
+            let arg_ty_id = match self.infer_expr(&arg) {
+                Ok(ty_id) => ty_id,
+                Err(diag) => {
+                    if let Some(diag) = diag {
+                        self.dctx.add(diag);
+                    }
+
+                    continue;
+                }
+            };
+
+            if !self.tctx.unify_ty(*param_ty_id, arg_ty_id) {
+                self.dctx.add(InferDiag::error(
+                    arg.span,
+                    InferDiagErrorKind::TypeMismatch {
+                        ann_span: Span::default(),
+                        expected: *param_ty_id,
+                        received: arg_ty_id,
+                    },
+                ));
+            }
+        }
+
+        Ok(ret_ty)
     }
 
     pub(crate) fn infer_field_access(&mut self, access: &HirFieldAccess) -> InferResult<TyId> {

@@ -13,7 +13,7 @@ use hycc_ty::{
     fmt::TyFormatter,
     ty::Ty,
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 #[derive(Debug)]
 pub struct InferDiagDataCtx<'t, 'd, 'i> {
@@ -125,6 +125,12 @@ pub enum InferDiagErrorKind {
     },
 
     UnresolvedTy(Ty),
+
+    IllegalInvocation(TyId),
+    InvalidArgumentCount {
+        expected: u8,
+        received: u8,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -246,6 +252,23 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 let Ty { id, .. } = ty;
 
                                 format!("unresolved type `{}`.", fmt.fmt_id(*id))
+                            }
+
+                            Err::IllegalInvocation(ty_id) => {
+                                format!(
+                                    "cannot invoke expression of type `{}`.",
+                                    fmt.fmt_id(*ty_id)
+                                )
+                            }
+
+                            Err::InvalidArgumentCount { expected, received } => {
+                                format!(
+                                    "argument arity mismatch, expected `{}` argument{}, received `{}` argument{}.",
+                                    expected,
+                                    ternary!(*expected > 1, "s", ""),
+                                    received,
+                                    ternary!(*received > 1, "s", "")
+                                )
                             }
                         },
                     )

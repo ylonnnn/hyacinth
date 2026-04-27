@@ -1,8 +1,8 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::{
-        ArrayExpr, CallArguments, FieldAccess, MethodCall, RefExpr, StructExpr, StructExprField,
-        TupleExpr, Unary,
+        ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall, RefExpr, StructExpr,
+        StructExprField, TupleExpr, Unary,
     },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
@@ -18,8 +18,8 @@ use crate::{
     block::HirBlock,
     expr::{
         BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess,
-        HirFieldAccessField, HirFieldAccessFieldKind, HirLiteral, HirMethodCall, HirRefExpr,
-        HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
+        HirFieldAccessField, HirFieldAccessFieldKind, HirFnCall, HirLiteral, HirMethodCall,
+        HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -250,6 +250,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 HirExprKind::Struct(Box::new(self.lower_struct_expr(&strct)))
             }
 
+            ExprKind::FnCall(call) => HirExprKind::FnCall(Box::new(self.lower_fn_call(&call))),
+
             ExprKind::FieldAccess(access) => {
                 HirExprKind::FieldAccess(Box::new(self.lower_field_access(&access)))
             }
@@ -443,6 +445,13 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 }
             })
             .collect()
+    }
+
+    fn lower_fn_call(&mut self, call: &FnCall) -> HirFnCall<'h> {
+        HirFnCall {
+            callee: self.lower_expr(&call.callee),
+            arguments: self.lower_call_arguments(&call.arguments),
+        }
     }
 
     fn lower_field_access(&mut self, access: &FieldAccess) -> HirFieldAccess<'h> {

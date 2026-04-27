@@ -19,6 +19,8 @@ pub enum ExprKind {
     Tuple(Box<TupleExpr>),
     Struct(Box<StructExpr>),
 
+    FnCall(Box<FnCall>),
+
     FieldAccess(Box<FieldAccess>),
     MethodCall(Box<MethodCall>),
 }
@@ -39,6 +41,8 @@ impl ExprKind {
             Self::Array(array) => array.span,
             Self::Tuple(tup) => tup.span,
             Self::Struct(strct) => strct.span,
+
+            Self::FnCall(call) => call.callee.span.merge(&call.arguments.span),
 
             Self::FieldAccess(access) => access.leading.span.merge(&access.field.span),
             Self::MethodCall(call) => call.receiver.span.merge(&call.arguments.span),
@@ -78,8 +82,10 @@ impl ExprKind {
                 .reduce(|acc, eval| acc.infer(&eval))
                 .unwrap_or_else(|| ExprEvaluatability::CompileTime),
 
-            Self::FieldAccess(_) => ExprEvaluatability::CompileTime,
-            Self::MethodCall(_) => ExprEvaluatability::CompileTime,
+            Self::FnCall(_) => ExprEvaluatability::Unknown,
+
+            Self::FieldAccess(_) => ExprEvaluatability::Unknown,
+            Self::MethodCall(_) => ExprEvaluatability::Unknown,
         }
     }
 }
@@ -150,12 +156,6 @@ impl Unary {
 }
 
 #[derive(Debug, Clone)]
-pub struct CallArguments {
-    pub data: Vec<Expr>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone)]
 pub struct ArrayExpr {
     pub elements: Vec<Expr>,
     pub span: Span,
@@ -184,6 +184,18 @@ pub struct StructExprField {
 pub struct FieldAccess {
     pub leading: Box<Expr>,
     pub field: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct CallArguments {
+    pub data: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct FnCall {
+    pub callee: Box<Expr>,
+    pub arguments: CallArguments,
 }
 
 #[derive(Debug, Clone)]

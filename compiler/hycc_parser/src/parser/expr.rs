@@ -170,25 +170,9 @@ impl<'s> Parser<'s> {
                 }
             }
 
-            TokenKind::Ampersand => {
-                let span = self.next_nonlf_token().unwrap().span;
-                let mutability = if self
-                    .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
-                    .0
-                {
-                    Mutability::Mutable
-                } else {
-                    Mutability::Immutable
-                };
-
-                let expr = self.parse_expr(0)?;
-
-                Ok(Expr::new(ExprKind::RefExpr(Box::new(RefExpr {
-                    span: span.merge(&expr.span),
-                    expr: Box::new(expr),
-                    mutability,
-                }))))
-            }
+            TokenKind::Ampersand => Ok(Expr::new(ExprKind::RefExpr(Box::new(
+                self.parse_ref_expr()?,
+            )))),
 
             TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Array(Box::new(
                 self.parse_array_expr()?,
@@ -236,22 +220,7 @@ impl<'s> Parser<'s> {
             | TokenKind::Ampersand
             | TokenKind::Pipe
             | TokenKind::Tilde
-            | TokenKind::Caret => {
-                let Some(token) = self.next_nonlf_token() else {
-                    todo!("throw error: missing right-hand side expression")
-                };
-
-                let right = match self.parse_expr(min_bp) {
-                    Ok(right) => right,
-                    Err(diag) => return Err((left, diag)),
-                };
-
-                Ok(Expr::new(ExprKind::Binary(
-                    token,
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
+            | TokenKind::Caret => self.parse_binary_expr(left, min_bp),
 
             TokenKind::Greater => {
                 // This is done in order for the identifier arguments to be properly parsed and
@@ -307,71 +276,9 @@ impl<'s> Parser<'s> {
             | TokenKind::MinusEq
             | TokenKind::StarEq
             | TokenKind::SlashEq
-            | TokenKind::PercentEq => {
-                if self.next_nonlf_token().is_none() {
-                    return Err((left, None)); // TODO: throw error: missing right-hand side expression
-                };
+            | TokenKind::PercentEq => Ok(Expr::new(self.parse_assign(left)?)),
 
-                let right = match self.parse_expr(min_bp) {
-                    Ok(right) => right,
-                    Err(diag) => return Err((left, diag)),
-                };
-
-                Ok(Expr::new(ExprKind::Assign(Box::new(left), Box::new(right))))
-            }
-
-            TokenKind::Dot => {
-                self.adjust_to_nonlf();
-
-                // Field access for tuples or any integer fields
-                if let (true, Some(tg)) = self.expect_similar_nonlf(TokenKind::Int { base: 64 }) {
-                    return Ok(Expr::new(ExprKind::FieldAccess(Box::new(FieldAccess {
-                        leading: Box::new(left),
-                        field: tg.underlying().unwrap().clone(),
-                    }))));
-                }
-
-                let ident = match self.parse_ident(PathKind::Expr) {
-                    Ok(ident) => ident,
-                    Err(diag) => return Err((left, diag)),
-                };
-
-                // If the identifier consists of arguments, it is guaranteed
-                // to be a method call.
-                let kind = if ident.arguments.is_some() {
-                    let arguments = match self.parse_fn_call_arguments() {
-                        Ok(arguments) => arguments,
-                        Err(diag) => return Err((left, diag)),
-                    };
-
-                    ExprKind::MethodCall(Box::new(MethodCall {
-                        receiver: Box::new(left),
-                        callee: ident,
-                        arguments,
-                    }))
-                } else {
-                    // If the next token is a `LeftParen`, it is a method call
-                    if self.expect_preserved_exact_nonlf(TokenKind::LeftParen).0 {
-                        let arguments = match self.parse_fn_call_arguments() {
-                            Ok(arguments) => arguments,
-                            Err(diag) => return Err((left, diag)),
-                        };
-
-                        ExprKind::MethodCall(Box::new(MethodCall {
-                            receiver: Box::new(left),
-                            callee: ident,
-                            arguments,
-                        }))
-                    } else {
-                        ExprKind::FieldAccess(Box::new(FieldAccess {
-                            leading: Box::new(left),
-                            field: ident.ident,
-                        }))
-                    }
-                };
-
-                Ok(Expr::new(kind))
-            }
+            TokenKind::Dot => Ok(Expr::new(self.parse_field_access_or_method_call(left)?)),
 
             _ => Err((
                 left,
@@ -381,6 +288,43 @@ impl<'s> Parser<'s> {
                 )),
             )),
         }
+    }
+
+    pub fn parse_binary_expr(
+        &mut self,
+        left: Expr,
+        min_bp: u8,
+    ) -> ParseResult<Expr, (Expr, Option<ParserDiag>)> {
+        let Some(token) = self.next_nonlf_token() else {
+            todo!("throw error: missing right-hand side expression")
+        };
+
+        let right = match self.parse_expr(min_bp) {
+            Ok(right) => right,
+            Err(diag) => return Err((left, diag)),
+        };
+
+        Ok(Expr::new(ExprKind::Binary(
+            token,
+            Box::new(left),
+            Box::new(right),
+        )))
+    }
+
+    pub fn parse_assign(
+        &mut self,
+        left: Expr,
+    ) -> ParseResult<ExprKind, (Expr, Option<ParserDiag>)> {
+        if self.next_nonlf_token().is_none() {
+            todo!("throw error: missing right-hand side expression")
+        };
+
+        let right = match self.parse_expr(0) {
+            Ok(right) => right,
+            Err(diag) => return Err((left, diag)),
+        };
+
+        Ok(ExprKind::Assign(Box::new(left), Box::new(right)))
     }
 
     pub fn parse_paren_enclosed_expr(&mut self) -> ParseResult<Expr> {
@@ -467,6 +411,26 @@ impl<'s> Parser<'s> {
                 Ok(args)
             },
         )
+    }
+
+    pub fn parse_ref_expr(&mut self) -> ParseResult<RefExpr> {
+        let span = self.next_nonlf_token().unwrap().span;
+        let mutability = if self
+            .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
+            .0
+        {
+            Mutability::Mutable
+        } else {
+            Mutability::Immutable
+        };
+
+        let expr = self.parse_expr(0)?;
+
+        Ok(RefExpr {
+            span: span.merge(&expr.span),
+            expr: Box::new(expr),
+            mutability,
+        })
     }
 
     pub fn parse_array_expr(&mut self) -> ParseResult<ArrayExpr> {
@@ -581,5 +545,61 @@ impl<'s> Parser<'s> {
         let val = Box::new(self.parse_expr(0)?);
 
         Ok(StructExprField { ident, val })
+    }
+
+    pub fn parse_field_access_or_method_call(
+        &mut self,
+        left: Expr,
+    ) -> ParseResult<ExprKind, (Expr, Option<ParserDiag>)> {
+        self.adjust_to_nonlf();
+
+        // Field access for tuples or any integer fields
+        if let (true, Some(tg)) = self.expect_similar_nonlf(TokenKind::Int { base: 64 }) {
+            return Ok(ExprKind::FieldAccess(Box::new(FieldAccess {
+                leading: Box::new(left),
+                field: tg.underlying().unwrap().clone(),
+            })));
+        }
+
+        let ident = match self.parse_ident(PathKind::Expr) {
+            Ok(ident) => ident,
+            Err(diag) => return Err((left, diag)),
+        };
+
+        // If the identifier consists of arguments, it is guaranteed
+        // to be a method call.
+        let kind = if ident.arguments.is_some() {
+            let arguments = match self.parse_fn_call_arguments() {
+                Ok(arguments) => arguments,
+                Err(diag) => return Err((left, diag)),
+            };
+
+            ExprKind::MethodCall(Box::new(MethodCall {
+                receiver: Box::new(left),
+                callee: ident,
+                arguments,
+            }))
+        } else {
+            // If the next token is a `LeftParen`, it is a method call
+            if self.expect_preserved_exact_nonlf(TokenKind::LeftParen).0 {
+                let arguments = match self.parse_fn_call_arguments() {
+                    Ok(arguments) => arguments,
+                    Err(diag) => return Err((left, diag)),
+                };
+
+                ExprKind::MethodCall(Box::new(MethodCall {
+                    receiver: Box::new(left),
+                    callee: ident,
+                    arguments,
+                }))
+            } else {
+                ExprKind::FieldAccess(Box::new(FieldAccess {
+                    leading: Box::new(left),
+                    field: ident.ident,
+                }))
+            }
+        };
+
+        Ok(kind)
     }
 }

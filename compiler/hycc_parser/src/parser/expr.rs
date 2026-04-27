@@ -2,7 +2,7 @@ use hycc_ast::{
     Expr, ExprKind, Identifier, Mutability, Path,
     expr::{
         ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall, RefExpr, StructExpr,
-        StructExprField, TupleExpr,
+        StructExprField, TupleExpr, Unary,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
@@ -26,7 +26,6 @@ pub enum ExprInfixBindingPower {
     Exp,
     Unary,
     FnCall,
-    MemAccess,
     Primary,
 }
 
@@ -64,14 +63,11 @@ impl<'s> Parser<'s> {
 
             TokenKind::Plus | TokenKind::Minus => Some((Add as u8, Add as u8)),
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Some((Mul as u8, Mul as u8)),
+            TokenKind::CaretCaret => Some((Exp as u8, Exp as u8)),
 
-            TokenKind::Bang | TokenKind::PlusPlus | TokenKind::MinusMinus => {
-                Some((Unary as u8, Unary as u8))
-            }
+            TokenKind::Bang => Some((Unary as u8, Unary as u8)),
 
             TokenKind::LeftParen => Some((FnCall as u8, Default as u8)),
-
-            TokenKind::Dot => Some((MemAccess as u8, MemAccess as u8)),
 
             TokenKind::Int { .. }
             | TokenKind::Float { .. }
@@ -168,6 +164,17 @@ impl<'s> Parser<'s> {
                 } else {
                     Ok(Expr::new(ExprKind::Path(Box::new(path))))
                 }
+            }
+
+            TokenKind::Minus | TokenKind::Bang | TokenKind::Star => {
+                let Some(tok) = self.next_nonlf_token() else {
+                    unreachable!()
+                };
+
+                Ok(Expr::new(ExprKind::Unary(Box::new(dbg!(Unary::Pre(
+                    tok,
+                    Box::new(self.parse_expr(ExprInfixBindingPower::Unary as u8)?),
+                ))))))
             }
 
             TokenKind::Ampersand => Ok(Expr::new(ExprKind::RefExpr(Box::new(

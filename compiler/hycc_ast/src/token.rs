@@ -63,9 +63,11 @@ impl TokenGraph {
     pub fn span(&self) -> Span {
         match self {
             Self::Node(token) => token.span,
-            Self::Collection { data, .. } => {
-                data.first().unwrap().span().merge(&data.last().unwrap().span())
-            }
+            Self::Collection { data, .. } => data
+                .first()
+                .unwrap()
+                .span()
+                .merge(&data.last().unwrap().span()),
         }
     }
 
@@ -130,6 +132,10 @@ pub enum TokenIdentKind {
     Let,
 
     Mut,
+
+    // Conrol Flow
+    Ret,
+    Pass,
 }
 
 #[repr(u8)]
@@ -154,10 +160,8 @@ pub enum TokenKind {
 
     // Operators
     Plus,
-    PlusPlus,
     PlusEq,
     Minus,
-    MinusMinus,
     MinusEq,
     Star,
     StarEq,
@@ -231,16 +235,17 @@ impl Display for TokenKind {
 
                     TokenIdentKind::Mut => "mut",
 
+                    TokenIdentKind::Ret => "ret",
+                    TokenIdentKind::Pass => "pass",
+
                     TokenIdentKind::Normal => "ident",
                 },
 
                 Self::MacroIdent => "macro ident",
 
                 Self::Plus => "+",
-                Self::PlusPlus => "++",
                 Self::PlusEq => "+=",
                 Self::Minus => "-",
-                Self::MinusMinus => "--",
                 Self::MinusEq => "-=",
                 Self::Star => "*",
                 Self::StarEq => "*=",

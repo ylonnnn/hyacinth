@@ -78,12 +78,10 @@ pub enum UnaryOp {
     #[default]
     Nop,
 
-    Negative,
+    Negate,
     Not,
-    BitwiseNot,
 
-    Increment,
-    Decrement,
+    Deref,
 }
 
 #[derive(Debug, Default, Clone, Copy)]

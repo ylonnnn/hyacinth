@@ -361,12 +361,9 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         match expr {
             Unary::Pre(op, expr) => HirUnary::Pre(
                 match op.kind {
-                    TokenKind::Minus => UnaryOp::Negative,
+                    TokenKind::Minus => UnaryOp::Negate,
                     TokenKind::Bang => UnaryOp::Not,
-                    TokenKind::Tilde => UnaryOp::BitwiseNot,
-
-                    TokenKind::PlusPlus => UnaryOp::Increment,
-                    TokenKind::MinusMinus => UnaryOp::Decrement,
+                    TokenKind::Star => UnaryOp::Deref,
 
                     _ => UnaryOp::Nop,
                 },
@@ -374,9 +371,6 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
             ),
             Unary::Post(op, expr) => HirUnary::Post(
                 match op.kind {
-                    TokenKind::PlusPlus => UnaryOp::Increment,
-                    TokenKind::MinusMinus => UnaryOp::Decrement,
-
                     _ => UnaryOp::Nop,
                 },
                 self.lower_expr(&expr),

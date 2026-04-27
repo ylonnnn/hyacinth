@@ -41,6 +41,8 @@ impl<'s> Lexer<'s> {
                     TokenIdentKind::Let,
                     TokenIdentKind::Struct,
                     TokenIdentKind::Mut,
+                    TokenIdentKind::Ret,
+                    TokenIdentKind::Pass,
                 ] {
                     let kind = TokenKind::Ident(ident);
                     reserved.insert(Box::from(kind.to_string()), kind);
@@ -191,11 +193,6 @@ impl<'s> Lexer<'s> {
     fn read_num(&mut self) -> Option<Token> {
         let src_id = self.source.identifier.0;
         let start = self.offset;
-
-        // Skip `-` for negative literals
-        if let Some(b'-') = self.peek() {
-            self.adjust();
-        }
 
         // Identify base according to prefix
         let mut base: u8 = 10;
@@ -455,16 +452,13 @@ impl<'s> Lexer<'s> {
                     b'\'' | b'\"' => self.read_char_seq(),
 
                     b'+' => Some(match self.peekn(1) {
-                        Some(b'+') => token!(TokenKind::PlusPlus, span.extend(1)),
                         Some(b'=') => token!(TokenKind::PlusEq, span.extend(1)),
                         _ => token!(TokenKind::Plus, span),
                     }),
 
                     b'-' => Some(match self.peekn(1) {
-                        Some(b'-') => token!(TokenKind::MinusMinus, span.extend(1)),
                         Some(b'=') => token!(TokenKind::MinusEq, span.extend(1)),
                         Some(b'>') => token!(TokenKind::MinusGreater, span.extend(1)),
-                        Some(b'0') => self.read_num().unwrap(),
                         _ => token!(TokenKind::Minus, span),
                     }),
 

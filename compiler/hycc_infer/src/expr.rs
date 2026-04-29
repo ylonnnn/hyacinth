@@ -10,7 +10,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
-    ty::{InferKind, RefMutability, TyKind},
+    ty::{InferKind, RefMutability, Ty, TyKind},
 };
 use hycc_util::{bug, ternary};
 
@@ -60,6 +60,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     }
 
     pub(crate) fn infer_array_expr(&mut self, array: &HirArrayExpr) -> InferResult<TyId> {
+        // TODO: improve. use initial state verification for micro-optimization
         let mut el_ty_id = self.tctx.make_inferred_ty(InferKind::Any);
 
         for expr in &array.elements {
@@ -74,16 +75,11 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 }
             };
 
-            if !self.tctx.unify_ty(el_ty_id, curr_el_ty_id) {
-                self.dctx.add(InferDiag::error(
-                    expr.span,
-                    InferDiagErrorKind::TypeMismatch {
-                        ann_span: Span::default(),
-                        expected: el_ty_id,
-                        received: curr_el_ty_id,
-                    },
-                ));
-            }
+            self.check(
+                &Ty::new(el_ty_id, Span::default()),
+                &Ty::new(curr_el_ty_id, expr.span),
+            )
+            .map(|diag| self.dctx.add(diag));
 
             el_ty_id = self.tctx.resolve_ty(el_ty_id);
             self.tctx.resolve_ty(curr_el_ty_id);
@@ -172,16 +168,8 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 unreachable!()
             };
 
-            if !self.tctx.unify_ty(t_field_ty.id, field_ty_id) {
-                self.dctx.add(InferDiag::error(
-                    field.val.span,
-                    InferDiagErrorKind::TypeMismatch {
-                        ann_span: t_field_ty.span,
-                        expected: t_field_ty.id,
-                        received: field_ty_id,
-                    },
-                ));
-            }
+            self.check(&t_field_ty, &Ty::new(field_ty_id, field.val.span))
+                .map(|diag| self.dctx.add(diag));
         }
 
         let missing_mask = !field_mask & ((1 << strct_def.fields.len()) - 1);
@@ -233,16 +221,11 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 }
             };
 
-            if !self.tctx.unify_ty(*param_ty_id, arg_ty_id) {
-                self.dctx.add(InferDiag::error(
-                    arg.span,
-                    InferDiagErrorKind::TypeMismatch {
-                        ann_span: Span::default(),
-                        expected: *param_ty_id,
-                        received: arg_ty_id,
-                    },
-                ));
-            }
+            self.check(
+                &Ty::new(*param_ty_id, Span::default()),
+                &Ty::new(arg_ty_id, arg.span),
+            )
+            .map(|diag| self.dctx.add(diag));
         }
 
         Ok(ret_ty)

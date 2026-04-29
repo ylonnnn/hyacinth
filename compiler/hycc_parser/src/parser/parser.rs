@@ -247,7 +247,7 @@ impl<'s> Parser<'s> {
             Span::dummy(self.source.identifier.0),
         );
 
-        while !self.stream.at_eof() {
+        while !self.eos() {
             match self.parse_item_with_recovery() {
                 Ok(item) => petal.items.push(item),
                 Err(err) => {

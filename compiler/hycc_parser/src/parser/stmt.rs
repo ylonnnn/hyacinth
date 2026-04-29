@@ -1,4 +1,8 @@
-use hycc_ast::{Stmt, StmtKind, token::TokenKind};
+use hycc_ast::{
+    Stmt, StmtKind,
+    stmt::{PassStmt, RetStmt},
+    token::{TokenIdentKind, TokenKind},
+};
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult};
 
@@ -35,7 +39,46 @@ impl<'s> Parser<'s> {
 
         match tok.kind {
             // TODO: implement other statements
-            // TokenKind::Ident(..) => None,
+            TokenKind::Ident(TokenIdentKind::Ret) => {
+                let value = if self.eos() {
+                    None
+                } else {
+                    match self.parse_expr(0) {
+                        Ok(expr) => Some(Box::new(expr)),
+                        Err(None) => None,
+                        Err(err) => return Err(err),
+                    }
+                };
+
+                Ok(Stmt::new(StmtKind::Ret(Box::new(RetStmt {
+                    span: value
+                        .as_ref()
+                        .map_or(tok.span, |val| val.span.merge(&tok.span)),
+                    value,
+                }))))
+            }
+
+            TokenKind::Ident(TokenIdentKind::Pass) => {
+                // TODO: parse label
+                let value = if self.eos() {
+                    None
+                } else {
+                    match self.parse_expr(0) {
+                        Ok(expr) => Some(Box::new(expr)),
+                        Err(None) => None,
+                        Err(err) => return Err(err),
+                    }
+                };
+
+                Ok(Stmt::new(StmtKind::Pass(Box::new(PassStmt {
+                    span: value
+                        .as_ref()
+                        .map_or(tok.span, |val| val.span.merge(&tok.span)),
+                    label: None, // TODO: block label used in pass
+                    value,
+                }))))
+            }
+
             _ => {
                 self.stream.revert();
                 self.stream.save_offset();

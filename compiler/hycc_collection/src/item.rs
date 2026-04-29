@@ -1,6 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
+    expr::HirExprKind,
     item::{HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
@@ -173,10 +174,8 @@ impl<'t, 'h> Collector<'t, 'h> {
                 }
 
                 CollectionLevel::Local => {
-                    for stmt in &func.body.stmts {
-                        if let Err(Some(diag)) = s.collect_stmt(&stmt) {
-                            s.dctx.add(diag);
-                        }
+                    if let Err(Some(diag)) = s.collect_block(&func.body) {
+                        s.dctx.add(diag);
                     }
                 }
             }
@@ -191,6 +190,12 @@ impl<'t, 'h> Collector<'t, 'h> {
         };
 
         if !self.is_expected_to_be_collected() {
+            if let Some(val) = var.val {
+                if let Err(Some(diag)) = self.collect_expr(&val) {
+                    self.dctx.add(diag);
+                }
+            }
+
             self.define(Definition::new(
                 var.ident.ident,
                 DefKind::Var,

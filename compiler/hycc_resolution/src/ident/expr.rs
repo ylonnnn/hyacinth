@@ -3,6 +3,7 @@ use hycc_hir::{
     def::DefSpace,
     expr::{HirExpr, HirExprKind, HirUnary},
 };
+use hycc_scope::Scope;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 

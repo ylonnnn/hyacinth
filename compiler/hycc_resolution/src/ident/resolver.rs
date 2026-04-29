@@ -44,13 +44,15 @@ impl<'s, 'd> Resolver<'s, 'd> {
         Some(self.definitions.get(def_id))
     }
 
-    pub fn enter_scope<F>(&mut self, scope_id: ScopeId, mut handler: F)
+    pub fn enter_scope<F, U>(&mut self, scope_id: ScopeId, mut handler: F) -> U
     where
-        F: FnMut(&mut Self),
+        F: FnMut(&mut Self) -> U,
     {
         self.scope_ctx.push_id(scope_id);
-        handler(self);
+        let data = handler(self);
         self.scope_ctx.pop();
+
+        data
     }
 
     pub fn expect_space<F, R>(&mut self, space: DefSpace, mut handler: F) -> R

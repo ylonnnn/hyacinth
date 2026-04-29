@@ -5,8 +5,21 @@ use crate::{ResolveResult, ty::resolver::TyResolver};
 impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_stmt(&mut self, stmt: &HirStmt) -> ResolveResult {
         match &stmt.kind {
+            HirStmtKind::Ret(ret) => {
+                let Some(val) = &ret.value else { return Ok(()) };
+                self.resolve_expr(&val)
+            }
+
+            HirStmtKind::Pass(pass) => {
+                let Some(val) = &pass.value else {
+                    return Ok(());
+                };
+
+                self.resolve_expr(&val)
+            }
+
             HirStmtKind::Item(item) => self.resolve_item(&item),
-            _ => Ok(()),
+            HirStmtKind::Expr(expr) => self.resolve_expr(&expr),
         }
     }
 }

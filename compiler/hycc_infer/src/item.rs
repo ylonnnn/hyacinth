@@ -8,7 +8,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'r>  TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_item(&mut self, item: &HirItem) -> InferResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
@@ -48,11 +48,11 @@ impl<'t, 'd, 'r>  TyInferer<'t, 'd, 'r> {
         };
 
         let ty = decl.ty.map(|ty| {
-            let Some(ty_id) = self.tctx.get_ty_of_hir(ty.id).cloned() else {
-                bug!("var decl ty hir is not attached to a TyId: {:?}", ty.id)
+            let Some(ty) = self.tctx.get_ty_of_hir(ty.id).cloned() else {
+                bug!("var decl ty hir is not attached to a Ty: {:?}", ty.id)
             };
 
-            ty_id
+            ty
         });
 
         if let Some(expr) = decl.val {

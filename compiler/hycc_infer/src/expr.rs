@@ -28,7 +28,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             HirExprKind::Binary(op, left, right) => todo!("infer binary"),
             HirExprKind::Unary(unary) => todo!("infer unary"),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
-            HirExprKind::Block(block) => todo!("infer block"),
+            HirExprKind::Block(block) => self.infer_block(&block),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
             HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),

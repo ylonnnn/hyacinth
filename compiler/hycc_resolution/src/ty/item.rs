@@ -44,10 +44,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             match self.resolve_as_non_inferable_ty(&param.ty) {
                 Ok(ty_id) => params.push(ty_id),
                 Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
-
+                    diag.map(|diag| self.dctx.add(diag));
                     continue;
                 }
             }
@@ -58,9 +55,7 @@ impl<'d, 'r> TyResolver<'d, 'r> {
             match self.resolve_ty(&r_ty) {
                 Ok(ty_id) => ret_ty = ty_id,
                 Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
+                    diag.map(|diag| self.dctx.add(diag));
                 }
             }
         }
@@ -90,6 +85,13 @@ impl<'d, 'r> TyResolver<'d, 'r> {
                     self.dctx.add(diag);
                 }
                 _ => {}
+            }
+        }
+
+        // Attempt to resolve block expressions
+        if let Some(expr) = decl.val {
+            if let Err(Some(diag)) = self.resolve_expr(&expr) {
+                self.dctx.add(diag);
             }
         }
 

@@ -1,11 +1,14 @@
 use hycc_span::Span;
 
-use crate::{HirId, expr::HirExpr, item::HirItem};
+use crate::{HirId, expr::HirExpr, item::HirItem, path::HirRawIdent};
 
 #[derive(Debug, Clone)]
 pub enum HirStmtKind<'h> {
-    Expr(&'h HirExpr<'h>),
+    Ret(Box<HirRetStmt<'h>>),
+    Pass(Box<HirPassStmt<'h>>),
+
     Item(&'h HirItem<'h>),
+    Expr(&'h HirExpr<'h>),
 }
 
 #[derive(Debug, Clone)]
@@ -23,4 +26,17 @@ impl<'h> HirStmt<'h> {
             span,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirRetStmt<'h> {
+    pub value: Option<&'h HirExpr<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirPassStmt<'h> {
+    pub value: Option<&'h HirExpr<'h>>,
+    pub label: Option<&'h HirRawIdent>,
+    pub span: Span,
 }

@@ -59,8 +59,8 @@ impl<'d, 's> CLIReporter<'d, 's> {
                 let dig_n = ((num as f32).log10().floor() as usize) + 1;
 
                 let prefix = format!(
-                    " {line_num}{padding}{pipe}  {r}",
-                    padding = " ".repeat((2 + digit_n) - dig_n),
+                    " {line_num}{padding}{pipe} {r}",
+                    padding = " ".repeat((1 + digit_n) - dig_n),
                     line_num = num.to_string().style(bb).style(b),
                     pipe = "|",
                 );
@@ -75,7 +75,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     format!(
                         "{ptr_prefix}{padding}{pointer}",
                         ptr_prefix = format!(
-                            " {space}  {pipe}  {r}",
+                            " {space} {pipe} {r}",
                             space = " ".repeat(digit_n as usize),
                             pipe = "|".style(bb).style(b),
                         ),

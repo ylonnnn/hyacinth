@@ -141,15 +141,14 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let sev_color = self.color(&kind);
 
         let indentation = 6 * indentation as usize;
-        let s_kind_indent = " ".repeat(indentation.saturating_sub(2));
-        let indent = " ".repeat(indentation);
+        let indent = " ".repeat(indentation.saturating_sub(2));
 
         let Ok(cwd) = std::env::current_dir() else {
             panic!("failed to retrieve the current directory")
         };
 
         format!(
-            "{s_kind_indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}{details}",
+            "{indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}{details}",
             s_kind.to_string().style(&sev_color).bold(),
             code.map_or_else(
                 || ":".into(),

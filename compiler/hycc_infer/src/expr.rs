@@ -3,8 +3,8 @@ use hycc_hir::{
     HirMutability,
     def::DefKind,
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
-        HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
+        HirAnonFn, HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind,
+        HirFnCall, HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -16,6 +16,7 @@ use hycc_util::{bug, ternary};
 
 use crate::{
     diag::{InferDiag, InferDiagErrorKind},
+    fn_ctx::FnCtx,
     inferer::{InferResult, TyInferer},
 };
 
@@ -32,6 +33,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
             HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),
+            HirExprKind::AnonFn(_) => self.infer_anon_fn(&expr),
             HirExprKind::FnCall(call) => self.infer_fn_call(&call),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
             HirExprKind::MethodCall(call) => todo!("infer method call"),
@@ -186,6 +188,41 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         Ok(self.tctx.get_ty_of_hir(def.hir_id).unwrap().id)
     }
 
+    pub(crate) fn infer_anon_fn(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
+        let HirExprKind::AnonFn(anfn) = &anfn_expr.kind else {
+            unreachable!()
+        };
+
+        let Some(fn_ty) = self.tctx.get_ty_of_hir(anfn_expr.id).cloned() else {
+            bug!(
+                "anon fn hir {:?} does not have an attached ty",
+                anfn_expr.id
+            )
+        };
+
+        let fn_ty_id = fn_ty.id;
+
+        self.use_fn_ctx(FnCtx::new(fn_ty), |s| {
+            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+                return;
+            };
+
+            let ret_ty = Ty::new(
+                fn_ty.ret_ty,
+                anfn.ret_ty.map(|ty| ty.span).unwrap_or(Span::default()),
+            );
+            s.tctx.attach_to_hir(anfn.body.id, ret_ty);
+
+            // TODO: type check block to determine if it has proper return values
+
+            if let Err(Some(diag)) = s.infer_block(&anfn.body) {
+                s.dctx.add(diag);
+            }
+        });
+
+        Ok(fn_ty_id)
+    }
+
     pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {
         let callee_ty_id = self.infer_expr(&call.callee)?;
         let TyKind::Fn(fn_ty) = self.tctx.get(callee_ty_id) else {
@@ -228,7 +265,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             .map(|diag| self.dctx.add(diag));
         }
 
-        Ok(ret_ty)
+        Ok(self.tctx.resolve_ty(ret_ty))
     }
 
     pub(crate) fn infer_field_access(&mut self, access: &HirFieldAccess) -> InferResult<TyId> {

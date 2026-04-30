@@ -1,13 +1,14 @@
 use hycc_ast::{
-    Expr, ExprKind, Identifier, Mutability, Path,
+    Expr, ExprKind, Identifier, Mutability, Path, Ty,
     expr::{
-        ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall, RefExpr, StructExpr,
-        StructExprField, TupleExpr, Unary,
+        AnonFn, AnonFnParam, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall,
+        MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
 use hycc_diagnostic::DiagnosticContext;
+use hycc_span::Span;
 use hycc_util::ternary;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
@@ -153,16 +154,23 @@ impl<'s> Parser<'s> {
                 self.next_nonlf_token().unwrap().clone(),
             ))),
 
-            TokenKind::Ident(..) => {
+            TokenKind::Ident(ident_kind) => {
+                let span = token.span;
                 let path = self.parse_path(PathKind::Expr)?;
+                let Some(trailing) = self.peek_nonlf_token() else {
+                    return Ok(Expr::new(ExprKind::Path(Box::new(path))));
+                };
 
-                if let Some(tailing) = self.peek_nonlf_token()
-                    && tailing.kind == TokenKind::LeftBrace
-                {
-                    let strct = self.parse_struct_expr(path)?;
-                    Ok(Expr::new(ExprKind::Struct(Box::new(strct))))
-                } else {
-                    Ok(Expr::new(ExprKind::Path(Box::new(path))))
+                match &trailing.kind {
+                    TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Struct(Box::new(
+                        self.parse_struct_expr(path)?,
+                    )))),
+
+                    TokenKind::LeftParen if ident_kind == TokenIdentKind::Fn => Ok(Expr::new(
+                        ExprKind::AnonFn(Box::new(self.parse_anon_fn(span)?)),
+                    )),
+
+                    _ => Ok(Expr::new(ExprKind::Path(Box::new(path)))),
                 }
             }
 
@@ -558,6 +566,83 @@ impl<'s> Parser<'s> {
         let val = Box::new(self.parse_expr(0)?);
 
         Ok(StructExprField { ident, val })
+    }
+
+    // fn ( (PARAM (, PARAM)*)? ) (-> RET_TY)? BODY
+    pub fn parse_anon_fn(&mut self, span: Span) -> ParseResult<AnonFn> {
+        // ( (PARAM (, PARAM)*)? )
+        let params = self.parse_anon_fn_param_list()?;
+
+        // ->
+        let mut ret_ty: Option<Box<Ty>> = None;
+        if self.expect_exact_nonlf(TokenKind::MinusGreater).0 {
+            // RET_TY
+            ret_ty = Some(Box::new(self.parse_ty()?));
+        }
+
+        // BODY
+        let body = self.parse_block()?;
+
+        Ok(AnonFn {
+            span: span.merge(&body.span),
+            params,
+            ret_ty,
+            body,
+        })
+    }
+
+    pub fn parse_anon_fn_param_list(&mut self) -> ParseResult<AnonFnParamList> {
+        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
+            return Err(None);
+        };
+
+        let span = tg.span();
+        let TokenGraph::Collection { data, .. } = tg else {
+            unreachable!()
+        };
+
+        let n = data.len();
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| {
+                let mut params = AnonFnParamList {
+                    list: Vec::new(),
+                    span,
+                };
+
+                let mut expect = true;
+                while !s.eos() {
+                    if !expect {
+                        s.require_exact_nonlf(TokenKind::Comma)?;
+                    }
+
+                    if expect {
+                        params.list.push(s.parse_anon_fn_param()?);
+                        expect = false;
+                    }
+
+                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                        expect = true;
+                        continue;
+                    }
+                }
+
+                Ok(params)
+            },
+        )
+    }
+
+    pub fn parse_anon_fn_param(&mut self) -> ParseResult<AnonFnParam> {
+        // IDENT
+        let ident = self.parse_raw_ident()?;
+
+        // Optional type annotation
+        let mut ty: Option<Box<Ty>> = None;
+        if self.expect_exact_nonlf(TokenKind::Colon).0 {
+            ty = Some(Box::new(self.parse_ty()?));
+        }
+
+        Ok(AnonFnParam { ident, ty })
     }
 
     pub fn parse_fn_call(&mut self, left: Expr) -> ParseResult<FnCall, (Expr, Option<ParserDiag>)> {

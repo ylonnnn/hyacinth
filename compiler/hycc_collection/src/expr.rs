@@ -1,7 +1,11 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::expr::{HirExpr, HirExprKind, HirUnary};
+use hycc_hir::{
+    def::{DefAccessibility, DefKind, Definition},
+    expr::{HirExpr, HirExprKind, HirUnary},
+};
+use hycc_scope::Scope;
 
-use crate::collector::{CollectResult, Collector};
+use crate::collector::{CollectResult, CollectionLevel, Collector};
 
 impl<'t, 'h> Collector<'t, 'h> {
     pub(crate) fn collect_expr(&mut self, expr: &HirExpr) -> CollectResult {
@@ -61,6 +65,31 @@ impl<'t, 'h> Collector<'t, 'h> {
                 }
 
                 Ok(())
+            }
+
+            HirExprKind::AnonFn(anfn) => {
+                let scope_id = self.scope_ctx.attach(expr.id, Scope::new());
+                self.enter_scope(scope_id, CollectionLevel::Local, |s| {
+                    for param in &anfn.params.list {
+                        let res = s.define(Definition::new(
+                            param.ident.ident,
+                            DefKind::FnParam,
+                            param.id,
+                            param.span,
+                            DefAccessibility::Priv,
+                        ));
+
+                        if let Err(Some(diag)) = res {
+                            s.dctx.add(diag);
+                        }
+                    }
+
+                    if let Err(Some(diag)) = s.collect_block(&anfn.body) {
+                        s.dctx.add(diag);
+                    }
+
+                    Ok(())
+                })
             }
 
             HirExprKind::FnCall(call) => {

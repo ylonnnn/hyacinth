@@ -56,6 +56,8 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             );
             s.tctx.attach_to_hir(func.body.id, ret_ty);
 
+            // TODO: type check block to determine if it has proper return values
+
             if let Err(Some(diag)) = s.infer_block(&func.body) {
                 s.dctx.add(diag);
             }

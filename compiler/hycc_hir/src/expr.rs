@@ -2,6 +2,7 @@ use crate::{
     HirId, HirMutability,
     block::HirBlock,
     path::{HirIdent, HirPath, HirRawIdent},
+    ty::HirTy,
 };
 
 use hycc_ast::expr::ExprEvaluatability;
@@ -26,6 +27,8 @@ pub enum HirExprKind<'h> {
     Array(Box<HirArrayExpr<'h>>),
     Tuple(Box<HirTupleExpr<'h>>),
     Struct(Box<HirStructExpr<'h>>),
+
+    AnonFn(Box<HirAnonFn<'h>>),
 
     FnCall(Box<HirFnCall<'h>>),
 
@@ -155,6 +158,41 @@ impl<'h> HirStructExprField<'h> {
     pub fn span(&self) -> Span {
         self.ident.span.merge(&self.val.span)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirAnonFnParam<'h> {
+    pub id: HirId,
+    pub ident: &'h HirRawIdent,
+    pub ty: Option<&'h HirTy<'h>>,
+    pub span: Span,
+}
+
+impl<'h> HirAnonFnParam<'h> {
+    pub fn new(ident: &'h HirRawIdent, ty: Option<&'h HirTy<'h>>) -> Self {
+        Self {
+            id: HirId::Invalid,
+            ident,
+            ty,
+            span: ident
+                .span
+                .merge(&ty.map(|ty| ty.span).unwrap_or(ident.span)),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirAnonFnParamList<'h> {
+    pub list: Vec<&'h HirAnonFnParam<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirAnonFn<'h> {
+    pub params: HirAnonFnParamList<'h>,
+    pub ret_ty: Option<&'h HirTy<'h>>,
+    pub body: &'h HirBlock<'h>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

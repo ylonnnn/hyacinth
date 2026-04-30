@@ -1,6 +1,7 @@
 use crate::{ResolveResult, ty::resolver::TyResolver};
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::expr::{HirExpr, HirExprKind, HirUnary};
+use hycc_ty::ty::{InferKind, Ty};
 
 impl<'d, 'r> TyResolver<'d, 'r> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
@@ -60,6 +61,44 @@ impl<'d, 'r> TyResolver<'d, 'r> {
                 }
 
                 Ok(())
+            }
+
+            HirExprKind::AnonFn(anfn) => {
+                let mut params = Vec::new();
+                for param in &anfn.params.list {
+                    let ty_id = if let Some(p_ty) = &param.ty {
+                        match self.resolve_ty(&p_ty) {
+                            Ok(ty_id) => ty_id,
+                            Err(diag) => {
+                                diag.map(|diag| self.dctx.add(diag));
+                                continue;
+                            }
+                        }
+                    } else {
+                        self.tctx.make_inferred_ty(InferKind::Any)
+                    };
+
+                    params.push(ty_id);
+                    self.tctx.attach_to_hir(
+                        param.id,
+                        Ty::new(ty_id, param.ty.map(|ty| ty.span).unwrap_or(param.span)),
+                    );
+                }
+
+                let mut ret_ty = self.tctx.make_unit_ty();
+                if let Some(r_ty) = &anfn.ret_ty {
+                    match self.resolve_ty(&r_ty) {
+                        Ok(ty_id) => ret_ty = ty_id,
+                        Err(diag) => {
+                            diag.map(|diag| self.dctx.add(diag));
+                        }
+                    }
+                }
+
+                let fn_ty = self.tctx.make_fn_ty(params.into(), ret_ty);
+                self.tctx.attach_to_hir(expr.id, Ty::new(fn_ty, expr.span));
+
+                self.resolve_block(&anfn.body)
             }
 
             HirExprKind::FnCall(call) => {

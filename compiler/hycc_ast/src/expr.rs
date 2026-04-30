@@ -1,4 +1,4 @@
-use crate::{Block, Identifier, Mutability, Path, token::Token};
+use crate::{Block, Identifier, Mutability, Path, Ty, token::Token};
 
 use hycc_span::Span;
 
@@ -20,6 +20,8 @@ pub enum ExprKind {
     Array(Box<ArrayExpr>),
     Tuple(Box<TupleExpr>),
     Struct(Box<StructExpr>),
+
+    AnonFn(Box<AnonFn>),
 
     FnCall(Box<FnCall>),
 
@@ -45,6 +47,8 @@ impl ExprKind {
             Self::Array(array) => array.span,
             Self::Tuple(tup) => tup.span,
             Self::Struct(strct) => strct.span,
+
+            Self::AnonFn(anfn) => anfn.span,
 
             Self::FnCall(call) => call.callee.span.merge(&call.arguments.span),
 
@@ -87,6 +91,8 @@ impl ExprKind {
                 .map(|f| f.val.eval)
                 .reduce(|acc, eval| acc.infer(&eval))
                 .unwrap_or_else(|| ExprEvaluatability::CompileTime),
+
+            Self::AnonFn(_) => ExprEvaluatability::Unknown,
 
             Self::FnCall(_) => ExprEvaluatability::Unknown,
 
@@ -190,6 +196,26 @@ pub struct StructExprField {
 pub struct FieldAccess {
     pub leading: Box<Expr>,
     pub field: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnonFnParam {
+    pub ident: Token,
+    pub ty: Option<Box<Ty>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnonFnParamList {
+    pub list: Vec<AnonFnParam>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnonFn {
+    pub params: AnonFnParamList,
+    pub ret_ty: Option<Box<Ty>>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

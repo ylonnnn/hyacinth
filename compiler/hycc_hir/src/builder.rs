@@ -1,8 +1,8 @@
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::{
-        ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall, RefExpr, StructExpr,
-        StructExprField, TupleExpr, Unary,
+        AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall,
+        RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
@@ -18,9 +18,10 @@ use crate::{
     HirNode, HirTable,
     block::HirBlock,
     expr::{
-        BinaryOp, HirArrayExpr, HirCallArguments, HirExpr, HirExprKind, HirFieldAccess,
-        HirFieldAccessField, HirFieldAccessFieldKind, HirFnCall, HirLiteral, HirMethodCall,
-        HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
+        BinaryOp, HirAnonFn, HirAnonFnParam, HirAnonFnParamList, HirArrayExpr, HirCallArguments,
+        HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField, HirFieldAccessFieldKind,
+        HirFnCall, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField,
+        HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
@@ -273,6 +274,8 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 HirExprKind::Struct(Box::new(self.lower_struct_expr(&strct)))
             }
 
+            ExprKind::AnonFn(anfn) => HirExprKind::AnonFn(Box::new(self.lower_anon_fn(&anfn))),
+
             ExprKind::FnCall(call) => HirExprKind::FnCall(Box::new(self.lower_fn_call(&call))),
 
             ExprKind::FieldAccess(access) => {
@@ -462,6 +465,38 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                 }
             })
             .collect()
+    }
+
+    fn lower_anon_fn(&mut self, anfn: &AnonFn) -> HirAnonFn<'h> {
+        HirAnonFn {
+            params: self.lower_anon_fn_params(&anfn.params),
+            ret_ty: anfn.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
+            body: self.lower_block(&anfn.body),
+            span: anfn.span,
+        }
+    }
+
+    fn lower_anon_fn_params(&mut self, params: &AnonFnParamList) -> HirAnonFnParamList<'h> {
+        let mut data = Vec::new();
+
+        for param in &params.list {
+            if let HirNode::AnonFnParam(param) =
+                self.hir_table
+                    .add(HirNode::AnonFnParam(HirAnonFnParam::<'h>::new(
+                        self.lower_raw_ident(&param.ident),
+                        param.ty.as_ref().map(|ty| self.lower_ty(&ty)),
+                    )))
+            {
+                data.push(param);
+            } else {
+                unreachable!();
+            }
+        }
+
+        HirAnonFnParamList {
+            list: data,
+            span: params.span,
+        }
     }
 
     fn lower_fn_call(&mut self, call: &FnCall) -> HirFnCall<'h> {

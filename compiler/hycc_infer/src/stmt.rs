@@ -33,15 +33,13 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             }
 
             HirStmtKind::Pass(pass) => {
-                if let Some(value) = pass.value {
-                    match self.infer_expr(&value) {
-                        Ok(ty_id) => self.tctx.attach_to_hir(stmt.id, Ty::new(ty_id, value.span)),
-                        Err(diag) => {
-                            diag.map(|diag| self.dctx.add(diag));
-                        }
-                    }
-                }
+                let (ty_id, span) = if let Some(value) = pass.value {
+                    (self.infer_expr(&value)?, value.span)
+                } else {
+                    (self.tctx.make_unit_ty(), pass.span)
+                };
 
+                self.tctx.attach_to_hir(stmt.id, Ty::new(ty_id, span));
                 Ok(())
             }
 

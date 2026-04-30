@@ -3,7 +3,6 @@ use hycc_hir::{
     def::DefSpace,
     expr::{HirExpr, HirExprKind, HirUnary},
 };
-use hycc_scope::Scope;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
@@ -59,6 +58,32 @@ impl<'s, 'd> Resolver<'s, 'd> {
                     if let Err(Some(diag)) = s.resolve_expr(&field.val) {
                         s.dctx.add(diag);
                     }
+                })
+            }
+
+            HirExprKind::AnonFn(anfn) => {
+                let Some(scope_id) = s.scope_ctx.get_id(expr.id) else {
+                    return Ok(());
+                };
+
+                s.enter_scope(scope_id, |s| {
+                    for param in &anfn.params.list {
+                        let Some(p_ty) = param.ty else {
+                            continue;
+                        };
+
+                        if let Err(Some(diag)) = s.resolve_ty(&p_ty) {
+                            s.dctx.add(diag);
+                        }
+                    }
+
+                    if let Some(ret_ty) = &anfn.ret_ty {
+                        if let Err(Some(diag)) = s.resolve_ty(&ret_ty) {
+                            s.dctx.add(diag);
+                        }
+                    }
+
+                    s.resolve_block(&anfn.body)
                 })
             }
 

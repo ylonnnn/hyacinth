@@ -59,7 +59,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                 let dig_n = ((num as f32).log10().floor() as usize) + 1;
 
                 let prefix = format!(
-                    "  {line_num}{padding}{pipe}  {r}",
+                    " {line_num}{padding}{pipe}  {r}",
                     padding = " ".repeat((2 + digit_n) - dig_n),
                     line_num = num.to_string().style(bb).style(b),
                     pipe = "|",
@@ -75,7 +75,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     format!(
                         "{ptr_prefix}{padding}{pointer}",
                         ptr_prefix = format!(
-                            "  {space}  {pipe}  {r}",
+                            " {space}  {pipe}  {r}",
                             space = " ".repeat(digit_n as usize),
                             pipe = "|".style(bb).style(b),
                         ),
@@ -141,7 +141,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let sev_color = self.color(&kind);
 
         let indentation = 6 * indentation as usize;
-        let s_kind_indent = "=".bright_black().repeat(indentation.saturating_sub(2));
+        let s_kind_indent = " ".repeat(indentation.saturating_sub(2));
         let indent = " ".repeat(indentation);
 
         let Ok(cwd) = std::env::current_dir() else {
@@ -149,7 +149,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         };
 
         format!(
-            " {s_kind_indent} {}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}\n{details}",
+            "{s_kind_indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}{details}",
             s_kind.to_string().style(&sev_color).bold(),
             code.map_or_else(
                 || ":".into(),

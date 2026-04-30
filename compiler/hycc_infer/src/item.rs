@@ -1,11 +1,12 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_span::Span;
-use hycc_ty::ty::{InferKind, Ty};
+use hycc_ty::ty::{InferKind, Ty, TyKind};
 use hycc_util::bug;
 
 use crate::{
     diag::{InferDiag, InferDiagErrorKind},
+    fn_ctx::FnCtx,
     inferer::{InferResult, TyInferer},
 };
 
@@ -14,7 +15,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         match &item.kind {
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
             HirItemKind::Struct(strct) => self.infer_struct(&strct),
-            HirItemKind::Fn(func) => self.infer_fn(&func),
+            HirItemKind::Fn(_) => self.infer_fn(&item),
             HirItemKind::VarDecl(_) => self.infer_var_decl(&item),
         }
     }
@@ -34,11 +35,29 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         Ok(())
     }
 
-    pub(crate) fn infer_fn(&mut self, func: &HirFn) -> InferResult {
-        // TODO: allow infer_block to return its equivalent TyId
-        if let Err(Some(diag)) = self.infer_block(&func.body) {
-            self.dctx.add(diag);
-        }
+    pub(crate) fn infer_fn(&mut self, fn_item: &HirItem) -> InferResult {
+        let HirItemKind::Fn(func) = &fn_item.kind else {
+            unreachable!()
+        };
+
+        let Some(fn_ty) = self.tctx.get_ty_of_hir(fn_item.id).cloned() else {
+            bug!("fn hir {:?} does not have an attached ty", fn_item.id)
+        };
+
+        let fn_ty_id = fn_ty.id;
+        self.use_fn_ctx(FnCtx::new(fn_ty, func.body.id), |s| {
+            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+                return;
+            };
+
+            let ret_ty = fn_ty.ret_ty;
+            s.tctx
+                .attach_to_hir(func.body.id, Ty::new(ret_ty, Span::default()));
+
+            if let Err(Some(diag)) = s.infer_block(&func.body) {
+                s.dctx.add(diag);
+            }
+        });
 
         Ok(())
     }

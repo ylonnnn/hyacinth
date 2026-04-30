@@ -11,7 +11,10 @@ use hycc_ty::{
     ty::Ty,
 };
 
-use crate::diag::{InferDiag, InferDiagCtx, InferDiagErrorKind};
+use crate::{
+    diag::{InferDiag, InferDiagCtx, InferDiagErrorKind},
+    fn_ctx::FnCtx,
+};
 
 #[derive(Debug)]
 pub struct TyInferer<'t, 'd, 'r> {
@@ -20,6 +23,8 @@ pub struct TyInferer<'t, 'd, 'r> {
 
     pub(crate) definitions: &'d DefinitionTable,
     pub(crate) resolved: &'r HashMap<HirId, DefId>,
+
+    pub(crate) fn_ctx: Option<FnCtx>,
 }
 
 pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
@@ -36,6 +41,8 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
             definitions,
             resolved,
+
+            fn_ctx: None,
         }
     }
 
@@ -52,6 +59,17 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 },
             ))
         }
+    }
+
+    pub fn use_fn_ctx<F>(&mut self, ctx: FnCtx, mut handler: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        let prev_ctx = self.fn_ctx.take();
+        self.fn_ctx.replace(ctx);
+
+        handler(self);
+        self.fn_ctx = prev_ctx;
     }
 
     pub fn infer(&mut self, tree: &HirPetal) {

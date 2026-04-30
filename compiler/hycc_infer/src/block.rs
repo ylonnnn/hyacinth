@@ -3,13 +3,14 @@ use hycc_hir::{block::HirBlock, stmt::HirStmtKind};
 use hycc_span::Span;
 use hycc_ty::{context::TyId, ty::Ty};
 
-use crate::{
-    inferer::{InferResult, TyInferer},
-};
+use crate::inferer::{InferResult, TyInferer};
 
 impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
-        let mut ty_id: Option<TyId> = None;
+        let mut ty_id: Option<TyId> = self
+            .tctx
+            .get_ty_of_hir(block.id)
+            .map(|ty| ty.id);
 
         for stmt in &block.stmts {
             if let Err(Some(diag)) = self.infer_stmt(&stmt) {

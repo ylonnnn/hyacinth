@@ -41,13 +41,17 @@ impl<'d, 'r> TyResolver<'d, 'r> {
 
         let mut params = Vec::new();
         for param in &func.params.list {
-            match self.resolve_as_non_inferable_ty(&param.ty) {
-                Ok(ty_id) => params.push(ty_id),
+            let ty_id = match self.resolve_as_non_inferable_ty(&param.ty) {
+                Ok(ty_id) => ty_id,
                 Err(diag) => {
                     diag.map(|diag| self.dctx.add(diag));
                     continue;
                 }
-            }
+            };
+
+            params.push(ty_id);
+            self.tctx
+                .attach_to_hir(param.id, Ty::new(ty_id, param.ty.span));
         }
 
         let mut ret_ty = self.tctx.make_unit_ty();

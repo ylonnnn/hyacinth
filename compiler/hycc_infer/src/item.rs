@@ -1,11 +1,10 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirFn, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::item::{HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_span::Span;
 use hycc_ty::ty::{InferKind, Ty, TyKind};
 use hycc_util::bug;
 
 use crate::{
-    diag::{InferDiag, InferDiagErrorKind},
     fn_ctx::FnCtx,
     inferer::{InferResult, TyInferer},
 };
@@ -45,14 +44,17 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         };
 
         let fn_ty_id = fn_ty.id;
+
         self.use_fn_ctx(FnCtx::new(fn_ty), |s| {
             let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
                 return;
             };
 
-            let ret_ty = fn_ty.ret_ty;
-            s.tctx
-                .attach_to_hir(func.body.id, Ty::new(ret_ty, Span::default()));
+            let ret_ty = Ty::new(
+                fn_ty.ret_ty,
+                func.ret_ty.map(|ty| ty.span).unwrap_or(Span::default()),
+            );
+            s.tctx.attach_to_hir(func.body.id, ret_ty);
 
             if let Err(Some(diag)) = s.infer_block(&func.body) {
                 s.dctx.add(diag);

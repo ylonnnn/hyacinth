@@ -18,17 +18,10 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                     bug!("fn ty must be the ty of the function")
                 };
 
+                // TODO: improve fn tys for precise diagnostics
                 let ret_ty = fn_ty.ret_ty;
-
                 if let Some(val) = ret.value {
-                    let val_ty = match self.infer_expr(&val) {
-                        Ok(ty_id) => ty_id,
-                        Err(diag) => {
-                            diag.map(|diag| self.dctx.add(diag));
-                            return Ok(());
-                        }
-                    };
-
+                    let val_ty = self.infer_expr(&val)?;
                     self.check(
                         &Ty::new(ret_ty, Span::default()),
                         &Ty::new(val_ty, val.span),

@@ -45,7 +45,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         };
 
         let fn_ty_id = fn_ty.id;
-        self.use_fn_ctx(FnCtx::new(fn_ty, func.body.id), |s| {
+        self.use_fn_ctx(FnCtx::new(fn_ty), |s| {
             let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
                 return;
             };

@@ -54,13 +54,18 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 fn_ty.ret_ty,
                 func.ret_ty.map(|ty| ty.span).unwrap_or(Span::default()),
             );
-            s.tctx.attach_to_hir(func.body.id, ret_ty);
+            s.tctx.attach_to_hir(func.body.id, ret_ty.clone());
 
-            // TODO: type check block to determine if it has proper return values
+            let block_ty_id = match s.infer_block(&func.body) {
+                Ok(ty_id) => ty_id,
+                Err(diag) => {
+                    diag.map(|diag| s.dctx.add(diag));
+                    return;
+                }
+            };
 
-            if let Err(Some(diag)) = s.infer_block(&func.body) {
-                s.dctx.add(diag);
-            }
+            s.check(&ret_ty, &Ty::new(block_ty_id, func.body.span))
+                .map(|diag| s.dctx.add(diag));
         });
 
         Ok(())

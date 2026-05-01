@@ -11,7 +11,12 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_span::Span;
 use hycc_util::ternary;
 
-use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
+use crate::parser::{
+    Parser,
+    diag::ParserDiag,
+    parser::{ParseResult, ParserTerminatorKind},
+    path::PathKind,
+};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -102,7 +107,7 @@ impl<'s> Parser<'s> {
 
     pub fn parse_expr_stmt(&mut self) -> ParseResult<Expr> {
         let expr = self.parse_expr(0)?;
-        self.require_terminator()?;
+        self.require_terminator(ParserTerminatorKind::Both)?;
 
         Ok(expr)
     }

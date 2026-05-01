@@ -14,7 +14,7 @@ use std::path::{self, PathBuf};
 use crate::parser::{
     Parser,
     diag::{ParserDiag, ParserDiagErrorKind},
-    parser::{ParseLevel, ParseResult},
+    parser::{ParseLevel, ParseResult, ParserTerminatorKind},
     path::PathKind,
 };
 
@@ -202,7 +202,7 @@ impl<'s> Parser<'s> {
             }
         }
 
-        self.require_terminator()?;
+        self.require_terminator(ParserTerminatorKind::LnFeed)?;
 
         Ok(petal)
     }
@@ -322,7 +322,7 @@ impl<'s> Parser<'s> {
         // { STMT* }
         let body = self.parse_block();
 
-        self.require_terminator()?;
+        self.require_terminator(ParserTerminatorKind::LnFeed)?;
 
         Ok(Fn {
             ident: ident?,
@@ -418,7 +418,7 @@ impl<'s> Parser<'s> {
             val = Some(self.parse_expr(0)?);
         }
 
-        self.require_terminator()?;
+        self.require_terminator(ParserTerminatorKind::Both)?;
 
         // Validate variable declaration
         if (ty.is_none() && val.is_none())

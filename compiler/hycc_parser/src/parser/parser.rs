@@ -29,6 +29,13 @@ pub struct Parser<'s> {
 
 pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
 
+#[derive(Debug, Clone, Copy)]
+pub enum ParserTerminatorKind {
+    LnFeed,
+    SemiColon,
+    Both,
+}
+
 impl<'s> Parser<'s> {
     pub fn new(stream: TokenStream, source: &'s Source) -> Self {
         Self {
@@ -221,13 +228,44 @@ impl<'s> Parser<'s> {
         )
     }
 
-    pub fn require_terminator(&mut self) -> Result<TokenGraph, Option<ParserDiag>> {
-        self.require(
-            TokenKind::LnFeed,
-            TokenConsumptionKind::UponSuccess,
-            &[],
-            TokenMatchExpectation::Exact,
-        )
+    pub fn require_terminator(
+        &mut self,
+        kind: ParserTerminatorKind,
+    ) -> Result<TokenGraph, Option<ParserDiag>> {
+        match &kind {
+            ParserTerminatorKind::LnFeed => self.require(
+                TokenKind::LnFeed,
+                TokenConsumptionKind::UponSuccess,
+                &[],
+                TokenMatchExpectation::Exact,
+            ),
+
+            ParserTerminatorKind::SemiColon => self.require_exact_nonlf(TokenKind::SemiColon),
+
+            ParserTerminatorKind::Both => {
+                if let (true, Some(tg)) = self.stream.expect(
+                    TokenKind::LnFeed,
+                    TokenConsumptionKind::UponSuccess,
+                    &[],
+                    TokenMatchExpectation::Exact,
+                ) {
+                    return Ok(tg);
+                }
+
+                if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::SemiColon) {
+                    return Ok(tg);
+                }
+
+                let Some(token) = self.peek_nonlf_token().cloned() else {
+                    return Err(None);
+                };
+
+                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                    token,
+                    "terminator",
+                )))
+            }
+        }
     }
 
     pub fn use_stream<F, T>(&mut self, mut stream: TokenStream, mut f: F) -> T

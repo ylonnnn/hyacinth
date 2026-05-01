@@ -3,8 +3,8 @@ use hycc_hir::{
     HirMutability,
     def::DefKind,
     expr::{
-        HirAnonFn, HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind,
-        HirFnCall, HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
+        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
+        HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -240,7 +240,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         if a_len != p_len {
             return Err(Some(InferDiag::error(
                 call.arguments.span,
-                InferDiagErrorKind::InvalidArgumentCount {
+                InferDiagErrorKind::ArgumentArityMismatch {
                     expected: p_len as u8,
                     received: a_len as u8,
                 },

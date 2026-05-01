@@ -127,7 +127,7 @@ pub enum InferDiagErrorKind {
     UnresolvedTy(Ty),
 
     IllegalInvocation(TyId),
-    InvalidArgumentCount {
+    ArgumentArityMismatch {
         expected: u8,
         received: u8,
     },
@@ -261,13 +261,13 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
-                            Err::InvalidArgumentCount { expected, received } => {
+                            Err::ArgumentArityMismatch { expected, received } => {
                                 format!(
-                                    "argument arity mismatch, expected `{}` argument{}, received `{}` argument{}.",
+                                    "expected `{}` argument{}, received `{}` argument{}.",
                                     expected,
-                                    ternary!(*expected > 1, "s", ""),
+                                    ternary!(*expected == 1, "", "s"),
                                     received,
-                                    ternary!(*received > 1, "s", "")
+                                    ternary!(*expected == 1, "", "s"),
                                 )
                             }
                         },

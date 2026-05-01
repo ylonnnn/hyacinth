@@ -73,14 +73,20 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
             }
 
             TyKind::Fn(ty) => {
+                let is_unit = matches!(self.tctx.get(ty.ret_ty), TyKind::Unit);
+
                 format!(
-                    "fn({}) -> {}",
+                    "fn({}){}",
                     ty.params
                         .iter()
                         .map(|param| self.fmt_id(*param))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    self.fmt_id(ty.ret_ty)
+                    ternary!(
+                        is_unit,
+                        String::from(""),
+                        format!(" -> {}", self.fmt_id(ty.ret_ty))
+                    )
                 )
             }
 

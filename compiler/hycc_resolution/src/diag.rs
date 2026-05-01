@@ -39,7 +39,7 @@ impl<'i, 'd> ResolverDiagDataCtx<'i, 'd> {
 #[derive(Debug, Clone)]
 pub struct ResolverDiagCtx(Vec<ResolverDiag>, bool);
 
-impl ResolverDiagCtx {
+impl<'c> ResolverDiagCtx {
     #[allow(unused)]
     const RESOLVER_NOTE_OFFSET: u16 = 200;
     #[allow(unused)]
@@ -108,7 +108,7 @@ pub struct ResolverDiag {
     pub span: Span,
 }
 
-impl ResolverDiag {
+impl<'c> ResolverDiag {
     pub fn warning(span: Span, kind: ResolverDiagWarningKind) -> Self {
         Self {
             span,

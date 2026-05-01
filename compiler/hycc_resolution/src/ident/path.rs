@@ -11,7 +11,7 @@ use crate::{
     ident::resolver::Resolver,
 };
 
-impl<'s, 'd> Resolver<'s, 'd> {
+impl<'c> Resolver<'c> {
     pub(crate) fn resolve_path(&mut self, path: &HirPath) -> ResolveResult {
         let Some(space) = self.expected_space else {
             bug!("expected definition space must exist!")

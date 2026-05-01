@@ -102,6 +102,7 @@ dependencies = [
 name = "hycc_resolution"
 version = "0.1.0"
 dependencies = [
+ "hycc_collection",
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_scope",

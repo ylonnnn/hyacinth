@@ -1,14 +1,12 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::block::HirBlock;
-use hycc_util::bug;
+use hycc_scope::Scope;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'s, 'd> Resolver<'s, 'd> {
+impl<'c> Resolver<'c> {
     pub(crate) fn resolve_block(&mut self, block: &HirBlock) -> ResolveResult {
-        let Some(scope_id) = self.scope_ctx.get_id(block.id) else {
-            bug!("block {:?} does not have an attached scope!", block.id)
-        };
+        let scope_id = self.collector.scope_ctx.attach(block.id, Scope::new());
 
         self.enter_scope(scope_id, |s| {
             for stmt in &block.stmts {

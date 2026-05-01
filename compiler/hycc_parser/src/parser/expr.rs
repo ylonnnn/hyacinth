@@ -184,10 +184,10 @@ impl<'s> Parser<'s> {
                     unreachable!()
                 };
 
-                Ok(Expr::new(ExprKind::Unary(Box::new(dbg!(Unary::Pre(
+                Ok(Expr::new(ExprKind::Unary(Box::new(Unary::Pre(
                     tok,
                     Box::new(self.parse_expr(ExprInfixBindingPower::Unary as u8)?),
-                ))))))
+                )))))
             }
 
             TokenKind::Ampersand => Ok(Expr::new(ExprKind::RefExpr(Box::new(

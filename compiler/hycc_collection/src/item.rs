@@ -1,7 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
-    expr::HirExprKind,
     item::{HirItem, HirItemKind, HirPetalKind},
 };
 use hycc_scope::Scope;
@@ -10,18 +9,17 @@ use hycc_util::{bug, ternary};
 
 use crate::collector::{CollectResult, CollectionLevel, Collector};
 
-impl<'t, 'h> Collector<'t, 'h> {
-    pub(crate) fn collect_item(&mut self, item: &HirItem) -> CollectResult {
+impl Collector {
+    pub fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         match &item.kind {
             HirItemKind::Petal(_) => self.collect_petal(&item),
             HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
-
             HirItemKind::VarDecl(_) => self.collect_var(&item),
         }
     }
 
-    pub(crate) fn collect_petal(&mut self, petal_item: &HirItem) -> CollectResult {
+    pub fn collect_petal(&mut self, petal_item: &HirItem) -> CollectResult {
         let HirItemKind::Petal(petal) = &petal_item.kind else {
             unreachable!();
         };
@@ -79,7 +77,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         Ok(())
     }
 
-    pub(crate) fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
+    pub fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
         if self.is_expected_to_be_collected() {
             return Ok(());
         }
@@ -121,7 +119,7 @@ impl<'t, 'h> Collector<'t, 'h> {
         Ok(())
     }
 
-    pub(crate) fn collect_fn(&mut self, fn_item: &HirItem) -> CollectResult {
+    pub fn collect_fn(&mut self, fn_item: &HirItem) -> CollectResult {
         let HirItemKind::Fn(func) = &fn_item.kind else {
             unreachable!()
         };
@@ -147,55 +145,43 @@ impl<'t, 'h> Collector<'t, 'h> {
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, CollectionLevel::Local, |s| {
-            match s.level {
-                CollectionLevel::Top => {
-                    // Define the function parameters
-                    for param in &func.params.list {
-                        let res = s.define(Definition::new(
-                            param.ident.ident,
-                            DefKind::FnParam,
-                            param.id,
-                            param.span,
-                            DefAccessibility::Priv,
-                        ));
+            if s.level != CollectionLevel::Top {
+                return;
+            }
 
-                        match res {
-                            Ok(def_id) => {
-                                if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
-                                    def.params.push(def_id)
-                                }
-                            }
-                            Err(Some(diag)) => {
-                                s.dctx.add(diag);
-                            }
-                            _ => {}
-                        };
+            // Define the function parameters
+            for param in &func.params.list {
+                let res = s.define(Definition::new(
+                    param.ident.ident,
+                    DefKind::FnParam,
+                    param.id,
+                    param.span,
+                    DefAccessibility::Priv,
+                ));
+
+                match res {
+                    Ok(def_id) => {
+                        if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
+                            def.params.push(def_id)
+                        }
                     }
-                }
-
-                CollectionLevel::Local => {
-                    if let Err(Some(diag)) = s.collect_block(&func.body) {
+                    Err(Some(diag)) => {
                         s.dctx.add(diag);
                     }
-                }
+                    _ => {}
+                };
             }
         });
 
         Ok(())
     }
 
-    pub(crate) fn collect_var(&mut self, var_item: &HirItem) -> CollectResult {
+    pub fn collect_var(&mut self, var_item: &HirItem) -> CollectResult {
         let HirItemKind::VarDecl(var) = &var_item.kind else {
             unreachable!()
         };
 
         if !self.is_expected_to_be_collected() {
-            if let Some(val) = var.val {
-                if let Err(Some(diag)) = self.collect_expr(&val) {
-                    self.dctx.add(diag);
-                }
-            }
-
             self.define(Definition::new(
                 var.ident.ident,
                 DefKind::Var,

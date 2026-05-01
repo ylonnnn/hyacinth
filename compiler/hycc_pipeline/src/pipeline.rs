@@ -103,10 +103,10 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     };
 
     let (hir_table, hir) = lower_hir(session, tree);
-    let mut collector = Collector::new(&hir_table);
+    let mut collector = Collector::new();
 
     collector.init_builtin_ty(&mut session.interner);
-    collector.collect(hir);
+    collector.collect_top(hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
     collector.dctx.emit(
@@ -118,9 +118,19 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut resolver = Resolver::new(&mut collector.scope_ctx, &collector.definitions);
-
+    let mut resolver = Resolver::new(&mut collector);
     resolver.resolve(&hir);
+
+    let (definitions, scope_ctx) = (
+        &resolver.collector.definitions,
+        &resolver.collector.scope_ctx,
+    );
+
+    resolver.collector.dctx.emit(
+        &mut session.dctx,
+        CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
+    );
+
     resolver.dctx.emit(
         &mut session.dctx,
         ResolverDiagDataCtx::new(&session.interner, &definitions),
@@ -130,7 +140,10 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_resolver = TyResolver::new(collector.tctx, &definitions, &resolver.resolved);
+    let (resolved, definitions) = (&resolver.resolved, &collector.definitions);
+    let tctx = collector.tctx;
+
+    let mut ty_resolver = TyResolver::new(tctx, &definitions, &resolved);
 
     ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
@@ -142,7 +155,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolver.resolved);
+    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolved);
 
     ty_inferer.infer(&hir);
     ty_inferer.dctx.emit(

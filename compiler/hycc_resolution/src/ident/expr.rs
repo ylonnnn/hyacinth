@@ -6,7 +6,7 @@ use hycc_hir::{
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'s, 'd> Resolver<'s, 'd> {
+impl<'c> Resolver<'c> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
             HirExprKind::Path(path) => s.resolve_path(&path),
@@ -62,7 +62,7 @@ impl<'s, 'd> Resolver<'s, 'd> {
             }
 
             HirExprKind::AnonFn(anfn) => {
-                let Some(scope_id) = s.scope_ctx.get_id(expr.id) else {
+                let Some(scope_id) = s.collector.scope_ctx.get_id(expr.id) else {
                     return Ok(());
                 };
 

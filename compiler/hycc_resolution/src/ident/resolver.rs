@@ -1,34 +1,38 @@
 use std::collections::HashMap;
 
-use hycc_diagnostic::DiagnosticContext;
+use hycc_collection::{
+    collector::{CollectionLevel, Collector},
+    diag::CollectorDiagDataCtx,
+};
+use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
     HirId,
-    def::{DefId, DefSpace, Definition, DefinitionTable},
+    def::{DefId, DefSpace, Definition},
     item::HirPetal,
 };
-use hycc_scope::{ScopeCtx, ScopeId};
+use hycc_scope::ScopeId;
 use hycc_symbol::Symbol;
 
-use crate::diag::ResolverDiagCtx;
+use crate::diag::{ResolverDiagCtx, ResolverDiagDataCtx};
 
 #[derive(Debug)]
-pub struct Resolver<'s, 'd> {
-    pub dctx: ResolverDiagCtx,
-
-    pub(crate) scope_ctx: &'s mut ScopeCtx,
-    pub(crate) definitions: &'d DefinitionTable,
+pub struct Resolver<'c> {
     pub resolved: HashMap<HirId, DefId>,
+
+    pub dctx: ResolverDiagCtx,
+    pub collector: &'c mut Collector,
+    // pub(crate) scope_ctx: &'s mut ScopeCtx,
+    // pub(crate) definitions: &'d DefinitionTable,
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
 }
 
-impl<'s, 'd> Resolver<'s, 'd> {
-    pub fn new(scope_ctx: &'s mut ScopeCtx, definitions: &'d DefinitionTable) -> Self {
+impl<'c> Resolver<'c> {
+    pub fn new(collector: &'c mut Collector) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(),
-            scope_ctx,
-            definitions,
+            collector,
             resolved: HashMap::new(),
 
             expected_space: None,
@@ -36,21 +40,26 @@ impl<'s, 'd> Resolver<'s, 'd> {
     }
 
     pub fn get_def_id(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
-        self.scope_ctx.get_def_until_root(space, name)
+        // dbg!(&self.collector.scope_ctx);
+        self.collector.scope_ctx.get_def_until_root(space, name)
     }
 
     pub fn get_def(&self, space: DefSpace, name: Symbol) -> Option<&Definition> {
         let def_id = self.get_def_id(space, name)?;
-        Some(self.definitions.get(def_id))
+        Some(self.collector.definitions.get(def_id))
     }
 
     pub fn enter_scope<F, U>(&mut self, scope_id: ScopeId, mut handler: F) -> U
     where
         F: FnMut(&mut Self) -> U,
     {
-        self.scope_ctx.push_id(scope_id);
+        let prev_level = self.collector.node_level;
+        self.collector.node_level = CollectionLevel::Local;
+        self.collector.scope_ctx.push_id(scope_id);
+
         let data = handler(self);
-        self.scope_ctx.pop();
+        self.collector.scope_ctx.pop();
+        self.collector.node_level = prev_level;
 
         data
     }
@@ -68,7 +77,19 @@ impl<'s, 'd> Resolver<'s, 'd> {
         data
     }
 
+    pub fn emit_dctx(
+        &mut self,
+        target: &mut DiagnosticCtx,
+        collector_data_ctx: CollectorDiagDataCtx,
+        resolver_data_ctx: ResolverDiagDataCtx,
+    ) {
+        self.collector.dctx.emit(target, collector_data_ctx);
+        self.dctx.emit(target, resolver_data_ctx);
+    }
+
     pub fn resolve(&mut self, tree: &HirPetal) {
+        self.collector.level = CollectionLevel::Local;
+
         for item in &tree.items {
             if let Err(Some(diag)) = self.resolve_item(&item) {
                 self.dctx.add(diag);

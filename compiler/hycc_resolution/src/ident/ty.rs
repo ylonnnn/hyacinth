@@ -6,7 +6,7 @@ use hycc_hir::{
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'s, 'd> Resolver<'s, 'd> {
+impl<'c> Resolver<'c> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult {
         self.expect_space(DefSpace::Type, |s| match &ty.kind {
             HirTyKind::Unit(..) => Ok(()),

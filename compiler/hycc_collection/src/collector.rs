@@ -1,6 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirTable,
     def::{
         BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, Definition,
         DefinitionTable,
@@ -16,18 +15,16 @@ use hycc_util::ternary;
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
 #[derive(Debug)]
-pub struct Collector<'t, 'h> {
-    pub definitions: DefinitionTable,
-    pub scope_ctx: ScopeCtx,
-    pub dctx: CollectorDiagCtx,
+pub struct Collector {
     pub tctx: TyCtx,
-    #[allow(unused)]
-    pub(crate) hir_table: &'t HirTable<'h>,
+    pub scope_ctx: ScopeCtx,
+    pub definitions: DefinitionTable,
+    pub dctx: CollectorDiagCtx,
 
     // Default to top-level collection
-    pub(crate) level: CollectionLevel,
+    pub level: CollectionLevel,
     // The current collection level of the current node
-    pub(crate) node_level: CollectionLevel,
+    pub node_level: CollectionLevel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,14 +35,13 @@ pub enum CollectionLevel {
 
 pub type CollectResult<T = (), E = Option<CollectorDiag>> = Result<T, E>;
 
-impl<'t, 'h> Collector<'t, 'h> {
-    pub fn new(hir_table: &'t HirTable<'h>) -> Self {
+impl Collector {
+    pub fn new() -> Self {
         Self {
             definitions: DefinitionTable::new(),
             scope_ctx: ScopeCtx::new(),
             dctx: CollectorDiagCtx::new(),
             tctx: TyCtx::new(),
-            hir_table,
             level: CollectionLevel::Top,
             node_level: CollectionLevel::Top,
         }
@@ -189,11 +185,13 @@ impl<'t, 'h> Collector<'t, 'h> {
         self.level == CollectionLevel::Local && self.node_level == CollectionLevel::Top
     }
 
-    pub fn collect(&mut self, tree: &HirPetal) {
+    pub fn collect_top(&mut self, tree: &HirPetal) {
         // Top-level collection
         self.level = CollectionLevel::Top;
         self.collect_tree(tree);
+    }
 
+    pub fn collect_local(&mut self, tree: &HirPetal) {
         // Local definitions collection
         self.level = CollectionLevel::Local;
         self.collect_tree(tree);

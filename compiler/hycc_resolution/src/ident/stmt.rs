@@ -3,7 +3,7 @@ use hycc_util::ternary;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'s, 'd> Resolver<'s, 'd> {
+impl<'c> Resolver<'c> {
     pub(crate) fn resolve_stmt(&mut self, stmt: &HirStmt) -> ResolveResult {
         match &stmt.kind {
             HirStmtKind::Ret(ret) => ternary!(

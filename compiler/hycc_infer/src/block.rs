@@ -38,7 +38,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         let ty_id = self
             .tctx
             .get_ty_of_hir(block.id)
-            .map(|_| expected_ty.map(|ty| ty.id).unwrap_or(unit_ty))
+            .map(|ty| expected_ty.map(|ty| ty.id).unwrap_or(ty.id))
             .unwrap_or(unit_ty);
 
         Ok(ty_id)

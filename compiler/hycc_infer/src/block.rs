@@ -1,12 +1,18 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{block::HirBlock, stmt::HirStmtKind};
-use hycc_ty::{context::TyId, ty::Ty};
+use hycc_span::Span;
+use hycc_ty::{
+    context::TyId,
+    ty::{Ty, TyKind},
+};
 
 use crate::inferer::{InferResult, TyInferer};
 
 impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
         let expected_ty: Option<Ty> = self.tctx.get_ty_of_hir(block.id).cloned();
+        self.tctx.dettach_hir(block.id);
+
         let mut ty: Option<Ty> = None;
 
         for stmt in &block.stmts {
@@ -36,6 +42,18 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             }
         }
 
-        Ok(ty.map(|ty| ty.id).unwrap_or(self.tctx.make_unit_ty()))
+        let unit_ty = self.tctx.make_unit_ty();
+        let ty_id = ty
+            .map(|_| expected_ty.map(|ty| ty.id).unwrap_or(unit_ty))
+            .unwrap_or_else(|| {
+                //
+                if let Some(ty) = self.tctx.get_ty_of_hir(block.id) {
+                    ty.id
+                } else {
+                    unit_ty
+                }
+            });
+
+        Ok(ty_id)
     }
 }

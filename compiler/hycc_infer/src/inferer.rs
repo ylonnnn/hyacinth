@@ -61,15 +61,17 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
         }
     }
 
-    pub fn use_fn_ctx<F>(&mut self, ctx: FnCtx, mut handler: F)
+    pub fn use_fn_ctx<F, U>(&mut self, ctx: FnCtx, mut handler: F) -> U
     where
-        F: FnMut(&mut Self),
+        F: FnMut(&mut Self) -> U,
     {
         let prev_ctx = self.fn_ctx.take();
         self.fn_ctx.replace(ctx);
 
-        handler(self);
+        let data = handler(self);
         self.fn_ctx = prev_ctx;
+
+        data
     }
 
     pub fn infer(&mut self, tree: &HirPetal) {

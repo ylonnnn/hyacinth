@@ -202,9 +202,9 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
         let fn_ty_id = fn_ty.id;
 
-        self.use_fn_ctx(FnCtx::new(fn_ty), |s| {
+        self.use_fn_ctx(FnCtx::new(fn_ty, anfn.body.id), |s| -> InferResult {
             let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
-                return;
+                return Ok(());
             };
 
             let ret_ty = Ty::new(
@@ -213,17 +213,16 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             );
             s.tctx.attach_to_hir(anfn.body.id, ret_ty.clone());
 
-            let block_ty_id = match s.infer_block(&anfn.body) {
-                Ok(ty_id) => ty_id,
-                Err(diag) => {
-                    diag.map(|diag| s.dctx.add(diag));
-                    return;
-                }
+            let block_ty_id = s.infer_block(&anfn.body)?;
+            let TyKind::Unit = s.tctx.get(block_ty_id) else {
+                return Ok(());
             };
 
             s.check(&ret_ty, &Ty::new(block_ty_id, anfn.body.span))
                 .map(|diag| s.dctx.add(diag));
-        });
+
+            Ok(())
+        })?;
 
         Ok(fn_ty_id)
     }

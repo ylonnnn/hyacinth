@@ -19,16 +19,20 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
                 };
 
                 // TODO: improve fn tys for precise diagnostics
+                let fn_body = fn_ctx.fn_body;
                 let ret_ty = fn_ty.ret_ty;
-                if let Some(val) = ret.value {
-                    let val_ty = self.infer_expr(&val)?;
-                    self.check(
-                        &Ty::new(ret_ty, Span::default()),
-                        &Ty::new(val_ty, val.span),
-                    )
-                    .map(|diag| self.dctx.add(diag));
-                }
 
+                let val_ty = if let Some(val) = ret.value {
+                    Ty::new(self.infer_expr(&val)?, val.span)
+                } else {
+                    Ty::new(self.tctx.make_unit_ty(), ret.span)
+                };
+
+                self.check(&Ty::new(ret_ty, Span::default()), &val_ty)
+                    .map(|diag| self.dctx.add(diag));
+
+                self.tctx
+                    .attach_to_hir(fn_body, Ty::new(ret_ty, Span::default()));
                 Ok(())
             }
 

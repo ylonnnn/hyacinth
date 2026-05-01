@@ -45,9 +45,9 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
         let fn_ty_id = fn_ty.id;
 
-        self.use_fn_ctx(FnCtx::new(fn_ty), |s| {
+        self.use_fn_ctx(FnCtx::new(fn_ty, func.body.id), |s| -> InferResult {
             let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
-                return;
+                return Ok(());
             };
 
             let ret_ty = Ty::new(
@@ -56,19 +56,12 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
             );
             s.tctx.attach_to_hir(func.body.id, ret_ty.clone());
 
-            let block_ty_id = match s.infer_block(&func.body) {
-                Ok(ty_id) => ty_id,
-                Err(diag) => {
-                    diag.map(|diag| s.dctx.add(diag));
-                    return;
-                }
-            };
-
+            let block_ty_id = s.infer_block(&func.body)?;
             s.check(&ret_ty, &Ty::new(block_ty_id, func.body.span))
                 .map(|diag| s.dctx.add(diag));
-        });
 
-        Ok(())
+            Ok(())
+        })
     }
 
     pub(crate) fn infer_var_decl(&mut self, var_decl: &HirItem) -> InferResult {

@@ -245,6 +245,10 @@ impl TyCtx {
         self.node_ty_map.insert(hir_id, ty);
     }
 
+    pub fn dettach_hir(&mut self, hir_id: HirId) {
+        self.node_ty_map.remove(&hir_id);
+    }
+
     pub fn get_ty_of_hir(&self, hir_id: HirId) -> Option<&Ty> {
         self.node_ty_map.get(&hir_id)
     }
@@ -255,6 +259,10 @@ impl TyCtx {
 
     pub fn attach_to_def(&mut self, def_id: DefId, ty: Ty) {
         self.def_ty_map.insert(def_id, ty);
+    }
+
+    pub fn dettach_def(&mut self, def_id: DefId) {
+        self.def_ty_map.remove(&def_id);
     }
 
     pub fn get_ty_of_def(&self, def_id: DefId) -> Option<&Ty> {

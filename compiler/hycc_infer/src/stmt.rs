@@ -30,9 +30,9 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
                 self.check(&Ty::new(ret_ty, Span::default()), &val_ty)
                     .map(|diag| self.dctx.add(diag));
-
                 self.tctx
                     .attach_to_hir(fn_body, Ty::new(ret_ty, Span::default()));
+
                 Ok(())
             }
 

@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use hycc_const::table::ConstTable;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirId,
@@ -17,23 +18,25 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyInferer<'t, 'd, 'r> {
+pub struct TyInferer<'t, 'd, 'r, 'c> {
     pub dctx: InferDiagCtx,
     pub tctx: &'t mut TyCtx,
 
     pub(crate) definitions: &'d DefinitionTable,
     pub(crate) resolved: &'r HashMap<HirId, DefId>,
+    pub(crate) const_table: &'c ConstTable,
 
     pub(crate) fn_ctx: Option<FnCtx>,
 }
 
 pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
 
-impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
     pub fn new(
         tctx: &'t mut TyCtx,
         definitions: &'d DefinitionTable,
         resolved: &'r HashMap<HirId, DefId>,
+        const_table: &'c ConstTable,
     ) -> Self {
         Self {
             dctx: InferDiagCtx::new(),
@@ -41,6 +44,7 @@ impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
 
             definitions,
             resolved,
+            const_table,
 
             fn_ctx: None,
         }

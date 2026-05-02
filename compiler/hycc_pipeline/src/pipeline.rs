@@ -3,6 +3,7 @@ use hycc_ast::{
     item::{Petal, PetalKind},
 };
 use hycc_collection::{collector::Collector, diag::CollectorDiagDataCtx};
+use hycc_const::table::ConstTable;
 use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
@@ -88,9 +89,18 @@ pub fn parse_source(session: &mut Session, src_id: SourceId) -> Option<Petal> {
     Some(root_petal)
 }
 
-pub fn lower_hir<'h>(session: &mut Session, tree: Petal) -> (HirTable<'h>, &'h HirPetal<'h>) {
+pub fn lower_hir<'h>(
+    session: &mut Session,
+    const_table: &mut ConstTable,
+    tree: Petal,
+) -> (HirTable<'h>, &'h HirPetal<'h>) {
     let hir_table = HirTable::new();
-    let mut hir_builder = HirBuilder::new(&mut session.interner, &session.registry, &hir_table);
+    let mut hir_builder = HirBuilder::new(
+        &mut session.interner,
+        &session.registry,
+        &hir_table,
+        const_table,
+    );
 
     let hir = hir_builder.lower(tree);
     (hir_table, hir)
@@ -102,7 +112,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     };
 
-    let (hir_table, hir) = lower_hir(session, tree);
+    let mut const_table = ConstTable::new();
+    let (hir_table, hir) = lower_hir(session, &mut const_table, tree);
     let mut collector = Collector::new();
 
     collector.init_builtin_ty(&mut session.interner);
@@ -155,7 +166,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolved);
+    let mut ty_inferer =
+        TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolved, &const_table);
 
     ty_inferer.infer(&hir);
     ty_inferer.dctx.emit(

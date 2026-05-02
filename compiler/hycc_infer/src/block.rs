@@ -4,7 +4,7 @@ use hycc_ty::{context::TyId, ty::Ty};
 
 use crate::inferer::{InferResult, TyInferer};
 
-impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
         let expected_ty: Option<Ty> = self.tctx.get_ty_of_hir(block.id).cloned();
         self.tctx.dettach_hir(block.id);

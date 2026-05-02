@@ -21,8 +21,6 @@ pub struct Resolver<'c> {
 
     pub dctx: ResolverDiagCtx,
     pub collector: &'c mut Collector,
-    // pub(crate) scope_ctx: &'s mut ScopeCtx,
-    // pub(crate) definitions: &'d DefinitionTable,
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,

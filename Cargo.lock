@@ -36,6 +36,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "hycc_const"
+version = "0.1.0"
+dependencies = [
+ "hycc_span",
+]
+
+[[package]]
 name = "hycc_diagnostic"
 version = "0.1.0"
 dependencies = [
@@ -50,6 +57,7 @@ version = "0.1.0"
 dependencies = [
  "hycc_arena",
  "hycc_ast",
+ "hycc_const",
  "hycc_source",
  "hycc_span",
  "hycc_symbol",
@@ -60,6 +68,7 @@ dependencies = [
 name = "hycc_infer"
 version = "0.1.0"
 dependencies = [
+ "hycc_const",
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_span",
@@ -86,6 +95,7 @@ version = "0.1.0"
 dependencies = [
  "hycc_ast",
  "hycc_collection",
+ "hycc_const",
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_infer",
@@ -154,6 +164,7 @@ version = "0.1.0"
 name = "hycc_ty"
 version = "0.1.0"
 dependencies = [
+ "hycc_const",
  "hycc_hir",
  "hycc_span",
  "hycc_symbol",
@@ -163,19 +174,3 @@ dependencies = [
 [[package]]
 name = "hycc_util"
 version = "0.1.0"
-
-[[package]]
-name = "hycc_vm"
-version = "0.1.0"
-dependencies = [
- "hycc_util",
-]
-
-[[package]]
-name = "hysm"
-version = "0.1.0"
-dependencies = [
- "hycc_source",
- "hycc_util",
- "hycc_vm",
-]

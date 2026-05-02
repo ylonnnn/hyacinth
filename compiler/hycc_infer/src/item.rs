@@ -9,7 +9,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'r> TyInferer<'t, 'd, 'r> {
+impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
     pub(crate) fn infer_item(&mut self, item: &HirItem) -> InferResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.infer_petal(&petal),

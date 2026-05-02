@@ -6,6 +6,7 @@ use crate::{
 };
 
 use hycc_ast::expr::ExprEvaluatability;
+use hycc_const::table::ConstId;
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 
@@ -65,13 +66,22 @@ pub struct HirRefExpr<'h> {
 }
 
 #[derive(Debug, Clone)]
-pub enum HirLiteral {
-    Int(u64),
-    Float(f64),
-    Bool(bool),
-    Char(u8),
-    String(String),
+pub struct HirLiteral(pub(crate) ConstId);
+
+impl HirLiteral {
+    pub fn const_id(&self) -> ConstId {
+        self.0
+    }
 }
+
+// #[derive(Debug, Clone)]
+// pub enum HirLiteral {
+//     Int(u64),
+//     Float(f64),
+//     Bool(bool),
+//     Char(u8),
+//     String(String),
+// }
 
 #[derive(Debug, Clone)]
 pub enum HirUnary<'h> {

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::{
@@ -10,6 +12,7 @@ use hycc_ast::{
     token::{Token, TokenKind},
     ty::{Array, FnTy, Ref, Slice, Tuple},
 };
+use hycc_const::{constant::ConstKind, table::ConstTable};
 use hycc_source::SourceRegistry;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_util::{bug, digit_value, ternary};
@@ -33,25 +36,28 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct HirBuilder<'i, 's, 't, 'h>
+pub struct HirBuilder<'i, 's, 't, 'h, 'c>
 where
     'h: 't,
 {
     interner: &'i mut SymbolInterner,
     registry: &'s SourceRegistry,
     hir_table: &'t HirTable<'h>,
+    const_table: &'c mut ConstTable,
 }
 
-impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
+impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     pub fn new(
         interner: &'i mut SymbolInterner,
         source: &'s SourceRegistry,
         hir_table: &'t HirTable<'h>,
+        const_table: &'c mut ConstTable,
     ) -> Self {
         Self {
             interner,
             registry: source,
             hir_table,
+            const_table,
         }
     }
 
@@ -309,7 +315,7 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
         let source = self.registry.get(lit.span.src_id);
         let view = lit.view(&source.data);
 
-        match &lit.kind {
+        let const_kind = match &lit.kind {
             TokenKind::Int { base } | TokenKind::Float { base } => {
                 let view = ternary!(*base != 10, &view[2..], view);
                 let mut split = view.split(".");
@@ -328,21 +334,23 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                         })
                         .sum::<f64>();
 
-                    HirLiteral::Float(val)
+                    ConstKind::float(val)
                 } else {
-                    HirLiteral::Int(val as u64)
+                    ConstKind::Int(val as u64)
                 }
             }
 
-            TokenKind::Bool => HirLiteral::Bool(view == "true"),
-            TokenKind::Char { .. } => HirLiteral::Char(view.as_bytes()[0]), // TODO: maybe
+            TokenKind::Bool => ConstKind::Bool(view == "true"),
+            TokenKind::Char { .. } => ConstKind::Char(view.as_bytes()[0]), // TODO: maybe
             // add support to
             // larger sized
             // characters
-            TokenKind::String { .. } => HirLiteral::String(String::from(view)),
+            TokenKind::String { .. } => ConstKind::String(Rc::from(view)),
 
             _ => unreachable!(),
-        }
+        };
+
+        HirLiteral(self.const_table.intern(const_kind))
     }
 
     fn lower_binary(
@@ -514,11 +522,12 @@ impl<'i, 's, 't, 'h> HirBuilder<'i, 's, 't, 'h> {
                     HirFieldAccessFieldKind::Ident(self.lower_raw_ident(&access.field).ident)
                 }
                 TokenKind::Int { .. } => {
-                    let HirLiteral::Int(data) = self.lower_literal(&access.field) else {
+                    let lit = self.lower_literal(&access.field);
+                    let ConstKind::Int(data) = self.const_table.get(lit.0) else {
                         bug!("fields can only be identifiers or integers")
                     };
 
-                    HirFieldAccessFieldKind::Index(data as usize)
+                    HirFieldAccessFieldKind::Index(*data as usize)
                 }
 
                 _ => bug!("fields can only be identifiers or integers"),

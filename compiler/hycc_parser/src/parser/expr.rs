@@ -32,6 +32,7 @@ pub enum ExprInfixBindingPower {
     Exp,
     Unary,
     FnCall,
+    FieldAccess,
     Primary,
 }
 
@@ -74,6 +75,8 @@ impl<'s> Parser<'s> {
             TokenKind::Bang => Some((Unary as u8, Unary as u8)),
 
             TokenKind::LeftParen => Some((FnCall as u8, Default as u8)),
+
+            TokenKind::Dot => Some((FieldAccess as u8, FieldAccess as u8)),
 
             TokenKind::Int { .. }
             | TokenKind::Float { .. }

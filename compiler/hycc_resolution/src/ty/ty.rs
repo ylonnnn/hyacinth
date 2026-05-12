@@ -15,7 +15,7 @@ use crate::{
     ty::resolver::TyResolver,
 };
 
-impl<'d, 'r> TyResolver<'d, 'r> {
+impl<'d> TyResolver<'d> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
         let ty_id = match &ty.kind {
             HirTyKind::Unit(_) => Ok(self.tctx.make_unit_ty()),

@@ -17,8 +17,6 @@ use crate::diag::{ResolverDiagCtx, ResolverDiagDataCtx};
 
 #[derive(Debug)]
 pub struct Resolver<'c> {
-    pub resolved: HashMap<HirId, DefId>,
-
     pub dctx: ResolverDiagCtx,
     pub collector: &'c mut Collector,
 
@@ -31,7 +29,6 @@ impl<'c> Resolver<'c> {
         Self {
             dctx: ResolverDiagCtx::new(),
             collector,
-            resolved: HashMap::new(),
 
             expected_space: None,
         }

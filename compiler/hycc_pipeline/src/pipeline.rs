@@ -10,6 +10,7 @@ use hycc_diagnostic::{
 };
 use hycc_hir::{HirTable, builder::HirBuilder, item::HirPetal};
 use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
+use hycc_mir::builder::MirBuilder;
 use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
@@ -151,10 +152,10 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let (resolved, definitions) = (&resolver.resolved, &collector.definitions);
+    let definitions = &collector.definitions;
     let tctx = collector.tctx;
 
-    let mut ty_resolver = TyResolver::new(tctx, &definitions, &resolved);
+    let mut ty_resolver = TyResolver::new(tctx, &definitions);
 
     ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
@@ -166,8 +167,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer =
-        TyInferer::new(&mut ty_resolver.tctx, &definitions, &resolved, &const_table);
+    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &const_table);
 
     ty_inferer.infer(&hir);
     ty_inferer.dctx.emit(
@@ -178,4 +178,9 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     if session.dctx.error_occurred() {
         return;
     }
+
+    // let mut mir_builder = MirBuilder::new(&mut ty_inferer.tctx, &definitions);
+    // mir_builder.lower(&hir);
+
+    // dbg!(&mir_builder.table);
 }

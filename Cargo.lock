@@ -78,6 +78,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hycc_mir"
+version = "0.1.0"
+dependencies = [
+ "hycc_const",
+ "hycc_hir",
+ "hycc_span",
+ "hycc_ty",
+ "hycc_util",
+]
+
+[[package]]
 name = "hycc_parser"
 version = "0.1.0"
 dependencies = [
@@ -99,6 +110,7 @@ dependencies = [
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_infer",
+ "hycc_mir",
  "hycc_parser",
  "hycc_resolution",
  "hycc_session",

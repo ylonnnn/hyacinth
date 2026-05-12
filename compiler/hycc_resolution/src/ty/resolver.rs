@@ -18,26 +18,20 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyResolver<'d, 'r> {
+pub struct TyResolver<'d> {
     pub dctx: ResolverDiagCtx,
     pub tctx: TyCtx,
 
     pub(crate) definitions: &'d DefinitionTable,
-    pub(crate) resolved: &'r HashMap<HirId, DefId>,
 }
 
-impl<'d, 'r> TyResolver<'d, 'r> {
-    pub fn new(
-        tctx: TyCtx,
-        definitions: &'d DefinitionTable,
-        resolved: &'r HashMap<HirId, DefId>,
-    ) -> Self {
+impl<'d> TyResolver<'d> {
+    pub fn new(tctx: TyCtx, definitions: &'d DefinitionTable) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(),
             tctx,
 
             definitions,
-            resolved,
         }
     }
 

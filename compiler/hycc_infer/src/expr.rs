@@ -21,9 +21,9 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
+impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
-        match &expr.kind {
+        let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
             HirExprKind::RefExpr(reference) => self.infer_ref_expr(&reference),
             HirExprKind::Literal(lit) => self.infer_literal(&lit),
@@ -38,7 +38,11 @@ impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
             HirExprKind::FnCall(call) => self.infer_fn_call(&call),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
             HirExprKind::MethodCall(call) => todo!("infer method call"),
-        }
+        }?;
+
+        self.tctx.attach_to_hir(expr.id, Ty::new(ty_id, expr.span));
+
+        Ok(ty_id)
     }
 
     pub(crate) fn infer_literal(&mut self, lit: &HirLiteral) -> InferResult<TyId> {
@@ -112,7 +116,7 @@ impl<'t, 'd, 'r, 'c> TyInferer<'t, 'd, 'r, 'c> {
     }
 
     pub(crate) fn infer_struct_expr(&mut self, strct: &HirStructExpr) -> InferResult<TyId> {
-        let Some(def_id) = self.resolved.get(&strct.path.id) else {
+        let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
             unreachable!()
         };
 

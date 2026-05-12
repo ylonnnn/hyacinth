@@ -28,8 +28,8 @@ impl<'c> Resolver<'c> {
             });
 
             if is_last {
-                if let Some(def_id) = self.resolved.get(&segment.id) {
-                    self.resolved.insert(path.id, *def_id);
+                if let Some(def_id) = self.collector.definitions.get_def_id(segment.id) {
+                    self.collector.definitions.define_id_hir(path.id, *def_id);
                 }
             }
         }
@@ -67,7 +67,7 @@ impl<'c> Resolver<'c> {
             }
         }
 
-        self.resolved.insert(ident.id, def_id);
+        self.collector.definitions.define_id_hir(ident.id, def_id);
         Ok(())
     }
 }

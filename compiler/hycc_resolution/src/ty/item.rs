@@ -4,7 +4,7 @@ use hycc_ty::ty::Ty;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
-impl<'d, 'r> TyResolver<'d, 'r> {
+impl<'d> TyResolver<'d> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),

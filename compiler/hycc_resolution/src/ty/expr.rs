@@ -3,7 +3,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::expr::{HirExpr, HirExprKind, HirUnary};
 use hycc_ty::ty::{InferKind, Ty};
 
-impl<'d, 'r> TyResolver<'d, 'r> {
+impl<'d> TyResolver<'d> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         match &expr.kind {
             HirExprKind::Block(block) => self.resolve_block(&block),

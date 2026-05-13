@@ -4,7 +4,7 @@ use hycc_hir::{
     block::HirBlock,
     def::{DefId, DefinitionTable},
     expr::{HirExpr, HirExprKind},
-    item::{HirItem, HirItemKind, HirPetal, HirVarDecl},
+    item::{HirItem, HirItemKind, HirPetal},
     stmt::{HirStmt, HirStmtKind},
 };
 use hycc_span::Span;
@@ -106,10 +106,27 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         let body = self.table.get_mut(def_id);
         if let Some(last) = body.basic_blocks.last_mut() {
-            last.terminator.replace(MirTerminator::new(
-                MirTerminatorKind::Return,
+            let ret = MirTerminator::new(MirTerminatorKind::Return, Span::default());
+            let Some(term) = &last.terminator else {
+                last.terminator.replace(ret);
+                return;
+            };
+
+            let MirTerminatorKind::Pass(local_id) = &term.kind else {
+                return;
+            };
+
+            let Some(local_id) = local_id else { return };
+
+            last.statements.push(MirStatement::new(
+                MirStatementKind::Assign(Box::new((
+                    Location::new(LocalDeclId(0)),
+                    RValue::Use(Operand::Move(Location::new(*local_id))),
+                ))),
                 Span::default(),
             ));
+
+            last.terminator.replace(ret);
         }
 
         self.current_def = prev_def;
@@ -129,22 +146,33 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             bug!("var decl {:?} does not have an attached ty!", var_item.id)
         };
 
-        // TODO: attach local decl id to def id for path expressions/identifier-based lookup
-
-        // self.definitions.
-
         let var_local_id = body.declare_local_var(
             ty.id,
             Mutability::Immutable, // TODO: update to decl.mutability once implemented
             decl.span,
         );
 
-        if let Some(val) = decl.val {
-            self.lower_expr(&val);
-        }
+        let var_val_local_id = decl.val.map(|val| self.lower_expr(&val));
 
         let var_def_id = *self.definitions.get_def_id(var_item.id).unwrap();
         self.def_map.insert(var_def_id, var_local_id);
+
+        let Some(var_val_local_id) = var_val_local_id else {
+            return;
+        };
+
+        let body = self.table.get_mut(def_id);
+        let Some(last) = body.basic_blocks.last_mut() else {
+            return;
+        };
+
+        last.statements.push(MirStatement::new(
+            MirStatementKind::Assign(Box::new((
+                Location::new(var_local_id),
+                RValue::Use(Operand::Move(Location::new(var_val_local_id))),
+            ))),
+            var_item.span,
+        ));
     }
 
     fn lower_block(&mut self, block: &HirBlock) -> MirBasicBlockId {
@@ -167,7 +195,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         }
 
         for stmt in &block.stmts {
-            self.lower_stmt(&stmt)
+            self.lower_stmt(&stmt);
         }
 
         block_id
@@ -176,18 +204,35 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     fn lower_stmt(&mut self, stmt: &HirStmt) {
         let Some(def_id) = self.current_def else {
             bug!("lowering statement without a currently existing definition!")
-            // return;
         };
 
-        let body = self.table.get_mut(def_id);
-        // _ = body;
-
         match &stmt.kind {
-            HirStmtKind::Ret(_) => todo!("lower ret stmt"),
-            HirStmtKind::Pass(_) => todo!("lower pass stmt"),
+            HirStmtKind::Ret(_) => {
+                //
+                todo!("lower ret stmt")
+            }
+
+            HirStmtKind::Pass(pass) => {
+                let pass_val = pass
+                    .value
+                    .map(|val| Some(self.lower_expr(&val)))
+                    .unwrap_or(None);
+
+                let body = self.table.get_mut(def_id);
+                let Some(block) = body.basic_blocks.last_mut() else {
+                    return;
+                };
+
+                block.terminator.replace(MirTerminator::new(
+                    MirTerminatorKind::Pass(pass_val),
+                    pass.span,
+                ));
+            }
 
             HirStmtKind::Item(item) => self.lower_item(&item),
-            HirStmtKind::Expr(expr) => todo!("lower expr stmt"),
+            HirStmtKind::Expr(expr) => {
+                self.lower_expr(&expr);
+            }
         }
     }
 
@@ -196,23 +241,35 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
+        let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
+        let rvalue = self.lower_expr_rvalue(&expr);
+
         let body = self.table.get_mut(def_id);
+        let local_id = body.declare_local_temp(ty_id, expr.span);
 
-        let Some(ty) = self.tctx.get_ty_of_hir(expr.id) else {
-            unreachable!()
+        let Some(rvalue) = rvalue else {
+            return local_id;
         };
-
-        let local_decl_id = body.declare_local_temp(ty.id, expr.span);
-        let loc = Location::new(local_decl_id);
 
         let Some(block) = body.basic_blocks.last_mut() else {
             bug!("lowering outside of a block!")
         };
 
-        let rvalue = match &expr.kind {
+        let loc = Location::new(local_id);
+
+        block.statements.push(MirStatement::new(
+            MirStatementKind::Assign(Box::new((loc, rvalue))),
+            expr.span,
+        ));
+
+        local_id
+    }
+
+    fn lower_expr_rvalue(&mut self, expr: &HirExpr) -> Option<RValue> {
+        Some(match &expr.kind {
             HirExprKind::Path(path) => {
                 let def_id = self.definitions.get_def_id(path.id).unwrap();
-                let local_id = dbg!(self.def_map.get(def_id)).cloned().unwrap();
+                let local_id = self.def_map.get(def_id).cloned().unwrap();
 
                 RValue::Use(Operand::Move(Location::new(local_id)))
             }
@@ -230,14 +287,35 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 RValue::Binary(
                     *op,
                     Box::new((Operand::Move(left_loc), Operand::Move(right_loc))),
-                );
-
-                todo!("lower binary expr")
+                )
             }
 
             HirExprKind::Unary(unary) => todo!("lower unary expr"),
             HirExprKind::Assign(assignee, expr) => todo!("lower assign expr"),
-            HirExprKind::Block(block) => todo!("lower block expr"),
+
+            HirExprKind::Block(block) => {
+                let def_id = self.current_def?;
+                let block_id = self.lower_block(&block);
+
+                let body = self.table.get_mut(def_id);
+                body.basic_blocks.push(MirBasicBlock::new());
+
+                let block = body.get_mut(block_id);
+                let Some(term) = &block.terminator else {
+                    return None;
+                };
+
+                let MirTerminatorKind::Pass(local_id) = term.kind else {
+                    return None;
+                };
+
+                let Some(local_id) = local_id else {
+                    return None;
+                };
+
+                RValue::Use(Operand::Move(Location::new(local_id)))
+            }
+
             HirExprKind::Array(array) => todo!("lower array expr"),
             HirExprKind::Tuple(tup) => todo!("lower tuple expr"),
             HirExprKind::Struct(strct) => todo!("lower struct expr"),
@@ -245,15 +323,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::FnCall(call) => todo!("lower fn call expr"),
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
             HirExprKind::MethodCall(call) => todo!("lower method call expr"),
-
-            _ => todo!("lower expr (arms)"),
-        };
-
-        block.statements.push(MirStatement::new(
-            MirStatementKind::Assign(Box::new((loc, rvalue))),
-            expr.span,
-        ));
-
-        local_decl_id
+        })
     }
 }

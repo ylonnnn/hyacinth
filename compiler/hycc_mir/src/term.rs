@@ -1,15 +1,18 @@
 use hycc_span::Span;
 
 use crate::{
-    basic_block::MirBasicBlockId,
-    stmt::{Location, Operand},
+    basic_block::MirBasicBlockId, local::LocalDeclId, stmt::{Location, Operand}
 };
 
 #[derive(Debug, Clone)]
 pub enum MirTerminatorKind {
     Goto(MirBasicBlockId),
+
     Return,
+    Pass(Option<LocalDeclId>),
+
     Unreachable,
+
     Call {
         func: Operand,
         args: Vec<Operand>,

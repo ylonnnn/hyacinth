@@ -9,7 +9,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct MirBody {
     pub basic_blocks: Vec<MirBasicBlock>,
-    local_decls: Vec<LocalDecl>,
+    pub(crate) local_decls: Vec<LocalDecl>,
 }
 
 impl MirBody {
@@ -71,7 +71,7 @@ impl MirBody {
 
     pub fn declare_local_temp(&mut self, ty: TyId, span: Span) -> LocalDeclId {
         self.declare_local(LocalDecl::new(
-            LocalDeclKind::Param,
+            LocalDeclKind::Temp,
             ty,
             Mutability::Immutable,
             span,

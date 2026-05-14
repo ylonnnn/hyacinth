@@ -90,23 +90,6 @@ pub fn parse_source(session: &mut Session, src_id: SourceId) -> Option<Petal> {
     Some(root_petal)
 }
 
-pub fn lower_hir<'h>(
-    session: &mut Session,
-    const_table: &mut ConstTable,
-    tree: Petal,
-) -> (HirTable<'h>, &'h HirPetal<'h>) {
-    let hir_table = HirTable::new();
-    let mut hir_builder = HirBuilder::new(
-        &mut session.interner,
-        &session.registry,
-        &hir_table,
-        const_table,
-    );
-
-    let hir = hir_builder.lower(tree);
-    (hir_table, hir)
-}
-
 pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let unit = session.get_unit(unit_id);
     let Some(tree) = parse_source(session, unit.root) else {
@@ -114,7 +97,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     };
 
     let mut const_table = ConstTable::new();
-    let (hir_table, hir) = lower_hir(session, &mut const_table, tree);
+
+    let hir_table = HirTable::new();
+    let mut hir_builder = HirBuilder::new(
+        &mut session.interner,
+        &session.registry,
+        &hir_table,
+        &mut const_table,
+    );
+
+    let hir = hir_builder.lower(tree);
+
     let mut collector = Collector::new();
 
     collector.init_builtin_ty(&mut session.interner);

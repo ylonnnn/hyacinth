@@ -196,6 +196,12 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         for stmt in &block.stmts {
             self.lower_stmt(&stmt);
+
+            // TODO: emit warning for unreachable statements or create a separate phase for it
+            match &stmt.kind {
+                HirStmtKind::Ret(_) | HirStmtKind::Pass(_) => break,
+                _ => continue,
+            }
         }
 
         block_id

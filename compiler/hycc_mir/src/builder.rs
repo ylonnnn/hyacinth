@@ -106,7 +106,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         let body = self.table.get_mut(def_id);
         if let Some(last) = body.basic_blocks.last_mut() {
-            let ret = MirTerminator::new(MirTerminatorKind::Return, Span::default());
+            let ret = MirTerminator::new(MirTerminatorKind::Ret, Span::default());
             let Some(term) = &last.terminator else {
                 last.terminator.replace(ret);
                 return;
@@ -207,9 +207,31 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         match &stmt.kind {
-            HirStmtKind::Ret(_) => {
+            HirStmtKind::Ret(ret) => {
                 //
-                todo!("lower ret stmt")
+                let ret_val = ret
+                    .value
+                    .map(|val| Some(self.lower_expr(&val)))
+                    .unwrap_or(None);
+
+                let body = self.table.get_mut(def_id);
+                let Some(block) = body.basic_blocks.last_mut() else {
+                    return;
+                };
+
+                if let Some(local_id) = ret_val {
+                    block.statements.push(MirStatement::new(
+                        MirStatementKind::Assign(Box::new((
+                            Location::new(LocalDeclId(0)),
+                            RValue::Use(Operand::Move(Location::new(local_id))),
+                        ))),
+                        ret.span,
+                    ));
+                }
+
+                block
+                    .terminator
+                    .replace(MirTerminator::new(MirTerminatorKind::Ret, ret.span));
             }
 
             HirStmtKind::Pass(pass) => {

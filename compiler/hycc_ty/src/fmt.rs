@@ -35,6 +35,7 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
     pub fn fmt(&self, kind: &TyKind) -> String {
         match &kind {
             TyKind::Unit => String::from("()"),
+            TyKind::Never => String::from("~"),
 
             TyKind::Int(data) => match data {
                 IntTy::Fixed(width, signed) => format!("{}{width}", ternary!(*signed, "i", "u")),

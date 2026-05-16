@@ -14,24 +14,34 @@ impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
                 self.dctx.add(diag);
             }
 
-            let HirStmtKind::Pass(_) = &stmt.kind else {
-                continue;
-            };
+            match &stmt.kind {
+                HirStmtKind::Ret(_) => {
+                    if self.tctx.get_ty_of_hir(block.id).is_none() {
+                        let never_ty = self.tctx.make_never_ty();
+                        self.tctx
+                            .attach_to_hir(block.id, Ty::new(never_ty, block.span));
+                    }
+                }
 
-            let Some(stmt_ty) = self.tctx.get_ty_of_hir(stmt.id).cloned() else {
-                continue;
-            };
+                HirStmtKind::Pass(_) => {
+                    let Some(stmt_ty) = self.tctx.get_ty_of_hir(stmt.id).cloned() else {
+                        continue;
+                    };
 
-            if self.tctx.get_ty_of_hir(block.id).is_none() {
-                self.tctx.attach_to_hir(block.id, stmt_ty.clone());
+                    if self.tctx.get_ty_of_hir(block.id).is_none() {
+                        self.tctx.attach_to_hir(block.id, stmt_ty.clone());
+                    }
+
+                    let Some(expected_ty) = &expected_ty else {
+                        continue;
+                    };
+
+                    self.check(&expected_ty, &stmt_ty)
+                        .map(|diag| self.dctx.add(diag));
+                }
+
+                _ => {}
             }
-
-            let Some(expected_ty) = &expected_ty else {
-                continue;
-            };
-
-            self.check(&expected_ty, &stmt_ty)
-                .map(|diag| self.dctx.add(diag));
         }
 
         let unit_ty = self.tctx.make_unit_ty();

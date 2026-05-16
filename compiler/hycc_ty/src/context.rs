@@ -202,6 +202,8 @@ impl TyCtx {
         let b_ty = &self.storage[b.unwrap()];
 
         match (&a_ty, &b_ty) {
+            (TyKind::Never, _) | (_, TyKind::Never) => true,
+
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
                 self.bind_var(*v_id, a);
                 true
@@ -295,6 +297,10 @@ impl TyCtx {
 
     pub fn make_unit_ty(&mut self) -> TyId {
         self.intern(TyKind::Unit)
+    }
+
+    pub fn make_never_ty(&mut self) -> TyId {
+        self.intern(TyKind::Never)
     }
 
     pub fn make_int_ty(&mut self, ty: IntTy) -> TyId {

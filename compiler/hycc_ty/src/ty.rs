@@ -14,6 +14,7 @@ pub enum RefMutability {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Unit,
+    Never,
 
     Int(IntTy),
     Float(u8),

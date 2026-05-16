@@ -21,7 +21,7 @@ use crate::{
     inferer::{InferResult, TyInferer},
 };
 
-impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
+impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
         let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),

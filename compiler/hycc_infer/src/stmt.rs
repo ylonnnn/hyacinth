@@ -1,12 +1,15 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::stmt::{HirStmt, HirStmtKind};
+use hycc_hir::{
+    HirNode,
+    stmt::{HirStmt, HirStmtKind},
+};
 use hycc_span::Span;
 use hycc_ty::ty::{Ty, TyKind};
 use hycc_util::bug;
 
 use crate::inferer::{InferResult, TyInferer};
 
-impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
+impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         match &stmt.kind {
             HirStmtKind::Ret(ret) => {
@@ -18,9 +21,9 @@ impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
                     bug!("fn ty must be the ty of the function")
                 };
 
-                // TODO: improve fn tys for precise diagnostics
+                // TODO: improve diagnostics (?)
                 let fn_body = fn_ctx.fn_body;
-                let ret_ty = fn_ty.ret_ty;
+                let ret_ty = Ty::new(fn_ty.ret_ty, Span::default());
 
                 let val_ty = if let Some(val) = ret.value {
                     Ty::new(self.infer_expr(&val)?, val.span)
@@ -28,10 +31,14 @@ impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
                     Ty::new(self.tctx.make_unit_ty(), ret.span)
                 };
 
-                self.check(&Ty::new(ret_ty, Span::default()), &val_ty)
-                    .map(|diag| self.dctx.add(diag));
-                self.tctx
-                    .attach_to_hir(fn_body, Ty::new(ret_ty, Span::default()));
+                self.check(&ret_ty, &val_ty).map(|diag| self.dctx.add(diag));
+
+                let HirNode::Block(fn_body) = self.hir_table.get(fn_body) else {
+                    unreachable!()
+                };
+
+                let ret_ty = Ty::new(ret_ty.id, fn_body.span);
+                self.tctx.attach_to_hir(fn_body.id, ret_ty);
 
                 Ok(())
             }

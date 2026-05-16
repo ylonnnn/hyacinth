@@ -202,8 +202,6 @@ impl TyCtx {
         let b_ty = &self.storage[b.unwrap()];
 
         match (&a_ty, &b_ty) {
-            (TyKind::Never, _) | (_, TyKind::Never) => true,
-
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
                 self.bind_var(*v_id, a);
                 true
@@ -237,6 +235,8 @@ impl TyCtx {
                     .all(|(ap_ty, bp_ty)| self.unify_ty(*ap_ty, *bp_ty))
                     && self.unify_ty(a_ret, b_ret)
             }
+
+            (TyKind::Never, _) | (_, TyKind::Never) => true,
 
             // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
             (_, _) => false,

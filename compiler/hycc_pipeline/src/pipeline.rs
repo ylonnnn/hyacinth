@@ -160,7 +160,12 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut ty_inferer = TyInferer::new(&mut ty_resolver.tctx, &definitions, &const_table);
+    let mut ty_inferer = TyInferer::new(
+        &mut ty_resolver.tctx,
+        &definitions,
+        &const_table,
+        &hir_table,
+    );
 
     ty_inferer.infer(&hir);
     ty_inferer.dctx.emit(
@@ -175,5 +180,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let mut mir_builder = MirBuilder::new(&mut ty_inferer.tctx, &definitions);
     mir_builder.lower(&hir);
 
-    dbg!(&mir_builder.table);
+    for (_, body) in mir_builder.table.defs() {
+        println!("{}", &body);
+    }
 }

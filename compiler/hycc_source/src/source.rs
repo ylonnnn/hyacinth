@@ -4,10 +4,8 @@ use std::fs;
 pub struct SourceId(pub u16);
 
 impl SourceId {
-    #[allow(non_snake_case)]
-    pub fn Invalid() -> Self {
-        Self(u16::MAX)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(u16::MAX);
 
     pub fn is_valid(&self) -> bool {
         self.0 != u16::MAX
@@ -30,7 +28,7 @@ impl Source {
         match fs::read_to_string(path.to_string()) {
             Ok(data) => match std::path::absolute(path) {
                 Ok(path) => Self {
-                    identifier: (SourceId::Invalid(), path.to_str().unwrap().into()),
+                    identifier: (SourceId::Invalid, path.to_str().unwrap().into()),
                     data,
                 },
                 _ => {

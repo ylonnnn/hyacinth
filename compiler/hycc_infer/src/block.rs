@@ -4,7 +4,7 @@ use hycc_ty::{context::TyId, ty::Ty};
 
 use crate::inferer::{InferResult, TyInferer};
 
-impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
+impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
         let expected_ty: Option<Ty> = self.tctx.get_ty_of_hir(block.id).cloned();
         self.tctx.dettach_hir(block.id);
@@ -27,6 +27,8 @@ impl<'t, 'd, 'c> TyInferer<'t, 'd, 'c> {
                     let Some(stmt_ty) = self.tctx.get_ty_of_hir(stmt.id).cloned() else {
                         continue;
                     };
+
+                    dbg!(&stmt_ty);
 
                     if self.tctx.get_ty_of_hir(block.id).is_none() {
                         self.tctx.attach_to_hir(block.id, stmt_ty.clone());

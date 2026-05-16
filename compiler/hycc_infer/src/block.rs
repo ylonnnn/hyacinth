@@ -28,8 +28,6 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                         continue;
                     };
 
-                    dbg!(&stmt_ty);
-
                     if self.tctx.get_ty_of_hir(block.id).is_none() {
                         self.tctx.attach_to_hir(block.id, stmt_ty.clone());
                     }

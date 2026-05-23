@@ -286,7 +286,7 @@ impl<'s> Parser<'s> {
 
                 let right = match self.parse_expr(min_bp) {
                     Ok(right) => right,
-                    Err(matched) => return Err((left, matched)),
+                    Err(diag) => return Err((left, diag)),
                 };
 
                 Ok(Expr::new(ExprKind::Binary(
@@ -308,6 +308,8 @@ impl<'s> Parser<'s> {
             )))),
 
             TokenKind::Dot => Ok(Expr::new(self.parse_field_access_or_method_call(left)?)),
+
+            TokenKind::LeftBrace => Err((left, None)),
 
             _ => Err((
                 left,

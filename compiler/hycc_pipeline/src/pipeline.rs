@@ -180,6 +180,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let mut mir_builder = MirBuilder::new(&mut ty_inferer.tctx, &definitions);
     mir_builder.lower(&hir);
 
+    // dbg!(mir_builder.scope_tree);
+
     for (_, body) in mir_builder.table.defs() {
         println!("{}", &body);
     }

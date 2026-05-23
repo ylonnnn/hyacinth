@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use hycc_span::Span;
 use hycc_ty::context::TyId;
 
@@ -76,5 +78,15 @@ impl MirBody {
             Mutability::Immutable,
             span,
         ))
+    }
+}
+
+impl Display for MirBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, basic_block) in self.basic_blocks.iter().enumerate() {
+            writeln!(f, "bb{}:\n{}", i, &basic_block)?;
+        }
+
+        Ok(())
     }
 }

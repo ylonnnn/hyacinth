@@ -15,6 +15,7 @@ use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
     body::MirBody,
     local::{LocalDeclId, Mutability},
+    scope::{MirScope, MirScopeId, MirScopeTerminator, MirScopeTree},
     stmt::{Location, MirStatement, MirStatementKind, Operand, RValue},
     table::MirTable,
     term::{MirTerminator, MirTerminatorKind},
@@ -26,8 +27,14 @@ pub struct MirBuilder<'t, 'd> {
     tctx: &'t mut TyCtx,
     definitions: &'d DefinitionTable,
 
-    current_def: Option<DefId>,
     def_map: HashMap<DefId, LocalDeclId>,
+    current_def: Option<DefId>,
+
+    pub scope_tree: MirScopeTree,
+    current_scope: Option<MirScopeId>,
+
+    // The local decl id to assign the value that the current block (scope) will yield
+    block_assign_local: Option<LocalDeclId>,
 }
 
 impl<'t, 'd> MirBuilder<'t, 'd> {
@@ -39,6 +46,96 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
             current_def: None,
             def_map: HashMap::new(),
+
+            scope_tree: MirScopeTree::new(),
+            current_scope: None,
+
+            block_assign_local: None,
+        }
+    }
+
+    fn emit_storage_init(&mut self, span: Span, local_id: LocalDeclId, rval: RValue) {
+        let Some(def_id) = self.current_def else {
+            bug!("storage initialization outside of a definition body!")
+        };
+
+        let body = self.table.get_mut(def_id);
+        let Some(block) = body.basic_blocks.last_mut() else {
+            bug!("body of definition has no basic blocks")
+        };
+
+        block.statements.push(MirStatement::new(
+            MirStatementKind::StorageLive(local_id),
+            span,
+        ));
+
+        let loc = Location::new(local_id);
+        block.statements.push(MirStatement::new(
+            MirStatementKind::Assign(Box::new((loc, rval))),
+            span,
+        ));
+
+        let Some(current_scope) = self.current_scope else {
+            return;
+        };
+
+        self.scope_tree
+            .get_mut(current_scope)
+            .store(local_id, MirBasicBlockId(body.basic_blocks.len() - 1));
+    }
+
+    fn emit_dead(&mut self, scope: Option<MirScopeId>) {
+        let scope_id = scope.unwrap_or(MirScopeId(0));
+        let scope = self.scope_tree.get(scope_id);
+
+        let body = self.table.get_mut(self.current_def.unwrap());
+        // let block = body.get_mut(scope.tail);
+
+        // for local_id in scope.local_decls() {
+        //     let block_id = scope.local_init_block(local_id).unwrap();
+        //     if block_id.0 > scope.tail.0 {
+        //         continue;
+        //     }
+
+        //     // block.statements.insert(
+        //     //     scope.insert_pos,
+        //     //     MirStatement::new(MirStatementKind::StorageDead(local_id), Span::default()),
+        //     // );
+        // }
+
+        // let term = block.terminator.as_ref().unwrap();
+        // match &term.kind {
+        //     MirTerminatorKind::Ret => {
+        //         let mut curr_scope: Option<&MirScope> =
+        //             scope.parent.map(|parent_id| self.scope_tree.get(parent_id));
+        //         // dbg!(&curr_scope);
+
+        //         while let Some(curr) = curr_scope {
+        //             let block = body.get_mut(curr.tail);
+        //             for local_id in curr.local_decls() {
+        //                 let block_id = curr.local_init_block(local_id).unwrap();
+        //                 if block_id.0 > curr.tail.0 {
+        //                     continue;
+        //                 }
+
+        //                 // block.statements.insert(
+        //                 //     curr.insert_pos,
+        //                 //     MirStatement::new(
+        //                 //         MirStatementKind::StorageDead(local_id),
+        //                 //         Span::default(),
+        //                 //     ),
+        //                 // );
+        //             }
+
+        //             curr_scope = curr.parent.map(|parent_id| self.scope_tree.get(parent_id));
+        //         }
+        //     }
+
+        //     _ => {}
+        // }
+
+        for child_id in scope.children.clone() {
+            self.emit_dead(Some(child_id));
         }
     }
 
@@ -46,6 +143,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         for item in &tree.items {
             self.lower_item(&item);
         }
+
+        // dbg!(&self.scope_tree);
+        // for def_id in self.table.defs().keys().map(|key| *key).collect::<Vec<_>>() {
+        //     self.current_def.replace(def_id);
+        //     self.emit_dead(None);
+        //     self.current_def.take();
+        // }
     }
 
     fn lower_item(&mut self, item: &HirItem) {
@@ -102,31 +206,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             self.def_map.insert(param_def_id, local_id);
         }
 
-        self.lower_block(&func.body);
+        body.insert(MirBasicBlock::new());
+        self.lower_block(&func.body, Some(LocalDeclId(0)));
 
         let body = self.table.get_mut(def_id);
         if let Some(last) = body.basic_blocks.last_mut() {
-            let ret = MirTerminator::new(MirTerminatorKind::Ret, Span::default());
-            let Some(term) = &last.terminator else {
-                last.terminator.replace(ret);
-                return;
-            };
-
-            let MirTerminatorKind::Pass(local_id) = &term.kind else {
-                return;
-            };
-
-            let Some(local_id) = local_id else { return };
-
-            last.statements.push(MirStatement::new(
-                MirStatementKind::Assign(Box::new((
-                    Location::new(LocalDeclId(0)),
-                    RValue::Use(Operand::Move(Location::new(*local_id))),
-                ))),
-                Span::default(),
-            ));
-
-            last.terminator.replace(ret);
+            last.terminator
+                .replace(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
         }
 
         self.current_def = prev_def;
@@ -161,50 +247,74 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             return;
         };
 
-        let body = self.table.get_mut(def_id);
-        let Some(last) = body.basic_blocks.last_mut() else {
-            return;
-        };
-
-        last.statements.push(MirStatement::new(
-            MirStatementKind::Assign(Box::new((
-                Location::new(var_local_id),
-                RValue::Use(Operand::Move(Location::new(var_val_local_id))),
-            ))),
+        self.emit_storage_init(
             var_item.span,
-        ));
+            var_local_id,
+            RValue::Use(Operand::Move(Location::new(var_val_local_id))),
+        );
     }
 
-    fn lower_block(&mut self, block: &HirBlock) -> MirBasicBlockId {
-        let Some(def_id) = self.current_def else {
-            unreachable!()
-        };
+    fn lower_block(&mut self, block: &HirBlock, assign_local: Option<LocalDeclId>) {
+        let prev_assign_local = self.block_assign_local;
+        assign_local.map(|local_id| self.block_assign_local.replace(local_id));
 
-        let body = self.table.get_mut(def_id);
+        let prev_scope = self.current_scope;
+        self.current_scope
+            .replace(self.scope_tree.create(prev_scope));
 
-        let block_id = body.insert(MirBasicBlock::new());
-        if block_id.0 >= 1 {
-            let Some(prev) = body.basic_blocks.get_mut(block_id.0 - 1) else {
-                unreachable!()
-            };
-
-            prev.terminator.replace(MirTerminator::new(
-                MirTerminatorKind::Goto(block_id),
-                Span::default(),
-            ));
-        }
-
+        let scope_id = self.current_scope.unwrap();
         for stmt in &block.stmts {
             self.lower_stmt(&stmt);
 
-            // TODO: emit warning for unreachable statements or create a separate phase for it
-            match &stmt.kind {
-                HirStmtKind::Ret(_) | HirStmtKind::Pass(_) => break,
+            let scope_term = Some(match &stmt.kind {
+                HirStmtKind::Ret(_) => MirScopeTerminator::Ret,
+                HirStmtKind::Pass(_) => MirScopeTerminator::Normal,
+
                 _ => continue,
+            });
+
+            self.scope_tree.get_mut(scope_id).term =
+                scope_term.unwrap_or(MirScopeTerminator::Normal);
+
+            break;
+            // TODO: emit warning for unreachable statements or create a separate phase for it
+        }
+
+        let scope = self.scope_tree.get_mut(scope_id);
+        let body = self.table.get_mut(self.current_def.unwrap());
+        let block = body.basic_blocks.last_mut().unwrap();
+
+        match scope.term {
+            MirScopeTerminator::Normal => {
+                for local_id in scope.local_decls().iter().rev() {
+                    block.statements.push(MirStatement::new(
+                        MirStatementKind::StorageDead(*local_id),
+                        Span::default(),
+                    ));
+                }
+            }
+
+            MirScopeTerminator::Ret => {
+                let mut curr_scope = Some(scope_id);
+                while let Some(curr) = curr_scope {
+                    let parent = self.scope_tree.get(curr);
+
+                    for local_id in parent.local_decls().iter().rev() {
+                        block.statements.push(MirStatement::new(
+                            MirStatementKind::StorageDead(*local_id),
+                            Span::default(),
+                        ));
+                    }
+
+                    curr_scope = parent.parent;
+                }
+
+                body.insert(MirBasicBlock::new());
             }
         }
 
-        block_id
+        self.current_scope = prev_scope;
+        self.block_assign_local = prev_assign_local;
     }
 
     fn lower_stmt(&mut self, stmt: &HirStmt) {
@@ -214,7 +324,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         match &stmt.kind {
             HirStmtKind::Ret(ret) => {
-                //
                 let ret_val = ret
                     .value
                     .map(|val| Some(self.lower_expr(&val)))
@@ -225,6 +334,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     return;
                 };
 
+                // Emit assignment for the return LocalDecl (0) with
+                // the return value.
                 if let Some(local_id) = ret_val {
                     block.statements.push(MirStatement::new(
                         MirStatementKind::Assign(Box::new((
@@ -251,8 +362,16 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     return;
                 };
 
-                block.terminator.replace(MirTerminator::new(
-                    MirTerminatorKind::Pass(pass_val),
+                let assign_local = self.block_assign_local.unwrap();
+                let Some(local_id) = pass_val else {
+                    return;
+                };
+
+                block.statements.push(MirStatement::new(
+                    MirStatementKind::Assign(Box::new((
+                        Location::new(assign_local),
+                        RValue::Use(Operand::Move(Location::new(local_id))),
+                    ))),
                     pass.span,
                 ));
             }
@@ -322,24 +441,14 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::Assign(assignee, expr) => todo!("lower assign expr"),
 
             HirExprKind::Block(block) => {
-                let def_id = self.current_def?;
-                let block_id = self.lower_block(&block);
+                let def_id = self.current_def.unwrap();
+                let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
+                let local_id = self
+                    .table
+                    .get_mut(def_id)
+                    .declare_local_temp(ty_id, block.span);
 
-                let body = self.table.get_mut(def_id);
-                body.basic_blocks.push(MirBasicBlock::new());
-
-                let block = body.get_mut(block_id);
-                let Some(term) = &block.terminator else {
-                    return None;
-                };
-
-                let MirTerminatorKind::Pass(local_id) = term.kind else {
-                    return None;
-                };
-
-                let Some(local_id) = local_id else {
-                    return None;
-                };
+                self.lower_block(&block, Some(local_id));
 
                 RValue::Use(Operand::Move(Location::new(local_id)))
             }

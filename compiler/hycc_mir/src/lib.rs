@@ -1,6 +1,8 @@
 pub mod builder;
 pub mod table;
 
+pub mod scope;
+
 pub mod body;
 
 pub mod local;

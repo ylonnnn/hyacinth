@@ -13,6 +13,10 @@ impl MirTable {
         Self(HashMap::new())
     }
 
+    pub fn defs(&self) -> &HashMap<DefId, MirBody> {
+        &self.0
+    }
+
     pub fn insert(&mut self, def_id: DefId, body: MirBody) -> &mut MirBody {
         if self.0.contains_key(&def_id) {
             bug!("def id {def_id:?} already has an attached body!")

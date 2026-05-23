@@ -8,7 +8,7 @@ use hycc_ast::{
     },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
-    stmt::{PassStmt, RetStmt},
+    stmt::{IfStmt, PassStmt, RetStmt},
     token::{Token, TokenKind},
     ty::{Array, FnTy, Ref, Slice, Tuple},
 };
@@ -31,7 +31,7 @@ use crate::{
         HirStructField, HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
-    stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
+    stmt::{HirIfStmt, HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
     ty::{HirArray, HirFnTy, HirRef, HirSlice, HirTuple, HirTy, HirTyKind},
 };
 
@@ -220,6 +220,8 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_stmt(&mut self, stmt: &Stmt) -> &'h HirStmt<'h> {
         let kind = match &stmt.kind {
+            StmtKind::If(ite) => HirStmtKind::If(Box::new(self.lower_if_stmt(&ite))),
+
             StmtKind::Ret(ret) => HirStmtKind::Ret(Box::new(self.lower_ret_stmt(&ret))),
             StmtKind::Pass(pass) => HirStmtKind::Pass(Box::new(self.lower_pass_stmt(&pass))),
             StmtKind::Item(item) => HirStmtKind::Item(self.lower_item(item)),
@@ -233,6 +235,14 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             stmt
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_if_stmt(&mut self, ite: &IfStmt) -> HirIfStmt<'h> {
+        HirIfStmt {
+            cond: self.lower_expr(&ite.cond),
+            consequent: self.lower_block(&ite.consequent),
+            alternate: ite.alternate.as_ref().map(|alt| self.lower_block(&alt)),
         }
     }
 

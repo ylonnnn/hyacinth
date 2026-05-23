@@ -12,6 +12,10 @@ use crate::inferer::{InferResult, TyInferer};
 impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         match &stmt.kind {
+            HirStmtKind::If(ite) => {
+                todo!("infer if stmt")
+            }
+
             HirStmtKind::Ret(ret) => {
                 let Some(fn_ctx) = &self.fn_ctx else {
                     bug!("fn ctx must exist when entering a function")

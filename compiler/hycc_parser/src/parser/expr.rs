@@ -14,7 +14,7 @@ use hycc_util::ternary;
 use crate::parser::{
     Parser,
     diag::ParserDiag,
-    parser::{ParseResult, ParserTerminatorKind},
+    parser::{ParseResult, ParserCtx, ParserTerminatorKind},
     path::PathKind,
 };
 
@@ -170,9 +170,9 @@ impl<'s> Parser<'s> {
                 };
 
                 match &trailing.kind {
-                    TokenKind::LeftBrace => Ok(Expr::new(ExprKind::Struct(Box::new(
-                        self.parse_struct_expr(path)?,
-                    )))),
+                    TokenKind::LeftBrace if !matches!(self.ctx, ParserCtx::IfCond) => Ok(
+                        Expr::new(ExprKind::Struct(Box::new(self.parse_struct_expr(path)?))),
+                    ),
 
                     TokenKind::LeftParen if ident_kind == TokenIdentKind::Fn => Ok(Expr::new(
                         ExprKind::AnonFn(Box::new(self.parse_anon_fn(span)?)),
@@ -359,49 +359,50 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_paren_enclosed_expr(&mut self) -> ParseResult<Expr> {
-        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
-        let span = tg.span();
+        self.use_ctx(ParserCtx::Normal, |s| {
+            let tg = s.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+            let span = tg.span();
 
-        let TokenGraph::Collection { data, .. } = tg else {
-            unreachable!()
-        };
+            let TokenGraph::Collection { data, .. } = tg else {
+                unreachable!()
+            };
 
-        let n = data.len();
+            let n = data.len();
+            s.use_stream(
+                TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                |s| -> ParseResult<Expr> {
+                    let mut tup = TupleExpr {
+                        elements: Vec::new(),
+                        span,
+                    };
+                    let mut expect = true;
 
-        self.use_stream(
-            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
-            |s| -> ParseResult<Expr> {
-                let mut tup = TupleExpr {
-                    elements: Vec::new(),
-                    span,
-                };
-                let mut expect = true;
+                    while !s.eos() {
+                        if !expect {
+                            s.require_exact_nonlf(TokenKind::Comma)?;
+                        }
 
-                while !s.eos() {
-                    if !expect {
-                        s.require_exact_nonlf(TokenKind::Comma)?;
+                        if expect {
+                            tup.elements.push(s.parse_expr(0)?);
+                            expect = false;
+                        }
+
+                        if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                            expect = true;
+                            continue;
+                        }
                     }
 
-                    if expect {
-                        tup.elements.push(s.parse_expr(0)?);
-                        expect = false;
-                    }
-
-                    if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
-                        expect = true;
-                        continue;
-                    }
-                }
-
-                Ok(if tup.elements.is_empty() {
-                    todo!("unit expr")
-                } else if tup.elements.len() == 1 {
-                    tup.elements.into_iter().next().unwrap()
-                } else {
-                    Expr::new(ExprKind::Tuple(Box::new(tup)))
-                })
-            },
-        )
+                    Ok(if tup.elements.is_empty() {
+                        todo!("unit expr")
+                    } else if tup.elements.len() == 1 {
+                        tup.elements.into_iter().next().unwrap()
+                    } else {
+                        Expr::new(ExprKind::Tuple(Box::new(tup)))
+                    })
+                },
+            )
+        })
     }
 
     pub fn parse_fn_call_arguments(&mut self) -> ParseResult<CallArguments> {

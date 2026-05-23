@@ -134,6 +134,12 @@ pub enum TokenIdentKind {
     Mut,
 
     // Conrol Flow
+    If,
+    Else,
+
+    For,
+    While,
+
     Ret,
     Pass,
 }
@@ -234,6 +240,12 @@ impl Display for TokenKind {
                     TokenIdentKind::Let => "let",
 
                     TokenIdentKind::Mut => "mut",
+
+                    TokenIdentKind::If => "if",
+                    TokenIdentKind::Else => "else",
+
+                    TokenIdentKind::For => "for",
+                    TokenIdentKind::While => "while",
 
                     TokenIdentKind::Ret => "ret",
                     TokenIdentKind::Pass => "pass",

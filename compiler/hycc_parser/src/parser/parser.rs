@@ -17,12 +17,22 @@ pub enum ParseLevel {
     Local,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParserCtx {
+    Normal,
+
+    // Disables struct literal parsing for if conditions unless
+    // surrounded by `()` to avoid ambiguity.
+    IfCond,
+}
+
 #[derive(Debug)]
 pub struct Parser<'s> {
     pub(super) stream: TokenStream,
     pub dctx: ParserDiagCtx,
     pub(super) source: &'s Source,
 
+    pub(super) ctx: ParserCtx,
     pub(super) level: ParseLevel,
     pub(super) petal_stack: Vec<String>,
 }
@@ -43,9 +53,22 @@ impl<'s> Parser<'s> {
             dctx: ParserDiagCtx::new(),
             source,
 
+            ctx: ParserCtx::Normal,
             level: ParseLevel::Global,
             petal_stack: Vec::new(),
         }
+    }
+
+    pub fn use_ctx<F, T>(&mut self, ctx: ParserCtx, mut handler: F) -> T
+    where
+        F: FnMut(&mut Self) -> T,
+    {
+        let prev_ctx = self.ctx;
+        self.ctx = ctx;
+        let data = handler(self);
+        self.ctx = prev_ctx;
+
+        data
     }
 
     pub fn eos(&self) -> bool {

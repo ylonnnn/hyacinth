@@ -41,6 +41,10 @@ impl<'s> Lexer<'s> {
                     TokenIdentKind::Let,
                     TokenIdentKind::Struct,
                     TokenIdentKind::Mut,
+                    TokenIdentKind::If,
+                    TokenIdentKind::Else,
+                    TokenIdentKind::For,
+                    TokenIdentKind::While,
                     TokenIdentKind::Ret,
                     TokenIdentKind::Pass,
                 ] {

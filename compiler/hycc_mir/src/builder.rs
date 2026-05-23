@@ -323,6 +323,10 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         match &stmt.kind {
+            HirStmtKind::If(ite) => {
+                todo!("mir lower if stmt")
+            }
+
             HirStmtKind::Ret(ret) => {
                 let ret_val = ret
                     .value

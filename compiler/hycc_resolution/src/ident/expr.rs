@@ -1,8 +1,9 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::DefSpace,
+    def::{DefSpace, Definition},
     expr::{HirExpr, HirExprKind, HirUnary},
 };
+use hycc_scope::Scope;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
@@ -62,9 +63,7 @@ impl<'c> Resolver<'c> {
             }
 
             HirExprKind::AnonFn(anfn) => {
-                let Some(scope_id) = s.collector.scope_ctx.get_id(expr.id) else {
-                    return Ok(());
-                };
+                let scope_id = s.collector.scope_ctx.attach(expr.id, Scope::new());
 
                 s.enter_scope(scope_id, |s| {
                     for param in &anfn.params.list {

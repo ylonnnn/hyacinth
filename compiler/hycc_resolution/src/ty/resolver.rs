@@ -1,8 +1,5 @@
-use std::collections::HashMap;
-
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirId,
     def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},
     item::HirPetal,
 };

@@ -56,7 +56,7 @@ impl<'d> TyResolver<'d> {
 
         let mut ret_ty = self.tctx.make_unit_ty();
         if let Some(r_ty) = &func.ret_ty {
-            match self.resolve_ty(&r_ty) {
+            match self.resolve_as_non_inferable_ty(&r_ty) {
                 Ok(ty_id) => ret_ty = ty_id,
                 Err(diag) => {
                     diag.map(|diag| self.dctx.add(diag));

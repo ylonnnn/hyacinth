@@ -35,6 +35,8 @@ pub enum HirExprKind<'h> {
 
     FieldAccess(Box<HirFieldAccess<'h>>),
     MethodCall(Box<HirMethodCall<'h>>),
+
+    If(Box<HirIfExpr<'h>>),
 }
 
 type HirExprEvaluatability = ExprEvaluatability;
@@ -240,4 +242,12 @@ pub struct HirMethodCall<'h> {
     pub receiver: &'h HirExpr<'h>,
     pub callee: &'h HirIdent<'h>,
     pub arguments: HirCallArguments<'h>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirIfExpr<'h> {
+    pub span: Span,
+    pub cond: &'h HirExpr<'h>,
+    pub consequent: &'h HirBlock<'h>,
+    pub alternate: Option<&'h HirBlock<'h>>,
 }

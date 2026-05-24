@@ -3,12 +3,12 @@ use std::rc::Rc;
 use hycc_ast::{
     Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
     expr::{
-        AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, MethodCall,
+        AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, IfExpr, MethodCall,
         RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
     item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
     path::{IdentifierArgument, IdentifierArguments},
-    stmt::{IfStmt, PassStmt, RetStmt},
+    stmt::{PassStmt, RetStmt},
     token::{Token, TokenKind},
     ty::{Array, FnTy, Ref, Slice, Tuple},
 };
@@ -23,15 +23,15 @@ use crate::{
     expr::{
         BinaryOp, HirAnonFn, HirAnonFnParam, HirAnonFnParamList, HirArrayExpr, HirCallArguments,
         HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField, HirFieldAccessFieldKind,
-        HirFnCall, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField,
-        HirTupleExpr, HirUnary, UnaryOp,
+        HirFnCall, HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr,
+        HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
         HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
         HirStructField, HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
-    stmt::{HirIfStmt, HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
+    stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
     ty::{HirArray, HirFnTy, HirRef, HirSlice, HirTuple, HirTy, HirTyKind},
 };
 
@@ -220,8 +220,6 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_stmt(&mut self, stmt: &Stmt) -> &'h HirStmt<'h> {
         let kind = match &stmt.kind {
-            StmtKind::If(ite) => HirStmtKind::If(Box::new(self.lower_if_stmt(&ite))),
-
             StmtKind::Ret(ret) => HirStmtKind::Ret(Box::new(self.lower_ret_stmt(&ret))),
             StmtKind::Pass(pass) => HirStmtKind::Pass(Box::new(self.lower_pass_stmt(&pass))),
             StmtKind::Item(item) => HirStmtKind::Item(self.lower_item(item)),
@@ -235,14 +233,6 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             stmt
         } else {
             unreachable!()
-        }
-    }
-
-    fn lower_if_stmt(&mut self, ite: &IfStmt) -> HirIfStmt<'h> {
-        HirIfStmt {
-            cond: self.lower_expr(&ite.cond),
-            consequent: self.lower_block(&ite.consequent),
-            alternate: ite.alternate.as_ref().map(|alt| self.lower_block(&alt)),
         }
     }
 
@@ -301,6 +291,8 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             ExprKind::MethodCall(call) => {
                 HirExprKind::MethodCall(Box::new(self.lower_method_call(&call)))
             }
+
+            ExprKind::If(ite) => HirExprKind::If(Box::new(self.lower_if_expr(&ite))),
         };
 
         if let HirNode::Expr(expr) = self
@@ -555,6 +547,15 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             receiver: self.lower_expr(&call.receiver),
             callee: self.lower_ident(&call.callee),
             arguments: self.lower_call_arguments(&call.arguments),
+        }
+    }
+
+    fn lower_if_expr(&mut self, ite: &IfExpr) -> HirIfExpr<'h> {
+        HirIfExpr {
+            span: ite.span,
+            cond: self.lower_expr(&ite.cond),
+            consequent: self.lower_block(&ite.consequent),
+            alternate: ite.alternate.as_ref().map(|alt| self.lower_block(&alt)),
         }
     }
 

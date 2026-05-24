@@ -131,6 +131,8 @@ pub enum InferDiagErrorKind {
         expected: u8,
         received: u8,
     },
+
+    MissingElseBranch,
 }
 
 #[derive(Debug, Clone)]
@@ -270,6 +272,12 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     ternary!(*expected == 1, "", "s"),
                                 )
                             }
+
+                            Err::MissingElseBranch => {
+                                format!(
+                                    "`if` expression with a non-unit consequent requires an `else` branch."
+                                )
+                            }
                         },
                     )
                 }
@@ -352,6 +360,15 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                         ty.span,
                         DiagnosticKind::Note(String::from(
                             "requires `type annotation` or be used in a context with `known type`.",
+                        )),
+                    );
+                }
+
+                Err::MissingElseBranch => {
+                    diag.detail(
+                        diag.span,
+                        DiagnosticKind::Note(String::from(
+                            "`if` may be missing its `else` branch.",
                         )),
                     );
                 }

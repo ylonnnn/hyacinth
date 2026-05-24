@@ -27,6 +27,8 @@ pub enum ExprKind {
 
     FieldAccess(Box<FieldAccess>),
     MethodCall(Box<MethodCall>),
+
+    If(Box<IfExpr>),
 }
 
 impl ExprKind {
@@ -54,6 +56,8 @@ impl ExprKind {
 
             Self::FieldAccess(access) => access.leading.span.merge(&access.field.span),
             Self::MethodCall(call) => call.receiver.span.merge(&call.arguments.span),
+
+            Self::If(ite) => ite.span,
         }
     }
 
@@ -98,6 +102,9 @@ impl ExprKind {
 
             Self::FieldAccess(_) => ExprEvaluatability::Unknown,
             Self::MethodCall(_) => ExprEvaluatability::Unknown,
+
+            // TODO: improve?
+            Self::If(_) => ExprEvaluatability::Unknown,
         }
     }
 }
@@ -235,4 +242,12 @@ pub struct MethodCall {
     pub receiver: Box<Expr>,
     pub callee: Identifier,
     pub arguments: CallArguments,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfExpr {
+    pub span: Span,
+    pub cond: Box<Expr>,
+    pub consequent: Box<Block>,
+    pub alternate: Option<Box<Block>>,
 }

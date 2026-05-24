@@ -4,8 +4,6 @@ use crate::{HirId, block::HirBlock, expr::HirExpr, item::HirItem, path::HirRawId
 
 #[derive(Debug, Clone)]
 pub enum HirStmtKind<'h> {
-    If(Box<HirIfStmt<'h>>),
-
     Ret(Box<HirRetStmt<'h>>),
     Pass(Box<HirPassStmt<'h>>),
 
@@ -28,13 +26,6 @@ impl<'h> HirStmt<'h> {
             span,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct HirIfStmt<'h> {
-    pub cond: &'h HirExpr<'h>,
-    pub consequent: &'h HirBlock<'h>,
-    pub alternate: Option<&'h HirBlock<'h>>,
 }
 
 #[derive(Debug, Clone)]

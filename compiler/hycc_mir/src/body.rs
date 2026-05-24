@@ -51,7 +51,7 @@ impl MirBody {
         self.new_bb = false;
     }
 
-    pub fn current_bb(&mut self) -> MirBasicBlockId {
+    pub fn current_bb(&self) -> MirBasicBlockId {
         MirBasicBlockId(self.basic_blocks.len() - 1)
     }
 

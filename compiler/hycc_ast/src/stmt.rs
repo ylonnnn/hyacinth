@@ -5,8 +5,6 @@ use hycc_span::Span;
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum StmtKind {
-    If(Box<IfStmt>),
-
     Ret(Box<RetStmt>),
     Pass(Box<PassStmt>),
 
@@ -17,7 +15,6 @@ pub enum StmtKind {
 impl StmtKind {
     pub fn span(&self) -> Span {
         match self {
-            Self::If(ite) => ite.span(),
             Self::Ret(ret) => ret.span,
             Self::Pass(pass) => pass.span,
             Self::Item(item) => item.span,
@@ -38,24 +35,6 @@ impl Stmt {
             span: kind.span(),
             kind,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct IfStmt {
-    pub cond: Box<Expr>,
-    pub consequent: Box<Block>,
-    pub alternate: Option<Box<Block>>,
-}
-
-impl IfStmt {
-    pub fn span(&self) -> Span {
-        self.cond.span.merge(
-            self.alternate
-                .as_ref()
-                .map(|alt| &alt.span)
-                .unwrap_or(&self.consequent.span),
-        )
     }
 }
 

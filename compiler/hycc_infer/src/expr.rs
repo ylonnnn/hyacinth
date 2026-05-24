@@ -5,7 +5,7 @@ use hycc_hir::{
     def::DefKind,
     expr::{
         HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
-        HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
+        HirIfExpr, HirLiteral, HirRefExpr, HirStructExpr, HirStructExprField, HirTupleExpr,
     },
 };
 use hycc_span::Span;
@@ -38,6 +38,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             HirExprKind::FnCall(call) => self.infer_fn_call(&call),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
             HirExprKind::MethodCall(call) => todo!("infer method call"),
+            HirExprKind::If(ite) => self.infer_if_expr(&ite),
         }?;
 
         self.tctx.attach_to_hir(expr.id, Ty::new(ty_id, expr.span));
@@ -331,5 +332,39 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                 _ => return err,
             }
         }
+    }
+
+    pub fn infer_if_expr(&mut self, ite: &HirIfExpr) -> InferResult<TyId> {
+        let bool_ty = self.tctx.make_bool_ty();
+        let cond_ty = self.infer_expr(&ite.cond)?;
+
+        self.check(
+            &Ty::new(bool_ty, Span::default()),
+            &Ty::new(cond_ty, ite.cond.span),
+        )
+        .map(|diag| self.dctx.add(diag));
+
+        let cons_ty = self.infer_block(&ite.consequent)?;
+        let (alt_ty, alt_span) = if let Some(alt) = &ite.alternate {
+            (self.infer_block(&alt)?, alt.span)
+        } else {
+            (self.tctx.make_unit_ty(), ite.span)
+        };
+
+        if let Some(diag) = self.check(
+            &Ty::new(cons_ty, ite.consequent.span),
+            &Ty::new(alt_ty, alt_span),
+        ) {
+            if ite.alternate.is_none() {
+                Err(Some(InferDiag::error(
+                    ite.span,
+                    InferDiagErrorKind::MissingElseBranch,
+                )))?
+            }
+
+            self.dctx.add(diag);
+        }
+
+        Ok(cons_ty)
     }
 }

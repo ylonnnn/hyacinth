@@ -9,13 +9,13 @@ use hycc_hir::{
 };
 use hycc_span::Span;
 use hycc_ty::context::TyCtx;
-use hycc_util::{bug, ternary};
+use hycc_util::bug;
 
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
     body::MirBody,
     local::{LocalDeclId, Mutability},
-    scope::{MirScope, MirScopeId, MirScopeTerminator, MirScopeTree},
+    scope::{MirScopeId, MirScopeTerminator, MirScopeTree},
     stmt::{Location, MirStatement, MirStatementKind, Operand, RValue},
     table::MirTable,
     term::{MirTerminator, MirTerminatorKind},
@@ -317,57 +317,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         match &stmt.kind {
-            HirStmtKind::If(ite) => {
-                let local_id = self.lower_expr(&ite.cond);
-
-                let body = self.table.get_mut(def_id);
-                let cond_bb_id = body.current_bb();
-
-                // Consequent
-                let cons_bb_id = body.insert(MirBasicBlock::new());
-                self.lower_block(&ite.consequent, None);
-
-                // Alternate
-                let alt_bb_id = ite.alternate.map(|alt| {
-                    let alt_bb_id = self.table.get_mut(def_id).insert(MirBasicBlock::new());
-                    self.lower_block(&alt, None);
-                    alt_bb_id
-                });
-
-                let body = self.table.get_mut(def_id);
-                let join_bb_id = body.insert(MirBasicBlock::new());
-
-                body.get_mut(cond_bb_id)
-                    .terminator
-                    .replace(MirTerminator::new(
-                        MirTerminatorKind::SwitchInt {
-                            discr: Operand::Move(Location::new(local_id)),
-                            targets: vec![alt_bb_id.unwrap_or(join_bb_id), cons_bb_id],
-                        },
-                        Span::default(),
-                    ));
-
-                // Default branch joining for consequent branch
-                body.get_mut(cons_bb_id)
-                    .terminator
-                    .get_or_insert(MirTerminator::new(
-                        MirTerminatorKind::Goto(join_bb_id),
-                        Span::default(),
-                    ));
-
-                // Default branch joining for alternate branch
-                if let Some(alt_bb_id) = alt_bb_id {
-                    body.get_mut(alt_bb_id)
-                        .terminator
-                        .get_or_insert(MirTerminator::new(
-                            MirTerminatorKind::Goto(join_bb_id),
-                            Span::default(),
-                        ));
-                }
-
-                // todo!("mir lower if stmt")
-            }
-
             HirStmtKind::Ret(ret) => {
                 let ret_val = ret
                     .value
@@ -446,6 +395,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_expr_rvalue(&mut self, expr: &HirExpr) -> Option<RValue> {
+        let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
+
         Some(match &expr.kind {
             HirExprKind::Path(path) => {
                 let def_id = self.definitions.get_def_id(path.id).unwrap();
@@ -475,7 +426,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
             HirExprKind::Block(block) => {
                 let def_id = self.current_def.unwrap();
-                let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
                 let local_id = self
                     .table
                     .get_mut(def_id)
@@ -493,6 +443,68 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::FnCall(call) => todo!("lower fn call expr"),
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
             HirExprKind::MethodCall(call) => todo!("lower method call expr"),
+
+            HirExprKind::If(ite) => {
+                let def_id = self.current_def.unwrap();
+                let cond_local_id = self.lower_expr(&ite.cond);
+
+                let body = self.table.get_mut(def_id);
+                let local_id = body.declare_local_temp(ty_id, expr.span);
+
+                let cond_bb_id = body.current_bb();
+
+                // Consequent
+                let cons_bb_id = body.insert(MirBasicBlock::new());
+                self.lower_block(&ite.consequent, Some(local_id));
+                let inner_cons_bb_id = self.table.get(def_id).current_bb();
+
+                // Alternate
+                let alt_bb_id = ite.alternate.map(|alt| {
+                    let alt_bb_id = self.table.get_mut(def_id).insert(MirBasicBlock::new());
+                    self.lower_block(&alt, Some(local_id));
+                    (alt_bb_id, self.table.get(def_id).current_bb())
+                });
+
+                let body = self.table.get_mut(def_id);
+                let join_bb_id = body.insert(MirBasicBlock::new());
+
+                body.get_mut(cond_bb_id)
+                    .terminator
+                    .replace(MirTerminator::new(
+                        MirTerminatorKind::SwitchInt {
+                            discr: Operand::Move(Location::new(cond_local_id)),
+                            targets: vec![
+                                alt_bb_id
+                                    .map(|(alt_bb_id, _)| alt_bb_id)
+                                    .unwrap_or(join_bb_id),
+                                cons_bb_id,
+                            ],
+                        },
+                        Span::default(),
+                    ));
+
+                // Default branch joining for the consequent branch's
+                // latest inner basic block
+                body.get_mut(inner_cons_bb_id)
+                    .terminator
+                    .get_or_insert(MirTerminator::new(
+                        MirTerminatorKind::Goto(join_bb_id),
+                        Span::default(),
+                    ));
+
+                // Default branch joining for alternate branch's
+                // latest inner basic block
+                if let Some((_, inner_alt_bb_id)) = alt_bb_id {
+                    body.get_mut(inner_alt_bb_id)
+                        .terminator
+                        .get_or_insert(MirTerminator::new(
+                            MirTerminatorKind::Goto(join_bb_id),
+                            Span::default(),
+                        ));
+                }
+
+                RValue::Use(Operand::Move(Location::new(local_id)))
+            }
         })
     }
 }

@@ -12,29 +12,6 @@ use crate::inferer::{InferResult, TyInferer};
 impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         match &stmt.kind {
-            HirStmtKind::If(ite) => {
-                let bool_ty = self.tctx.make_bool_ty();
-                let cond_ty = self.infer_expr(&ite.cond)?;
-
-                self.check(
-                    &Ty::new(bool_ty, Span::default()),
-                    &Ty::new(cond_ty, ite.cond.span),
-                )
-                .map(|diag| self.dctx.add(diag));
-
-                let cons_ty = self.infer_block(&ite.consequent)?;
-                if let Some(alt) = &ite.alternate {
-                    let alt_ty = self.infer_block(&alt)?;
-                    self.check(
-                        &Ty::new(cons_ty, ite.consequent.span),
-                        &Ty::new(alt_ty, alt.span),
-                    )
-                    .map(|diag| self.dctx.add(diag));
-                }
-
-                Ok(())
-            }
-
             HirStmtKind::Ret(ret) => {
                 let Some(fn_ctx) = &self.fn_ctx else {
                     bug!("fn ctx must exist when entering a function")

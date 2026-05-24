@@ -116,6 +116,24 @@ impl<'c> Resolver<'c> {
                     }
                 })
             }
+
+            HirExprKind::If(ite) => {
+                if let Err(Some(diag)) = s.resolve_expr(&ite.cond) {
+                    s.dctx.add(diag);
+                }
+
+                if let Err(Some(diag)) = s.resolve_block(&ite.consequent) {
+                    s.dctx.add(diag);
+                }
+
+                ite.alternate.as_ref().map(|alt| {
+                    if let Err(Some(diag)) = s.resolve_block(&alt) {
+                        s.dctx.add(diag);
+                    }
+                });
+
+                Ok(())
+            }
         })
     }
 }

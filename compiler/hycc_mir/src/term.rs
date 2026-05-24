@@ -61,6 +61,18 @@ impl Display for MirTerminator {
 
             MirTerminatorKind::Ret => write!(f, "ret"),
 
+            MirTerminatorKind::SwitchInt { discr, targets } => write!(
+                f,
+                "switch_int ({}) [{}]",
+                discr,
+                targets
+                    .iter()
+                    .enumerate()
+                    .map(|(i, target)| format!("{}: bb{}", i, target.0))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+
             _ => write!(f, "{:?}", &self.kind),
         }
     }

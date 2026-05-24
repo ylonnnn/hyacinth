@@ -1,9 +1,10 @@
 use hycc_ast::{
-    Expr, ExprKind, Identifier, Mutability, Path, Ty,
+    Block, Expr, ExprKind, Identifier, Mutability, Path, Stmt, StmtKind, Ty,
     expr::{
         AnonFn, AnonFnParam, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall,
-        MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
+        IfExpr, MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
+    stmt::PassStmt,
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
@@ -164,21 +165,31 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ident(ident_kind) => {
                 let span = token.span;
-                let path = self.parse_path(PathKind::Expr)?;
-                let Some(trailing) = self.peek_nonlf_token() else {
-                    return Ok(Expr::new(ExprKind::Path(Box::new(path))));
-                };
+                match ident_kind {
+                    TokenIdentKind::If => {
+                        Ok(Expr::new(ExprKind::If(Box::new(self.parse_if_expr()?))))
+                    }
 
-                match &trailing.kind {
-                    TokenKind::LeftBrace if !matches!(self.ctx, ParserCtx::IfCond) => Ok(
-                        Expr::new(ExprKind::Struct(Box::new(self.parse_struct_expr(path)?))),
-                    ),
+                    _ => {
+                        let path = self.parse_path(PathKind::Expr)?;
+                        let Some(trailing) = self.peek_nonlf_token() else {
+                            return Ok(Expr::new(ExprKind::Path(Box::new(path))));
+                        };
 
-                    TokenKind::LeftParen if ident_kind == TokenIdentKind::Fn => Ok(Expr::new(
-                        ExprKind::AnonFn(Box::new(self.parse_anon_fn(span)?)),
-                    )),
+                        match &trailing.kind {
+                            TokenKind::LeftBrace if !matches!(self.ctx, ParserCtx::IfCond) => {
+                                Ok(Expr::new(ExprKind::Struct(Box::new(
+                                    self.parse_struct_expr(path)?,
+                                ))))
+                            }
 
-                    _ => Ok(Expr::new(ExprKind::Path(Box::new(path)))),
+                            TokenKind::LeftParen if ident_kind == TokenIdentKind::Fn => Ok(
+                                Expr::new(ExprKind::AnonFn(Box::new(self.parse_anon_fn(span)?))),
+                            ),
+
+                            _ => Ok(Expr::new(ExprKind::Path(Box::new(path)))),
+                        }
+                    }
                 }
             }
 
@@ -505,6 +516,49 @@ impl<'s> Parser<'s> {
                 Ok(array)
             },
         )
+    }
+
+    pub fn parse_if_expr(&mut self) -> ParseResult<IfExpr> {
+        let Some(tg) = self.next_nonlf_token() else {
+            unreachable!()
+        };
+
+        let cond = Box::new(self.use_ctx(ParserCtx::IfCond, |s| s.parse_expr(0))?);
+        let consequent = Box::new(self.parse_block()?);
+
+        let alternate = if let (true, Some(_)) =
+            self.expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Else))
+        {
+            if let (true, Some(_)) =
+                self.expect_preserved_exact_nonlf(TokenKind::Ident(TokenIdentKind::If))
+            {
+                let ite = self.parse_expr(0)?;
+                Some(Block {
+                    span: ite.span,
+                    stmts: vec![Stmt::new(StmtKind::Pass(Box::new(PassStmt {
+                        span: ite.span,
+                        value: Some(Box::new(ite)),
+                        label: None,
+                    })))],
+                })
+            } else {
+                Some(self.parse_block()?)
+            }
+        } else {
+            None
+        };
+
+        Ok(IfExpr {
+            span: tg.span.merge(
+                alternate
+                    .as_ref()
+                    .map(|alt| &alt.span)
+                    .unwrap_or(&consequent.span),
+            ),
+            cond,
+            consequent,
+            alternate: alternate.map(|alt| Box::new(alt)),
+        })
     }
 
     // PATH { (FIELD (, FIELD)?)* }

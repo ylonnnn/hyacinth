@@ -94,7 +94,7 @@ pub enum InferDiagWarningKind {}
 #[derive(Debug, Clone)]
 pub enum InferDiagErrorKind {
     TypeMismatch {
-        ann_span: Span,
+        expectation_span: Span,
         expected: TyId,
         received: TyId,
     },
@@ -287,11 +287,14 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
             },
 
             Error(kind) => match kind {
-                Err::TypeMismatch { ann_span, .. } => {
+                Err::TypeMismatch {
+                    expectation_span: ann_span,
+                    ..
+                } => {
                     if ann_span.src_id.is_valid() {
                         diag.detail(
                             *ann_span,
-                            DiagnosticKind::Note(format!("expected due to the type annotation.")),
+                            DiagnosticKind::Note(format!("expected due to this.")),
                         );
                     }
                 }

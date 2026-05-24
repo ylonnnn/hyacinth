@@ -5,7 +5,6 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{HirTable, def::DefinitionTable, item::HirPetal};
 use hycc_ty::{
     context::{TyCtx, TyId},
-    fmt::TyFormatter,
     ty::Ty,
 };
 
@@ -54,7 +53,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             Some(InferDiag::error(
                 received.span,
                 InferDiagErrorKind::TypeMismatch {
-                    ann_span: expected.span,
+                    expectation_span: expected.span,
                     expected: expected.id,
                     received: received.id,
                 },

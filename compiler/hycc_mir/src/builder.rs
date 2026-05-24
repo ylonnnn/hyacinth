@@ -9,7 +9,7 @@ use hycc_hir::{
 };
 use hycc_span::Span;
 use hycc_ty::context::TyCtx;
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
@@ -60,17 +60,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         let body = self.table.get_mut(def_id);
-        let Some(block) = body.basic_blocks.last_mut() else {
-            bug!("body of definition has no basic blocks")
-        };
-
-        block.statements.push(MirStatement::new(
+        body.insert_stmt(MirStatement::new(
             MirStatementKind::StorageLive(local_id),
             span,
         ));
 
         let loc = Location::new(local_id);
-        block.statements.push(MirStatement::new(
+        body.insert_stmt(MirStatement::new(
             MirStatementKind::Assign(Box::new((loc, rval))),
             span,
         ));
@@ -206,7 +202,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             self.def_map.insert(param_def_id, local_id);
         }
 
-        body.insert(MirBasicBlock::new());
         self.lower_block(&func.body, Some(LocalDeclId(0)));
 
         let body = self.table.get_mut(def_id);
@@ -282,12 +277,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         let scope = self.scope_tree.get_mut(scope_id);
         let body = self.table.get_mut(self.current_def.unwrap());
-        let block = body.basic_blocks.last_mut().unwrap();
 
         match scope.term {
             MirScopeTerminator::Normal => {
                 for local_id in scope.local_decls().iter().rev() {
-                    block.statements.push(MirStatement::new(
+                    body.insert_stmt(MirStatement::new(
                         MirStatementKind::StorageDead(*local_id),
                         Span::default(),
                     ));
@@ -300,7 +294,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     let parent = self.scope_tree.get(curr);
 
                     for local_id in parent.local_decls().iter().rev() {
-                        block.statements.push(MirStatement::new(
+                        body.insert_stmt(MirStatement::new(
                             MirStatementKind::StorageDead(*local_id),
                             Span::default(),
                         ));
@@ -309,7 +303,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     curr_scope = parent.parent;
                 }
 
-                body.insert(MirBasicBlock::new());
+                body.cue();
             }
         }
 
@@ -324,7 +318,54 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         match &stmt.kind {
             HirStmtKind::If(ite) => {
-                todo!("mir lower if stmt")
+                let local_id = self.lower_expr(&ite.cond);
+
+                let body = self.table.get_mut(def_id);
+                let cond_bb_id = body.current_bb();
+
+                // Consequent
+                let cons_bb_id = body.insert(MirBasicBlock::new());
+                self.lower_block(&ite.consequent, None);
+
+                // Alternate
+                let alt_bb_id = ite.alternate.map(|alt| {
+                    let alt_bb_id = self.table.get_mut(def_id).insert(MirBasicBlock::new());
+                    self.lower_block(&alt, None);
+                    alt_bb_id
+                });
+
+                let body = self.table.get_mut(def_id);
+                let join_bb_id = body.insert(MirBasicBlock::new());
+
+                body.get_mut(cond_bb_id)
+                    .terminator
+                    .replace(MirTerminator::new(
+                        MirTerminatorKind::SwitchInt {
+                            discr: Operand::Move(Location::new(local_id)),
+                            targets: vec![alt_bb_id.unwrap_or(join_bb_id), cons_bb_id],
+                        },
+                        Span::default(),
+                    ));
+
+                // Default branch joining for consequent branch
+                body.get_mut(cons_bb_id)
+                    .terminator
+                    .get_or_insert(MirTerminator::new(
+                        MirTerminatorKind::Goto(join_bb_id),
+                        Span::default(),
+                    ));
+
+                // Default branch joining for alternate branch
+                if let Some(alt_bb_id) = alt_bb_id {
+                    body.get_mut(alt_bb_id)
+                        .terminator
+                        .get_or_insert(MirTerminator::new(
+                            MirTerminatorKind::Goto(join_bb_id),
+                            Span::default(),
+                        ));
+                }
+
+                // todo!("mir lower if stmt")
             }
 
             HirStmtKind::Ret(ret) => {
@@ -334,14 +375,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     .unwrap_or(None);
 
                 let body = self.table.get_mut(def_id);
-                let Some(block) = body.basic_blocks.last_mut() else {
-                    return;
-                };
 
                 // Emit assignment for the return LocalDecl (0) with
                 // the return value.
                 if let Some(local_id) = ret_val {
-                    block.statements.push(MirStatement::new(
+                    body.insert_stmt(MirStatement::new(
                         MirStatementKind::Assign(Box::new((
                             Location::new(LocalDeclId(0)),
                             RValue::Use(Operand::Move(Location::new(local_id))),
@@ -350,9 +388,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     ));
                 }
 
-                block
-                    .terminator
-                    .replace(MirTerminator::new(MirTerminatorKind::Ret, ret.span));
+                body.attach_term(MirTerminator::new(MirTerminatorKind::Ret, ret.span));
             }
 
             HirStmtKind::Pass(pass) => {
@@ -362,16 +398,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     .unwrap_or(None);
 
                 let body = self.table.get_mut(def_id);
-                let Some(block) = body.basic_blocks.last_mut() else {
-                    return;
-                };
-
                 let assign_local = self.block_assign_local.unwrap();
+
                 let Some(local_id) = pass_val else {
                     return;
                 };
 
-                block.statements.push(MirStatement::new(
+                body.insert_stmt(MirStatement::new(
                     MirStatementKind::Assign(Box::new((
                         Location::new(assign_local),
                         RValue::Use(Operand::Move(Location::new(local_id))),
@@ -402,13 +435,9 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             return local_id;
         };
 
-        let Some(block) = body.basic_blocks.last_mut() else {
-            bug!("lowering outside of a block!")
-        };
-
         let loc = Location::new(local_id);
 
-        block.statements.push(MirStatement::new(
+        body.insert_stmt(MirStatement::new(
             MirStatementKind::Assign(Box::new((loc, rvalue))),
             expr.span,
         ));

@@ -24,7 +24,7 @@ pub enum MirTerminatorKind {
 
     SwitchInt {
         discr: Operand,
-        // targets: SwitchTargets,
+        targets: Vec<MirBasicBlockId>,
     },
 
     Drop {

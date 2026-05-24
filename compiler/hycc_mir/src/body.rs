@@ -6,12 +6,16 @@ use hycc_ty::context::TyId;
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
     local::{LocalDecl, LocalDeclId, LocalDeclKind, Mutability},
+    stmt::MirStatement,
+    term::MirTerminator,
 };
 
 #[derive(Debug, Clone)]
 pub struct MirBody {
     pub basic_blocks: Vec<MirBasicBlock>,
     pub(crate) local_decls: Vec<LocalDecl>,
+
+    new_bb: bool,
 }
 
 impl MirBody {
@@ -19,10 +23,14 @@ impl MirBody {
         Self {
             basic_blocks: Vec::new(),
             local_decls: Vec::new(),
+
+            new_bb: true,
         }
     }
 
     pub fn insert(&mut self, basic_block: MirBasicBlock) -> MirBasicBlockId {
+        self.new_bb = false;
+
         self.basic_blocks.push(basic_block);
         MirBasicBlockId(self.basic_blocks.len() - 1)
     }
@@ -33,6 +41,40 @@ impl MirBody {
 
     pub fn get_mut(&mut self, id: MirBasicBlockId) -> &mut MirBasicBlock {
         &mut self.basic_blocks[id.unwrap()]
+    }
+
+    pub fn cue(&mut self) {
+        self.new_bb = true;
+    }
+
+    pub fn flush(&mut self) {
+        self.new_bb = false;
+    }
+
+    pub fn current_bb(&mut self) -> MirBasicBlockId {
+        MirBasicBlockId(self.basic_blocks.len() - 1)
+    }
+
+    pub fn insert_stmt(&mut self, stmt: MirStatement) {
+        if self.new_bb {
+            self.insert(MirBasicBlock::new());
+            self.new_bb = false;
+        }
+
+        self.basic_blocks.last_mut().unwrap().statements.push(stmt);
+    }
+
+    pub fn attach_term(&mut self, term: MirTerminator) {
+        if self.new_bb {
+            self.insert(MirBasicBlock::new());
+            self.new_bb = false;
+        }
+
+        self.basic_blocks
+            .last_mut()
+            .unwrap()
+            .terminator
+            .replace(term);
     }
 
     pub fn declare_local(&mut self, decl: LocalDecl) -> LocalDeclId {

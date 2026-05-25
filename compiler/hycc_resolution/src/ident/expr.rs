@@ -1,6 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefSpace, Definition},
+    def::{DefAccessibility, DefKind, DefSpace, Definition},
     expr::{HirExpr, HirExprKind, HirUnary},
 };
 use hycc_scope::Scope;
@@ -73,6 +73,16 @@ impl<'c> Resolver<'c> {
 
                         if let Err(Some(diag)) = s.resolve_ty(&p_ty) {
                             s.dctx.add(diag);
+                        }
+
+                        if let Err(Some(diag)) = s.collector.define(Definition::new(
+                            param.ident.ident,
+                            DefKind::FnParam,
+                            param.id,
+                            param.span,
+                            DefAccessibility::Priv,
+                        )) {
+                            s.collector.dctx.add(diag);
                         }
                     }
 

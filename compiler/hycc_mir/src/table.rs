@@ -59,16 +59,20 @@ impl MirTable {
         &mut self.data[id.unwrap()]
     }
 
+    pub fn get_id_by_def(&self, def_id: DefId) -> Option<MirBodyId> {
+        self.defs.get(&def_id).cloned()
+    }
+
     pub fn get_by_def(&self, def_id: DefId) -> &MirBody {
-        match self.defs.get(&def_id) {
-            Some(id) => self.get_body(*id),
+        match self.get_id_by_def(def_id) {
+            Some(id) => self.get_body(id),
             _ => bug!("def id {def_id:?} has no attached body"),
         }
     }
 
     pub fn get_mut_by_def(&mut self, def_id: DefId) -> &mut MirBody {
-        match self.defs.get(&def_id) {
-            Some(id) => self.get_body_mut(*id),
+        match self.get_id_by_def(def_id) {
+            Some(id) => self.get_body_mut(id),
             _ => bug!("def id {def_id:?} has no attached body"),
         }
     }

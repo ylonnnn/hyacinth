@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use hycc_const::table::ConstId;
-use hycc_hir::expr;
+use hycc_hir::{def::DefId, expr};
 use hycc_span::Span;
 
 use crate::{body::MirBodyId, local::LocalDeclId};
@@ -76,6 +76,7 @@ pub enum RValue {
     Use(Operand),
     Ref(RefKind, Location),
 
+    FnRef(DefId),
     AnonFn {
         body_id: MirBodyId,
         captures: Vec<Operand>,

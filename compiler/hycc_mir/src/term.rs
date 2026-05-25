@@ -61,6 +61,19 @@ impl Display for MirTerminator {
 
             MirTerminatorKind::Ret => write!(f, "ret"),
 
+            MirTerminatorKind::Call { func, args, dest } => {
+                write!(
+                    f,
+                    "_{} = call {}({})",
+                    dest.decl.0,
+                    func,
+                    args.iter()
+                        .map(|arg| format!("{}", arg))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+
             MirTerminatorKind::SwitchInt { discr, targets } => write!(
                 f,
                 "switch_int ({}) [{}]",

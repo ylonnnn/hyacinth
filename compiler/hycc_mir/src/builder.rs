@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hycc_hir::{
     block::HirBlock,
     def::{DefId, DefinitionTable},
-    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirFnCall, HirIfExpr},
+    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirFnCall},
     item::{HirItem, HirItemKind, HirPetal},
     path::HirPath,
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -165,11 +165,9 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
-        let Some(body_id) = self.current_body else {
-            return;
-        };
-
+        let body_id = self.current_body.unwrap();
         let body = self.table.get_body_mut(body_id);
+
         let Some(ty) = self.tctx.get_ty_of_hir(var_item.id) else {
             bug!("var decl {:?} does not have an attached ty!", var_item.id)
         };
@@ -368,7 +366,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
             HirExprKind::AnonFn(anfn) => self.lower_anon_fn_expr_rvalue(&anfn),
 
-            HirExprKind::FnCall(call) => self.lower_fn_call_expr_rvalue(&call),
+            HirExprKind::FnCall(_) => self.lower_fn_call_expr_rvalue(&expr),
 
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
             HirExprKind::MethodCall(call) => todo!("lower method call expr"),
@@ -378,10 +376,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_path_expr_rvalue(&mut self, path: &HirPath) -> RValue {
+        // TODO: improve?
         let def_id = self.definitions.get_def_id(path.id).unwrap();
-        let local_id = self.def_map.get(def_id).cloned().unwrap();
-
-        RValue::Use(Operand::Move(Location::new(local_id)))
+        if let Some(local_id) = self.def_map.get(def_id).cloned() {
+            RValue::Use(Operand::Move(Location::new(local_id)))
+        } else {
+            RValue::FnRef(*def_id)
+        }
     }
 
     fn lower_binary_expr_rvalue(
@@ -470,16 +471,40 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         }
     }
 
-    fn lower_fn_call_expr_rvalue(&mut self, call: &HirFnCall) -> RValue {
-        let body_id = self.current_body.unwrap();
-        let body = self.table.get_body_mut(body_id);
+    fn lower_fn_call_expr_rvalue(&mut self, call_expr: &HirExpr) -> RValue {
+        let HirExprKind::FnCall(call) = &call_expr.kind else {
+            unreachable!()
+        };
 
-        // body.attach_term(MirTerminator::new(MirTerminatorKind::Call { func: (), args: (), dest: () }))
+        let body_id = self.current_body.unwrap();
+        let ty_id = self.tctx.get_ty_of_hir(call_expr.id).unwrap().id;
+
+        // Callee
+        let callee_local_id = self.lower_expr(&call.callee);
+
+        // Arguments
+        let args = call
+            .arguments
+            .data
+            .iter()
+            .map(|arg| Operand::Move(Location::new(self.lower_expr(&arg))))
+            .collect::<Vec<_>>();
+
+        let body = self.table.get_body_mut(body_id);
+        let local_id = body.declare_local_temp(ty_id, call_expr.span);
+
+        body.attach_term(MirTerminator::new(
+            MirTerminatorKind::Call {
+                func: Operand::Move(Location::new(callee_local_id)),
+                args,
+                dest: Location::new(local_id),
+            },
+            call_expr.span,
+        ));
 
         body.cue();
 
-        //
-        todo!("lower fn call expr")
+        RValue::Use(Operand::Move(Location::new(local_id)))
     }
 
     fn lower_if_expr_rvalue(&mut self, if_expr: &HirExpr) -> RValue {

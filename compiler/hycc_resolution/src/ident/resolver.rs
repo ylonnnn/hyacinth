@@ -1,12 +1,9 @@
-use std::collections::HashMap;
-
 use hycc_collection::{
     collector::{CollectionLevel, Collector},
     diag::CollectorDiagDataCtx,
 };
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
-    HirId,
     def::{DefId, DefSpace, Definition},
     item::HirPetal,
 };

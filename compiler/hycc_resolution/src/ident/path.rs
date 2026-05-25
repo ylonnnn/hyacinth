@@ -1,6 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::DefSpace,
+    def::{DefId, DefSpace},
     path::{HirIdent, HirIdentArgument, HirPath},
 };
 use hycc_util::{bug, ternary};
@@ -17,13 +17,23 @@ impl<'c> Resolver<'c> {
             bug!("expected definition space must exist!")
         };
 
+        let top_id = self.collector.scope_ctx.top_id();
         let n = path.segments.len();
+
         for (i, segment) in path.segments.iter().enumerate() {
             let is_last = i == n - 1;
 
             self.expect_space(ternary!(is_last, space, DefSpace::Type), |s| {
-                if let Err(Some(diag)) = s.resolve_ident(&segment) {
-                    s.dctx.add(diag);
+                let def_id = match s.resolve_ident(&segment) {
+                    Ok(def_id) => def_id,
+                    Err(diag) => {
+                        diag.map(|diag| s.dctx.add(diag));
+                        return;
+                    }
+                };
+
+                if let Some(scope_id) = s.collector.scope_ctx.get_id_from_def(def_id) {
+                    s.collector.scope_ctx.push_id(scope_id)
                 }
             });
 
@@ -34,10 +44,14 @@ impl<'c> Resolver<'c> {
             }
         }
 
+        while top_id != self.collector.scope_ctx.top_id() {
+            self.collector.scope_ctx.pop();
+        }
+
         Ok(())
     }
 
-    pub(crate) fn resolve_ident(&mut self, ident: &HirIdent) -> ResolveResult {
+    pub(crate) fn resolve_ident(&mut self, ident: &HirIdent) -> ResolveResult<DefId> {
         let Some(space) = self.expected_space else {
             bug!("expected space must not be `None`");
         };
@@ -68,6 +82,6 @@ impl<'c> Resolver<'c> {
         }
 
         self.collector.definitions.define_id_hir(ident.id, def_id);
-        Ok(())
+        Ok(def_id)
     }
 }

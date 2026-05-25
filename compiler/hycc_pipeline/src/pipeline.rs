@@ -96,6 +96,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     };
 
+    // dbg!(&tree);
+
     let mut const_table = ConstTable::new();
 
     let hir_table = HirTable::new();

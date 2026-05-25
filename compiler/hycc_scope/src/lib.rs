@@ -189,6 +189,10 @@ impl ScopeCtx {
         })
     }
 
+    pub fn top_id(&self) -> ScopeId {
+        self.stack.last().cloned().unwrap()
+    }
+
     pub fn top(&self) -> &Scope {
         self.table.get(*self.stack.last().unwrap())
     }

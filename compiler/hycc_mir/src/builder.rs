@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use hycc_hir::{
     block::HirBlock,
     def::{DefId, DefinitionTable},
-    expr::{HirExpr, HirExprKind},
+    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirFnCall, HirIfExpr},
     item::{HirItem, HirItemKind, HirPetal},
-    stmt::{HirStmt, HirStmtKind},
+    path::HirPath,
+    stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
 };
 use hycc_span::Span;
 use hycc_ty::context::TyCtx;
@@ -258,61 +259,68 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_stmt(&mut self, stmt: &HirStmt) {
-        let Some(body_id) = self.current_body else {
-            bug!("lowering statement without a currently existing definition!")
-        };
-
         match &stmt.kind {
-            HirStmtKind::Ret(ret) => {
-                let ret_val = ret
-                    .value
-                    .map(|val| Some(self.lower_expr(&val)))
-                    .unwrap_or(None);
-
-                let body = self.table.get_body_mut(body_id);
-
-                // Emit assignment for the return LocalDecl (0) with
-                // the return value.
-                if let Some(local_id) = ret_val {
-                    body.insert_stmt(MirStatement::new(
-                        MirStatementKind::Assign(Box::new((
-                            Location::new(LocalDeclId(0)),
-                            RValue::Use(Operand::Move(Location::new(local_id))),
-                        ))),
-                        ret.span,
-                    ));
-                }
-
-                body.attach_term(MirTerminator::new(MirTerminatorKind::Ret, ret.span));
-            }
-
-            HirStmtKind::Pass(pass) => {
-                let pass_val = pass
-                    .value
-                    .map(|val| Some(self.lower_expr(&val)))
-                    .unwrap_or(None);
-
-                let body = self.table.get_body_mut(body_id);
-                let assign_local = self.block_assign_local.unwrap();
-
-                let Some(local_id) = pass_val else {
-                    return;
-                };
-
-                body.insert_stmt(MirStatement::new(
-                    MirStatementKind::Assign(Box::new((
-                        Location::new(assign_local),
-                        RValue::Use(Operand::Move(Location::new(local_id))),
-                    ))),
-                    pass.span,
-                ));
-            }
+            HirStmtKind::Ret(ret) => self.lower_ret_stmt(&ret),
+            HirStmtKind::Pass(pass) => self.lower_pass_stmt(&pass),
 
             HirStmtKind::Item(item) => self.lower_item(&item),
             HirStmtKind::Expr(expr) => {
                 self.lower_expr(&expr);
             }
         }
+    }
+
+    fn lower_ret_stmt(&mut self, ret: &HirRetStmt) {
+        let Some(body_id) = self.current_body else {
+            bug!("lowering statement without a currently existing definition!")
+        };
+
+        let ret_val = ret
+            .value
+            .map(|val| Some(self.lower_expr(&val)))
+            .unwrap_or(None);
+
+        let body = self.table.get_body_mut(body_id);
+
+        // Emit assignment for the return LocalDecl (0) with
+        // the return value.
+        if let Some(local_id) = ret_val {
+            body.insert_stmt(MirStatement::new(
+                MirStatementKind::Assign(Box::new((
+                    Location::new(LocalDeclId(0)),
+                    RValue::Use(Operand::Move(Location::new(local_id))),
+                ))),
+                ret.span,
+            ));
+        }
+
+        body.attach_term(MirTerminator::new(MirTerminatorKind::Ret, ret.span));
+    }
+
+    fn lower_pass_stmt(&mut self, pass: &HirPassStmt) {
+        let Some(body_id) = self.current_body else {
+            bug!("lowering statement without a currently existing definition!")
+        };
+
+        let pass_val = pass
+            .value
+            .map(|val| Some(self.lower_expr(&val)))
+            .unwrap_or(None);
+
+        let body = self.table.get_body_mut(body_id);
+        let assign_local = self.block_assign_local.unwrap();
+
+        let Some(local_id) = pass_val else {
+            return;
+        };
+
+        body.insert_stmt(MirStatement::new(
+            MirStatementKind::Assign(Box::new((
+                Location::new(assign_local),
+                RValue::Use(Operand::Move(Location::new(local_id))),
+            ))),
+            pass.span,
+        ));
     }
 
     fn lower_expr(&mut self, expr: &HirExpr) -> LocalDeclId {
@@ -341,181 +349,207 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_expr_rvalue(&mut self, expr: &HirExpr) -> Option<RValue> {
-        let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
-
         Some(match &expr.kind {
-            HirExprKind::Path(path) => {
-                let def_id = self.definitions.get_def_id(path.id).unwrap();
-                let local_id = self.def_map.get(def_id).cloned().unwrap();
-
-                RValue::Use(Operand::Move(Location::new(local_id)))
-            }
-
+            HirExprKind::Path(path) => self.lower_path_expr_rvalue(&path),
             HirExprKind::RefExpr(reference) => todo!("lower ref expr"),
-
             HirExprKind::Literal(lit) => RValue::Use(Operand::Const(lit.const_id())),
-
             HirExprKind::Binary(op, left, right) => {
-                let (left_loc, right_loc) = (
-                    Location::new(self.lower_expr(&left)),
-                    Location::new(self.lower_expr(&right)),
-                );
-
-                RValue::Binary(
-                    *op,
-                    Box::new((Operand::Move(left_loc), Operand::Move(right_loc))),
-                )
+                self.lower_binary_expr_rvalue(*op, &left, &right)
             }
 
             HirExprKind::Unary(unary) => todo!("lower unary expr"),
             HirExprKind::Assign(assignee, expr) => todo!("lower assign expr"),
 
-            HirExprKind::Block(block) => {
-                let body_id = self.current_body.unwrap();
-                let local_id = self
-                    .table
-                    .get_body_mut(body_id)
-                    .declare_local_temp(ty_id, block.span);
-
-                self.lower_block(&block, Some(local_id));
-
-                RValue::Use(Operand::Move(Location::new(local_id)))
-            }
+            HirExprKind::Block(_) => self.lower_block_expr_rvalue(&expr),
 
             HirExprKind::Array(array) => todo!("lower array expr"),
             HirExprKind::Tuple(tup) => todo!("lower tuple expr"),
             HirExprKind::Struct(strct) => todo!("lower struct expr"),
 
-            HirExprKind::AnonFn(anfn) => {
-                let prev_body_id = self.current_body;
+            HirExprKind::AnonFn(anfn) => self.lower_anon_fn_expr_rvalue(&anfn),
 
-                let body_id = self.table.new_body();
-                let body = self.table.get_body_mut(body_id);
-
-                self.current_body = Some(body_id);
-
-                let unit_ty = self.tctx.make_unit_ty();
-
-                let ret_ty = anfn
-                    .ret_ty
-                    .map(|ret_ty| {
-                        self.tctx
-                            .get_ty_of_hir(ret_ty.id)
-                            .map(|ty| ty.id)
-                            .unwrap_or(unit_ty)
-                    })
-                    .unwrap_or(unit_ty);
-
-                body.declare_local_ret(ret_ty);
-
-                for param in &anfn.params.list {
-                    let Some(ty) = &param.ty else {
-                        continue;
-                    };
-
-                    let Some(ty) = self.tctx.get_ty_of_hir(ty.id) else {
-                        bug!("param {:?} has no attached ty!", param.id)
-                    };
-
-                    let local_id = body.declare_local_param(ty.id, Mutability::Mutable, param.span);
-                    let param_def_id = self.definitions.get_def_id(param.id).cloned().unwrap();
-
-                    self.def_map.insert(param_def_id, local_id);
-                }
-
-                self.lower_block(&anfn.body, Some(LocalDeclId(0)));
-
-                self.table
-                    .get_body_mut(body_id)
-                    .attach_term(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
-
-                self.current_body = prev_body_id;
-
-                RValue::AnonFn {
-                    body_id,
-                    captures: Vec::new(),
-                }
-            }
-
-            HirExprKind::FnCall(call) => {
-                let body_id = self.current_body.unwrap();
-                let body = self.table.get_body_mut(body_id);
-
-                // body.attach_term(MirTerminator::new(MirTerminatorKind::Call { func: (), args: (), dest: () }))
-
-                body.cue();
-
-                //
-                todo!("lower fn call expr")
-            }
+            HirExprKind::FnCall(call) => self.lower_fn_call_expr_rvalue(&call),
 
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
             HirExprKind::MethodCall(call) => todo!("lower method call expr"),
 
-            HirExprKind::If(ite) => {
-                let body_id = self.current_body.unwrap();
-                let cond_local_id = self.lower_expr(&ite.cond);
-
-                let body = self.table.get_body_mut(body_id);
-                let local_id = body.declare_local_temp(ty_id, expr.span);
-
-                let cond_bb_id = body.current_bb();
-
-                // Consequent
-                let cons_bb_id = body.insert(MirBasicBlock::new());
-                self.lower_block(&ite.consequent, Some(local_id));
-                let inner_cons_bb_id = self.table.get_body(body_id).current_bb();
-
-                // Alternate
-                let alt_bb_id = ite.alternate.map(|alt| {
-                    let alt_bb_id = self
-                        .table
-                        .get_body_mut(body_id)
-                        .insert(MirBasicBlock::new());
-                    self.lower_block(&alt, Some(local_id));
-                    (alt_bb_id, self.table.get_body(body_id).current_bb())
-                });
-
-                let body = self.table.get_body_mut(body_id);
-                let join_bb_id = body.insert(MirBasicBlock::new());
-
-                body.get_mut(cond_bb_id)
-                    .terminator
-                    .replace(MirTerminator::new(
-                        MirTerminatorKind::SwitchInt {
-                            discr: Operand::Move(Location::new(cond_local_id)),
-                            targets: vec![
-                                alt_bb_id
-                                    .map(|(_, alt_bb_id)| alt_bb_id)
-                                    .unwrap_or(join_bb_id),
-                                cons_bb_id,
-                            ],
-                        },
-                        Span::default(),
-                    ));
-
-                // Default branch joining for the consequent branch's
-                // latest inner basic block
-                body.get_mut(inner_cons_bb_id)
-                    .terminator
-                    .get_or_insert(MirTerminator::new(
-                        MirTerminatorKind::Goto(join_bb_id),
-                        Span::default(),
-                    ));
-
-                // Default branch joining for alternate branch's
-                // latest inner basic block
-                if let Some((_, inner_alt_bb_id)) = alt_bb_id {
-                    body.get_mut(inner_alt_bb_id)
-                        .terminator
-                        .get_or_insert(MirTerminator::new(
-                            MirTerminatorKind::Goto(join_bb_id),
-                            Span::default(),
-                        ));
-                }
-
-                RValue::Use(Operand::Move(Location::new(local_id)))
-            }
+            HirExprKind::If(_) => self.lower_if_expr_rvalue(&expr),
         })
+    }
+
+    fn lower_path_expr_rvalue(&mut self, path: &HirPath) -> RValue {
+        let def_id = self.definitions.get_def_id(path.id).unwrap();
+        let local_id = self.def_map.get(def_id).cloned().unwrap();
+
+        RValue::Use(Operand::Move(Location::new(local_id)))
+    }
+
+    fn lower_binary_expr_rvalue(
+        &mut self,
+        op: BinaryOp,
+        left: &HirExpr,
+        right: &HirExpr,
+    ) -> RValue {
+        let (left_loc, right_loc) = (
+            Location::new(self.lower_expr(&left)),
+            Location::new(self.lower_expr(&right)),
+        );
+
+        RValue::Binary(
+            op,
+            Box::new((Operand::Move(left_loc), Operand::Move(right_loc))),
+        )
+    }
+
+    fn lower_block_expr_rvalue(&mut self, block_expr: &HirExpr) -> RValue {
+        let HirExprKind::Block(block) = &block_expr.kind else {
+            unreachable!()
+        };
+
+        let ty_id = self.tctx.get_ty_of_hir(block_expr.id).unwrap().id;
+
+        let body_id = self.current_body.unwrap();
+        let local_id = self
+            .table
+            .get_body_mut(body_id)
+            .declare_local_temp(ty_id, block.span);
+
+        self.lower_block(&block, Some(local_id));
+
+        RValue::Use(Operand::Move(Location::new(local_id)))
+    }
+
+    fn lower_anon_fn_expr_rvalue(&mut self, anfn: &HirAnonFn) -> RValue {
+        let prev_body_id = self.current_body;
+
+        let body_id = self.table.new_body();
+        let body = self.table.get_body_mut(body_id);
+
+        self.current_body = Some(body_id);
+
+        let unit_ty = self.tctx.make_unit_ty();
+
+        let ret_ty = anfn
+            .ret_ty
+            .map(|ret_ty| {
+                self.tctx
+                    .get_ty_of_hir(ret_ty.id)
+                    .map(|ty| ty.id)
+                    .unwrap_or(unit_ty)
+            })
+            .unwrap_or(unit_ty);
+
+        body.declare_local_ret(ret_ty);
+
+        for param in &anfn.params.list {
+            let Some(ty) = &param.ty else {
+                continue;
+            };
+
+            let Some(ty) = self.tctx.get_ty_of_hir(ty.id) else {
+                bug!("param {:?} has no attached ty!", param.id)
+            };
+
+            let local_id = body.declare_local_param(ty.id, Mutability::Mutable, param.span);
+            let param_def_id = self.definitions.get_def_id(param.id).cloned().unwrap();
+
+            self.def_map.insert(param_def_id, local_id);
+        }
+
+        self.lower_block(&anfn.body, Some(LocalDeclId(0)));
+
+        self.table
+            .get_body_mut(body_id)
+            .attach_term(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
+
+        self.current_body = prev_body_id;
+
+        RValue::AnonFn {
+            body_id,
+            captures: Vec::new(),
+        }
+    }
+
+    fn lower_fn_call_expr_rvalue(&mut self, call: &HirFnCall) -> RValue {
+        let body_id = self.current_body.unwrap();
+        let body = self.table.get_body_mut(body_id);
+
+        // body.attach_term(MirTerminator::new(MirTerminatorKind::Call { func: (), args: (), dest: () }))
+
+        body.cue();
+
+        //
+        todo!("lower fn call expr")
+    }
+
+    fn lower_if_expr_rvalue(&mut self, if_expr: &HirExpr) -> RValue {
+        let HirExprKind::If(ite) = &if_expr.kind else {
+            unreachable!()
+        };
+
+        let ty_id = self.tctx.get_ty_of_hir(if_expr.id).unwrap().id;
+
+        let body_id = self.current_body.unwrap();
+        let cond_local_id = self.lower_expr(&ite.cond);
+
+        let body = self.table.get_body_mut(body_id);
+        let local_id = body.declare_local_temp(ty_id, if_expr.span);
+
+        let cond_bb_id = body.current_bb();
+
+        // Consequent
+        let cons_bb_id = body.insert(MirBasicBlock::new());
+        self.lower_block(&ite.consequent, Some(local_id));
+        let inner_cons_bb_id = self.table.get_body(body_id).current_bb();
+
+        // Alternate
+        let alt_bb_id = ite.alternate.map(|alt| {
+            let alt_bb_id = self
+                .table
+                .get_body_mut(body_id)
+                .insert(MirBasicBlock::new());
+            self.lower_block(&alt, Some(local_id));
+            (alt_bb_id, self.table.get_body(body_id).current_bb())
+        });
+
+        let body = self.table.get_body_mut(body_id);
+        let join_bb_id = body.insert(MirBasicBlock::new());
+
+        body.get_mut(cond_bb_id)
+            .terminator
+            .replace(MirTerminator::new(
+                MirTerminatorKind::SwitchInt {
+                    discr: Operand::Move(Location::new(cond_local_id)),
+                    targets: vec![
+                        alt_bb_id
+                            .map(|(_, alt_bb_id)| alt_bb_id)
+                            .unwrap_or(join_bb_id),
+                        cons_bb_id,
+                    ],
+                },
+                Span::default(),
+            ));
+
+        // Default branch joining for the consequent branch's
+        // latest inner basic block
+        body.get_mut(inner_cons_bb_id)
+            .terminator
+            .get_or_insert(MirTerminator::new(
+                MirTerminatorKind::Goto(join_bb_id),
+                Span::default(),
+            ));
+
+        // Default branch joining for alternate branch's
+        // latest inner basic block
+        if let Some((_, inner_alt_bb_id)) = alt_bb_id {
+            body.get_mut(inner_alt_bb_id)
+                .terminator
+                .get_or_insert(MirTerminator::new(
+                    MirTerminatorKind::Goto(join_bb_id),
+                    Span::default(),
+                ));
+        }
+
+        RValue::Use(Operand::Move(Location::new(local_id)))
     }
 }

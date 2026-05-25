@@ -197,6 +197,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     pub fn lower_var_decl(&mut self, decl: &VarDecl) -> HirVarDecl<'h> {
         HirVarDecl {
             ident: self.lower_raw_ident(&decl.ident),
+            mutability: decl.mutability,
             ty: decl.ty.as_ref().map(|ty| self.lower_ty(ty)),
             val: decl.val.as_ref().map(|val| self.lower_expr(val)),
             span: decl.span(),

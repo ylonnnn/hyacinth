@@ -1,5 +1,5 @@
 use hycc_ast::{
-    Expr, Item, ItemKind, Ty,
+    Expr, Item, ItemKind, Mutability, Ty,
     item::{
         Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, Struct, StructField,
         StructFieldAccessibility, StructFieldList, VarDecl,
@@ -399,8 +399,17 @@ impl<'s> Parser<'s> {
     }
 
     // TODO: allow patterns rather than just raw identifiers
-    // let IDENT (: TY)? (= EXPR)? (TERM ::= '\n')
+    // let mut? IDENT (: TY)? (= EXPR)? (TERM ::= '\n')
     pub fn parse_var_decl(&mut self) -> ParseResult<VarDecl> {
+        // mut?
+        let mut mutability = Mutability::Immutable;
+        if self
+            .expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Mut))
+            .0
+        {
+            mutability = Mutability::Mutable;
+        }
+
         // IDENT
         let ident = self.parse_raw_ident()?;
 
@@ -435,6 +444,7 @@ impl<'s> Parser<'s> {
 
         Ok(VarDecl {
             ident,
+            mutability,
             ty: ty.map(Box::new),
             val: val.map(Box::new),
         })

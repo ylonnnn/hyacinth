@@ -172,12 +172,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             bug!("var decl {:?} does not have an attached ty!", var_item.id)
         };
 
-        let var_local_id = body.declare_local_var(
-            ty.id,
-            Mutability::Immutable, // TODO: update to decl.mutability once implemented
-            decl.span,
-        );
-
+        let var_local_id = body.declare_local_var(ty.id, decl.mutability, decl.span);
         let var_val_local_id = decl.val.map(|val| self.lower_expr(&val));
 
         let var_def_id = *self.definitions.get_def_id(var_item.id).unwrap();

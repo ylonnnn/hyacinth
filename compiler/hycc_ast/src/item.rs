@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{Block, Expr, Path, Ty, token::Token};
+use crate::{Block, Expr, Mutability, Path, Ty, token::Token};
 
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -130,6 +130,7 @@ pub struct FnParamList {
 #[derive(Debug, Clone)]
 pub struct VarDecl {
     pub ident: Token,
+    pub mutability: Mutability,
     pub ty: Option<Box<Ty>>,
     pub val: Option<Box<Expr>>,
 }

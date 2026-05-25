@@ -2,11 +2,7 @@ use hycc_ast::item::{ItemAccessibility, StructFieldAccessibility};
 use hycc_span::Span;
 
 use crate::{
-    HirId,
-    block::HirBlock,
-    expr::HirExpr,
-    path::{HirPath, HirRawIdent},
-    ty::HirTy,
+    HirId, HirMutability, block::HirBlock, expr::HirExpr, path::{HirPath, HirRawIdent}, ty::HirTy
 };
 
 #[derive(Debug, Clone)]
@@ -135,6 +131,7 @@ impl<'h> HirFnParam<'h> {
 #[derive(Debug, Clone)]
 pub struct HirVarDecl<'h> {
     pub ident: &'h HirRawIdent,
+    pub mutability: HirMutability,
     pub ty: Option<&'h HirTy<'h>>,
     pub val: Option<&'h HirExpr<'h>>,
     pub span: Span,

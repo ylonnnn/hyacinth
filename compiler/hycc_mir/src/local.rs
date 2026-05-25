@@ -9,11 +9,7 @@ pub enum LocalDeclKind {
     Temp,
 }
 
-#[derive(Debug, Clone)]
-pub enum Mutability {
-    Mutable,
-    Immutable,
-}
+pub type Mutability = hycc_hir::HirMutability;
 
 #[derive(Debug, Clone)]
 pub struct LocalDecl {

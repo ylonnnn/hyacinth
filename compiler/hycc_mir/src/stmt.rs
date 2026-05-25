@@ -4,7 +4,7 @@ use hycc_const::table::ConstId;
 use hycc_hir::expr;
 use hycc_span::Span;
 
-use crate::local::LocalDeclId;
+use crate::{body::MirBodyId, local::LocalDeclId};
 
 #[derive(Debug, Clone)]
 pub enum MirStatementKind {
@@ -75,6 +75,12 @@ pub type BinaryOp = expr::BinaryOp;
 pub enum RValue {
     Use(Operand),
     Ref(RefKind, Location),
+
+    AnonFn {
+        body_id: MirBodyId,
+        captures: Vec<Operand>,
+    },
+
     // Len(Location),
     // Cast(CastKind, Operand, Ty),
     Binary(BinaryOp, Box<(Operand, Operand)>),

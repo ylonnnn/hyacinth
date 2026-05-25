@@ -8,7 +8,7 @@ use hycc_diagnostic::{
     DiagnosticContext,
     reporter::{CLIReporter, DiagnosticReporter},
 };
-use hycc_hir::{HirTable, builder::HirBuilder, item::HirPetal};
+use hycc_hir::{HirTable, builder::HirBuilder};
 use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
 use hycc_mir::builder::MirBuilder;
 use hycc_parser::{
@@ -180,9 +180,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let mut mir_builder = MirBuilder::new(&mut ty_inferer.tctx, &definitions);
     mir_builder.lower(&hir);
 
-    // dbg!(mir_builder.scope_tree);
+    // for (def_id, body_id) in mir_builder.table.defs() {
+    //     let name = session.interner.get(definitions.get(*def_id).name);
+    //     println!(
+    //         "{} ({:?}):\n{}",
+    //         name,
+    //         *def_id,
+    //         mir_builder.table.get_body(*body_id)
+    //     );
+    // }
 
-    for (_, body) in mir_builder.table.defs() {
-        println!("{}", &body);
+    for (i, body) in mir_builder.table.bodies().iter().enumerate() {
+        println!("MirBody({i}):\n{}", body);
     }
 }

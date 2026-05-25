@@ -10,6 +10,19 @@ use crate::{
     term::MirTerminator,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MirBodyId(pub(crate) usize);
+
+impl MirBodyId {
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(usize::MAX);
+
+    pub fn unwrap(&self) -> usize {
+        assert_ne!(self.0, usize::MAX, "mir body id is invalid!");
+        self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MirBody {
     pub basic_blocks: Vec<MirBasicBlock>,

@@ -13,7 +13,7 @@ use hycc_util::bug;
 
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
-    body::MirBody,
+    body::MirBodyId,
     local::{LocalDeclId, Mutability},
     scope::{MirScopeId, MirScopeTerminator, MirScopeTree},
     stmt::{Location, MirStatement, MirStatementKind, Operand, RValue},
@@ -24,11 +24,12 @@ use crate::{
 #[derive(Debug)]
 pub struct MirBuilder<'t, 'd> {
     pub table: MirTable,
+
     tctx: &'t mut TyCtx,
     definitions: &'d DefinitionTable,
 
+    current_body: Option<MirBodyId>,
     def_map: HashMap<DefId, LocalDeclId>,
-    current_def: Option<DefId>,
 
     pub scope_tree: MirScopeTree,
     current_scope: Option<MirScopeId>,
@@ -44,7 +45,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             tctx,
             definitions,
 
-            current_def: None,
+            current_body: None,
             def_map: HashMap::new(),
 
             scope_tree: MirScopeTree::new(),
@@ -55,11 +56,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn emit_storage_init(&mut self, span: Span, local_id: LocalDeclId, rval: RValue) {
-        let Some(def_id) = self.current_def else {
-            bug!("storage initialization outside of a definition body!")
+        let Some(body_id) = self.current_body else {
+            bug!("storage initialization outside of a body!")
         };
 
-        let body = self.table.get_mut(def_id);
+        let body = self.table.get_body_mut(body_id);
         body.insert_stmt(MirStatement::new(
             MirStatementKind::StorageLive(local_id),
             span,
@@ -80,61 +81,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             .store(local_id, MirBasicBlockId(body.basic_blocks.len() - 1));
     }
 
-    fn emit_dead(&mut self, scope: Option<MirScopeId>) {
-        let scope_id = scope.unwrap_or(MirScopeId(0));
-        let scope = self.scope_tree.get(scope_id);
-
-        let body = self.table.get_mut(self.current_def.unwrap());
-        // let block = body.get_mut(scope.tail);
-
-        // for local_id in scope.local_decls() {
-        //     let block_id = scope.local_init_block(local_id).unwrap();
-        //     if block_id.0 > scope.tail.0 {
-        //         continue;
-        //     }
-
-        //     // block.statements.insert(
-        //     //     scope.insert_pos,
-        //     //     MirStatement::new(MirStatementKind::StorageDead(local_id), Span::default()),
-        //     // );
-        // }
-
-        // let term = block.terminator.as_ref().unwrap();
-        // match &term.kind {
-        //     MirTerminatorKind::Ret => {
-        //         let mut curr_scope: Option<&MirScope> =
-        //             scope.parent.map(|parent_id| self.scope_tree.get(parent_id));
-        //         // dbg!(&curr_scope);
-
-        //         while let Some(curr) = curr_scope {
-        //             let block = body.get_mut(curr.tail);
-        //             for local_id in curr.local_decls() {
-        //                 let block_id = curr.local_init_block(local_id).unwrap();
-        //                 if block_id.0 > curr.tail.0 {
-        //                     continue;
-        //                 }
-
-        //                 // block.statements.insert(
-        //                 //     curr.insert_pos,
-        //                 //     MirStatement::new(
-        //                 //         MirStatementKind::StorageDead(local_id),
-        //                 //         Span::default(),
-        //                 //     ),
-        //                 // );
-        //             }
-
-        //             curr_scope = curr.parent.map(|parent_id| self.scope_tree.get(parent_id));
-        //         }
-        //     }
-
-        //     _ => {}
-        // }
-
-        for child_id in scope.children.clone() {
-            self.emit_dead(Some(child_id));
-        }
-    }
-
     pub fn lower(&mut self, tree: &HirPetal) {
         for item in &tree.items {
             self.lower_item(&item);
@@ -142,9 +88,9 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         // dbg!(&self.scope_tree);
         // for def_id in self.table.defs().keys().map(|key| *key).collect::<Vec<_>>() {
-        //     self.current_def.replace(def_id);
+        //     self.current_body.replace(def_id);
         //     self.emit_dead(None);
-        //     self.current_def.take();
+        //     self.current_body.take();
         // }
     }
 
@@ -172,10 +118,12 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             bug!("no def id found for hir id {:?}", fn_item.id)
         };
 
-        let prev_def = self.current_def;
+        let prev_body_id = self.current_body;
 
-        let body = self.table.insert(def_id, MirBody::new());
-        self.current_def = Some(def_id);
+        let body_id = self.table.new_body_for(def_id);
+        let body = self.table.get_body_mut(body_id);
+
+        self.current_body = Some(body_id);
 
         let unit_ty = self.tctx.make_unit_ty();
 
@@ -204,13 +152,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         self.lower_block(&func.body, Some(LocalDeclId(0)));
 
-        let body = self.table.get_mut(def_id);
-        if let Some(last) = body.basic_blocks.last_mut() {
-            last.terminator
-                .replace(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
-        }
+        self.table
+            .get_body_mut(body_id)
+            .attach_term(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
 
-        self.current_def = prev_def;
+        self.current_body = prev_body_id;
     }
 
     fn lower_var_decl(&mut self, var_item: &HirItem) {
@@ -218,11 +164,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
-        let Some(def_id) = self.current_def else {
+        let Some(body_id) = self.current_body else {
             return;
         };
 
-        let body = self.table.get_mut(def_id);
+        let body = self.table.get_body_mut(body_id);
         let Some(ty) = self.tctx.get_ty_of_hir(var_item.id) else {
             bug!("var decl {:?} does not have an attached ty!", var_item.id)
         };
@@ -276,7 +222,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         }
 
         let scope = self.scope_tree.get_mut(scope_id);
-        let body = self.table.get_mut(self.current_def.unwrap());
+        let body = self.table.get_body_mut(self.current_body.unwrap());
 
         match scope.term {
             MirScopeTerminator::Normal => {
@@ -312,7 +258,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_stmt(&mut self, stmt: &HirStmt) {
-        let Some(def_id) = self.current_def else {
+        let Some(body_id) = self.current_body else {
             bug!("lowering statement without a currently existing definition!")
         };
 
@@ -323,7 +269,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     .map(|val| Some(self.lower_expr(&val)))
                     .unwrap_or(None);
 
-                let body = self.table.get_mut(def_id);
+                let body = self.table.get_body_mut(body_id);
 
                 // Emit assignment for the return LocalDecl (0) with
                 // the return value.
@@ -346,7 +292,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     .map(|val| Some(self.lower_expr(&val)))
                     .unwrap_or(None);
 
-                let body = self.table.get_mut(def_id);
+                let body = self.table.get_body_mut(body_id);
                 let assign_local = self.block_assign_local.unwrap();
 
                 let Some(local_id) = pass_val else {
@@ -370,14 +316,14 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_expr(&mut self, expr: &HirExpr) -> LocalDeclId {
-        let Some(def_id) = self.current_def else {
+        let Some(body_id) = self.current_body else {
             unreachable!()
         };
 
         let ty_id = self.tctx.get_ty_of_hir(expr.id).unwrap().id;
         let rvalue = self.lower_expr_rvalue(&expr);
 
-        let body = self.table.get_mut(def_id);
+        let body = self.table.get_body_mut(body_id);
         let local_id = body.declare_local_temp(ty_id, expr.span);
 
         let Some(rvalue) = rvalue else {
@@ -425,10 +371,10 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::Assign(assignee, expr) => todo!("lower assign expr"),
 
             HirExprKind::Block(block) => {
-                let def_id = self.current_def.unwrap();
+                let body_id = self.current_body.unwrap();
                 let local_id = self
                     .table
-                    .get_mut(def_id)
+                    .get_body_mut(body_id)
                     .declare_local_temp(ty_id, block.span);
 
                 self.lower_block(&block, Some(local_id));
@@ -439,16 +385,78 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::Array(array) => todo!("lower array expr"),
             HirExprKind::Tuple(tup) => todo!("lower tuple expr"),
             HirExprKind::Struct(strct) => todo!("lower struct expr"),
-            HirExprKind::AnonFn(anfn) => todo!("lower anon fn expr"),
-            HirExprKind::FnCall(call) => todo!("lower fn call expr"),
+
+            HirExprKind::AnonFn(anfn) => {
+                let prev_body_id = self.current_body;
+
+                let body_id = self.table.new_body();
+                let body = self.table.get_body_mut(body_id);
+
+                self.current_body = Some(body_id);
+
+                let unit_ty = self.tctx.make_unit_ty();
+
+                let ret_ty = anfn
+                    .ret_ty
+                    .map(|ret_ty| {
+                        self.tctx
+                            .get_ty_of_hir(ret_ty.id)
+                            .map(|ty| ty.id)
+                            .unwrap_or(unit_ty)
+                    })
+                    .unwrap_or(unit_ty);
+
+                body.declare_local_ret(ret_ty);
+
+                for param in &anfn.params.list {
+                    let Some(ty) = &param.ty else {
+                        continue;
+                    };
+
+                    let Some(ty) = self.tctx.get_ty_of_hir(ty.id) else {
+                        bug!("param {:?} has no attached ty!", param.id)
+                    };
+
+                    let local_id = body.declare_local_param(ty.id, Mutability::Mutable, param.span);
+                    let param_def_id = self.definitions.get_def_id(param.id).cloned().unwrap();
+
+                    self.def_map.insert(param_def_id, local_id);
+                }
+
+                self.lower_block(&anfn.body, Some(LocalDeclId(0)));
+
+                self.table
+                    .get_body_mut(body_id)
+                    .attach_term(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
+
+                self.current_body = prev_body_id;
+
+                RValue::AnonFn {
+                    body_id,
+                    captures: Vec::new(),
+                }
+            }
+
+            HirExprKind::FnCall(call) => {
+                let body_id = self.current_body.unwrap();
+                let body = self.table.get_body_mut(body_id);
+
+                // body.attach_term(MirTerminator::new(MirTerminatorKind::Call { func: (), args: (), dest: () }))
+
+                body.cue();
+
+                //
+                todo!("lower fn call expr")
+            }
+
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
             HirExprKind::MethodCall(call) => todo!("lower method call expr"),
 
             HirExprKind::If(ite) => {
-                let def_id = self.current_def.unwrap();
+                let body_id = self.current_body.unwrap();
                 let cond_local_id = self.lower_expr(&ite.cond);
 
-                let body = self.table.get_mut(def_id);
+                let body = self.table.get_body_mut(body_id);
                 let local_id = body.declare_local_temp(ty_id, expr.span);
 
                 let cond_bb_id = body.current_bb();
@@ -456,16 +464,19 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 // Consequent
                 let cons_bb_id = body.insert(MirBasicBlock::new());
                 self.lower_block(&ite.consequent, Some(local_id));
-                let inner_cons_bb_id = self.table.get(def_id).current_bb();
+                let inner_cons_bb_id = self.table.get_body(body_id).current_bb();
 
                 // Alternate
                 let alt_bb_id = ite.alternate.map(|alt| {
-                    let alt_bb_id = self.table.get_mut(def_id).insert(MirBasicBlock::new());
+                    let alt_bb_id = self
+                        .table
+                        .get_body_mut(body_id)
+                        .insert(MirBasicBlock::new());
                     self.lower_block(&alt, Some(local_id));
-                    (alt_bb_id, self.table.get(def_id).current_bb())
+                    (alt_bb_id, self.table.get_body(body_id).current_bb())
                 });
 
-                let body = self.table.get_mut(def_id);
+                let body = self.table.get_body_mut(body_id);
                 let join_bb_id = body.insert(MirBasicBlock::new());
 
                 body.get_mut(cond_bb_id)
@@ -475,7 +486,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                             discr: Operand::Move(Location::new(cond_local_id)),
                             targets: vec![
                                 alt_bb_id
-                                    .map(|(alt_bb_id, _)| alt_bb_id)
+                                    .map(|(_, alt_bb_id)| alt_bb_id)
                                     .unwrap_or(join_bb_id),
                                 cons_bb_id,
                             ],

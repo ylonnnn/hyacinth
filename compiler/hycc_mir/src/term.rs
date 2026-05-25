@@ -17,7 +17,7 @@ pub enum MirTerminatorKind {
     Call {
         func: Operand,
         args: Vec<Operand>,
-        destination: Location,
+        dest: Location,
         // target: Option<BasicBlockId>,
         // unwind: UnwindAction,
     },

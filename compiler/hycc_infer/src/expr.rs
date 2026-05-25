@@ -221,17 +221,31 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             s.tctx.attach_to_hir(anfn.body.id, ret_ty.clone());
 
             let block_ty_id = s.infer_block(&anfn.body)?;
-            let TyKind::Unit = s.tctx.get(block_ty_id) else {
-                return Ok(());
-            };
 
             s.check(&ret_ty, &Ty::new(block_ty_id, anfn.body.span))
                 .map(|diag| s.dctx.add(diag));
 
+            let resolved_ret_ty = s.tctx.resolve_ty(ret_ty.id);
+            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+                unreachable!()
+            };
+
+            let resolved_param_tys = fn_ty
+                .params
+                .clone()
+                .into_iter()
+                .map(|param| s.tctx.resolve_ty(*param))
+                .collect::<Vec<_>>()
+                .into();
+            let fn_ty = s.tctx.make_fn_ty(resolved_param_tys, resolved_ret_ty);
+
+            s.tctx
+                .attach_to_hir(anfn_expr.id, Ty::new(fn_ty, anfn_expr.span));
+
             Ok(())
         })?;
 
-        Ok(fn_ty_id)
+        Ok(self.tctx.get_ty_of_hir(anfn_expr.id).unwrap().id)
     }
 
     pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {

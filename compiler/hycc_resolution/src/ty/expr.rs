@@ -85,7 +85,8 @@ impl<'d> TyResolver<'d> {
                     );
                 }
 
-                let mut ret_ty = self.tctx.make_unit_ty();
+                let mut ret_ty = self.tctx.make_inferred_ty(InferKind::Any);
+                // let mut ret_ty = self.tctx.make_unit_ty();
                 if let Some(r_ty) = &anfn.ret_ty {
                     match self.resolve_ty(&r_ty) {
                         Ok(ty_id) => ret_ty = ty_id,

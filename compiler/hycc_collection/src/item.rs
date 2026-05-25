@@ -124,8 +124,9 @@ impl Collector {
             unreachable!()
         };
 
+        let expected = self.is_expected_to_be_collected();
         let def_id = ternary!(
-            self.is_expected_to_be_collected(),
+            expected,
             {
                 let def_id = self.definitions.get_def_id(fn_item.id);
                 if let Some(def_id) = def_id {
@@ -145,7 +146,7 @@ impl Collector {
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, CollectionLevel::Local, |s| {
-            if s.level != CollectionLevel::Top {
+            if expected {
                 return;
             }
 

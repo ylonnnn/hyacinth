@@ -194,20 +194,21 @@ impl TyCtx {
     }
 
     pub fn unify_ty(&mut self, a: TyId, b: TyId) -> bool {
-        if a == b {
+        let (res_a, res_b) = (self.resolve_ty(a), self.resolve_ty(b));
+        if res_a == res_b {
             return true;
         }
 
-        let a_ty = &self.storage[a.unwrap()];
-        let b_ty = &self.storage[b.unwrap()];
+        let a_ty = &self.storage[res_a.unwrap()];
+        let b_ty = &self.storage[res_b.unwrap()];
 
         match (&a_ty, &b_ty) {
             (other, TyKind::Infer(v_id, kind)) if kind.compatible(&other) => {
-                self.bind_var(*v_id, a);
+                self.bind_var(*v_id, res_a);
                 true
             }
             (TyKind::Infer(v_id, kind), other) if kind.compatible(&other) => {
-                self.bind_var(*v_id, b);
+                self.bind_var(*v_id, res_b);
                 true
             }
 
@@ -226,6 +227,10 @@ impl TyCtx {
             }
 
             (TyKind::Fn(a_func), TyKind::Fn(b_func)) => {
+                if a_func.params.len() != b_func.params.len() {
+                    return false;
+                }
+
                 let (a_ret, b_ret) = (a_func.ret_ty, b_func.ret_ty);
                 a_func
                     .params
@@ -363,6 +368,11 @@ impl TyCtx {
             TyKind::Slice(inner) => self.is_inferred(*inner),
 
             TyKind::Ref(inner, _) => self.is_inferred(*inner),
+
+            TyKind::Fn(fn_ty) => {
+                fn_ty.params.iter().any(|param| self.is_inferred(*param))
+                    || self.is_inferred(fn_ty.ret_ty)
+            }
 
             _ => false,
         }

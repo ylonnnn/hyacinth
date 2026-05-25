@@ -67,14 +67,6 @@ impl<'c> Resolver<'c> {
 
                 s.enter_scope(scope_id, |s| {
                     for param in &anfn.params.list {
-                        let Some(p_ty) = param.ty else {
-                            continue;
-                        };
-
-                        if let Err(Some(diag)) = s.resolve_ty(&p_ty) {
-                            s.dctx.add(diag);
-                        }
-
                         if let Err(Some(diag)) = s.collector.define(Definition::new(
                             param.ident.ident,
                             DefKind::FnParam,
@@ -83,6 +75,14 @@ impl<'c> Resolver<'c> {
                             DefAccessibility::Priv,
                         )) {
                             s.collector.dctx.add(diag);
+                        }
+
+                        let Some(p_ty) = param.ty else {
+                            continue;
+                        };
+
+                        if let Err(Some(diag)) = s.resolve_ty(&p_ty) {
+                            s.dctx.add(diag);
                         }
                     }
 

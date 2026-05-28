@@ -105,17 +105,25 @@ impl ScopeCtx {
         }
     }
 
-    pub fn get_id(&self, hir_id: HirId) -> Option<ScopeId> {
+    pub fn get(&self, id: ScopeId) -> &Scope {
+        self.table.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: ScopeId) -> &mut Scope {
+        self.table.get_mut(id)
+    }
+
+    pub fn get_id_by_hir(&self, hir_id: HirId) -> Option<ScopeId> {
         Some(*self.node_table.get(&hir_id)?)
     }
 
-    pub fn get(&self, hir_id: HirId) -> Option<&Scope> {
-        let scope_id = self.get_id(hir_id)?;
+    pub fn get_by_hir(&self, hir_id: HirId) -> Option<&Scope> {
+        let scope_id = self.get_id_by_hir(hir_id)?;
         Some(self.table.get(scope_id))
     }
 
-    pub fn get_mut(&mut self, hir_id: HirId) -> Option<&mut Scope> {
-        let scope_id = self.get_id(hir_id)?;
+    pub fn get_mut_by_hir(&mut self, hir_id: HirId) -> Option<&mut Scope> {
+        let scope_id = self.get_id_by_hir(hir_id)?;
         Some(self.table.get_mut(scope_id))
     }
 
@@ -219,7 +227,12 @@ impl ScopeCtx {
         self.pop();
     }
 
-    pub fn get_def(&self, space: DefSpace, name: Symbol, mut depth: usize) -> Option<DefId> {
+    pub fn get_def(
+        &self,
+        space: Option<DefSpace>,
+        name: Symbol,
+        mut depth: usize,
+    ) -> Option<DefId> {
         for scope_id in self.stack.iter().rev() {
             if depth == 0 {
                 break;
@@ -236,11 +249,11 @@ impl ScopeCtx {
         None
     }
 
-    pub fn get_def_current_only(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
+    pub fn get_def_current_only(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
         self.get_def(space, name, 1)
     }
 
-    pub fn get_def_until_root(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
+    pub fn get_def_until_root(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
         self.get_def(space, name, usize::MAX)
     }
 }
@@ -272,11 +285,23 @@ impl Scope {
         }
     }
 
-    pub fn get(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
-        let Some(defs) = self.definitions.get(&space) else {
-            return None;
-        };
+    pub fn get(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
+        if let Some(space) = space {
+            let Some(defs) = self.definitions.get(&space) else {
+                return None;
+            };
 
-        Some(*defs.get(&name)?)
+            Some(*defs.get(&name)?)
+        } else {
+            for space in [DefSpace::Type, DefSpace::Value] {
+                let Some(def_id) = self.get(Some(space), name) else {
+                    continue;
+                };
+
+                return Some(def_id);
+            }
+
+            None
+        }
     }
 }

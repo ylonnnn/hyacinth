@@ -1,8 +1,8 @@
 use hycc_ast::{
     Expr, Item, ItemKind, Mutability, Ty,
     item::{
-        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, Struct, StructField,
-        StructFieldAccessibility, StructFieldList, VarDecl,
+        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, Refer, ReferTarget,
+        ReferTargetKind, Struct, StructField, StructFieldAccessibility, StructFieldList, VarDecl,
     },
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
@@ -64,6 +64,10 @@ impl<'s> Parser<'s> {
                 return self.parse_item_with_accessibility();
             }
 
+            TokenKind::Ident(TokenIdentKind::Refer) => {
+                ItemKind::Refer(Box::new(self.parse_refer_with_recovery()?))
+            }
+
             TokenKind::Ident(TokenIdentKind::Petal) => {
                 ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
             }
@@ -94,6 +98,98 @@ impl<'s> Parser<'s> {
         item.accessibility = ItemAccessibility::Pub;
 
         Ok(item)
+    }
+
+    pub fn parse_refer_with_recovery(&mut self) -> ParseResult<Refer> {
+        let data = self.parse_refer();
+        self.try_sync(&[TokenKind::RightBrace, TokenKind::LnFeed]);
+
+        data
+    }
+
+    pub fn parse_refer(&mut self) -> ParseResult<Refer> {
+        let target = self.parse_refer_target()?;
+        self.require_terminator(ParserTerminatorKind::Both)?;
+
+        Ok(Refer {
+            span: target.span,
+            target,
+        })
+    }
+
+    pub fn parse_refer_target(&mut self) -> ParseResult<ReferTarget> {
+        let symbol = self.parse_ident(PathKind::Ty)?;
+        let Some(tok) = self.peek_nonlf_token() else {
+            todo!()
+        };
+
+        let kind = match tok.kind {
+            TokenKind::Ident(TokenIdentKind::As) => {
+                self.adjust_to_nonlf();
+                let alias = self.parse_raw_ident()?;
+                ReferTargetKind::Child(Some(alias))
+            }
+
+            TokenKind::ColonColon => {
+                self.adjust_to_nonlf();
+
+                // TODO: *
+
+                // [
+                if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
+                    // TODO: multi-target parsing
+                    let TokenGraph::Collection { data, .. } = tg else {
+                        unreachable!()
+                    };
+
+                    let n = data.len();
+                    let children = self.use_stream(
+                        TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                        |s| -> ParseResult<Vec<ReferTarget>> {
+                            let mut children = Vec::new();
+                            let mut expect = true;
+
+                            while !s.eos() {
+                                if !expect {
+                                    s.require_exact_nonlf(TokenKind::Comma)?;
+                                }
+
+                                if expect {
+                                    children.push(s.parse_refer_target()?);
+                                    expect = false;
+                                }
+
+                                if !expect && s.expect_exact_nonlf(TokenKind::Comma).0 {
+                                    expect = true;
+                                    continue;
+                                }
+                            }
+
+                            Ok(children)
+                        },
+                    )?;
+
+                    ReferTargetKind::Parent(children)
+                }
+                // IDENT
+                else {
+                    ReferTargetKind::Parent(vec![self.parse_refer_target()?])
+                }
+            }
+
+            _ => ReferTargetKind::Child(None),
+        };
+
+        // let span = match &kind {
+        //     ReferTargetKind::Child(alias) => alias.map(|alias| alias.span).unwrap_or(symbol.span),
+        //     ReferTargetKind::Parent()
+        // };
+
+        Ok(ReferTarget {
+            span: symbol.span,
+            kind,
+            symbol,
+        })
     }
 
     pub fn parse_petal_with_recovery(&mut self) -> ParseResult<Petal> {

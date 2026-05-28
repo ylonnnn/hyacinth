@@ -129,7 +129,7 @@ impl Collector {
         let top = self.scope_ctx.top_mut();
 
         let (name, space) = (definition.name, definition.kind.space());
-        if let Some(earlier_def) = top.get(space, name) {
+        if let Some(earlier_def) = top.get(Some(space), name) {
             Err(Some(CollectorDiag::error(
                 definition.span,
                 CollectorDiagErrorKind::Duplication {
@@ -149,7 +149,7 @@ impl Collector {
         let top = self.scope_ctx.top_mut();
 
         let (name, space) = (definition.name, definition.kind.space());
-        if let Some(earlier_def) = top.get(space, name) {
+        if let Some(earlier_def) = top.get(Some(space), name) {
             Ok(earlier_def)
         } else {
             let def_id = self.definitions.define_hir(definition.hir_id, definition);

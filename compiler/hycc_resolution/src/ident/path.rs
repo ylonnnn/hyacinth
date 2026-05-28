@@ -23,24 +23,21 @@ impl<'c> Resolver<'c> {
         for (i, segment) in path.segments.iter().enumerate() {
             let is_last = i == n - 1;
 
-            self.expect_space(ternary!(is_last, space, DefSpace::Type), |s| {
-                let def_id = match s.resolve_ident(&segment) {
-                    Ok(def_id) => def_id,
-                    Err(diag) => {
-                        diag.map(|diag| s.dctx.add(diag));
-                        return;
-                    }
-                };
-
-                if let Some(scope_id) = s.collector.scope_ctx.get_id_from_def(def_id) {
-                    s.collector.scope_ctx.push_id(scope_id)
-                }
-            });
+            self.expect_space(
+                ternary!(is_last, space, DefSpace::Type),
+                |s| -> ResolveResult {
+                    let def_id = s.resolve_ident(&segment)?;
+                    Ok(s.collector
+                        .scope_ctx
+                        .get_id_from_def(def_id)
+                        .map(|scope_id| s.collector.scope_ctx.push_id(scope_id))
+                        .unwrap_or(()))
+                },
+            )?;
 
             if is_last {
-                if let Some(def_id) = self.collector.definitions.get_def_id(segment.id) {
-                    self.collector.definitions.define_id_hir(path.id, *def_id);
-                }
+                let def_id = self.collector.definitions.get_def_id(segment.id).cloned();
+                def_id.map(|def_id| self.collector.definitions.define_id_hir(path.id, def_id));
             }
         }
 
@@ -56,10 +53,10 @@ impl<'c> Resolver<'c> {
             bug!("expected space must not be `None`");
         };
 
-        let Some(def_id) = self.get_def_id(space, ident.ident.ident) else {
+        let Some(def_id) = self.get_def_id(Some(space), ident.ident.ident) else {
             return Err(Some(ResolverDiag::error(
                 ident.span,
-                ResolverDiagErrorKind::UnrecognizedSymbol(ident.ident.ident, space),
+                ResolverDiagErrorKind::UnrecognizedSymbol(ident.ident.ident, Some(space)),
             )));
         };
 

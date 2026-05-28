@@ -6,7 +6,10 @@ use hycc_ast::{
         AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, IfExpr, MethodCall,
         RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
-    item::{Fn, FnParamList, Petal, PetalKind, Struct, StructFieldList, VarDecl},
+    item::{
+        Fn, FnParamList, Petal, PetalKind, Refer, ReferTarget, ReferTargetKind, Struct,
+        StructFieldList, VarDecl,
+    },
     path::{IdentifierArgument, IdentifierArguments},
     stmt::{PassStmt, RetStmt},
     token::{Token, TokenKind},
@@ -27,8 +30,9 @@ use crate::{
         HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
-        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirStruct,
-        HirStructField, HirStructFieldList, HirVarDecl,
+        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirRefer,
+        HirReferTarget, HirReferTargetKind, HirStruct, HirStructField, HirStructFieldList,
+        HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -95,6 +99,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
+            ItemKind::Refer(refer) => HirItemKind::Refer(Box::new(self.lower_refer(&refer))),
             ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(&petal))),
             ItemKind::Struct(strct) => HirItemKind::Struct(Box::new(self.lower_struct(&strct))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
@@ -108,6 +113,33 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             item
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_refer(&mut self, refer: &Refer) -> HirRefer<'h> {
+        HirRefer {
+            target: self.lower_refer_target(&refer.target),
+            span: refer.span,
+        }
+    }
+
+    fn lower_refer_target(&mut self, target: &ReferTarget) -> HirReferTarget<'h> {
+        let kind = match &target.kind {
+            ReferTargetKind::Child(alias) => {
+                HirReferTargetKind::Child(alias.as_ref().map(|alias| self.intern_tok_str(&alias)))
+            }
+            ReferTargetKind::Parent(children) => HirReferTargetKind::Parent(
+                children
+                    .iter()
+                    .map(|child| self.lower_refer_target(&child))
+                    .collect::<Vec<_>>(),
+            ),
+        };
+
+        HirReferTarget {
+            kind,
+            symbol: self.lower_ident(&target.symbol),
+            span: target.span,
         }
     }
 

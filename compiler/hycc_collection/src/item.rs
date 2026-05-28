@@ -12,6 +12,7 @@ use crate::collector::{CollectResult, CollectionLevel, Collector};
 impl Collector {
     pub fn collect_item(&mut self, item: &HirItem) -> CollectResult {
         match &item.kind {
+            HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item),
             HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
@@ -93,6 +94,8 @@ impl Collector {
             struct_item.span,
             struct_item.accessibility,
         ))?;
+
+        self.scope_ctx.try_attach_to_def(def_id, Scope::new());
 
         let ty = Ty::new(self.tctx.make_adt_ty(def_id), struct_item.span);
         self.tctx.attach_to_hir(struct_item.id, ty);

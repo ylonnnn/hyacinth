@@ -19,6 +19,8 @@ pub struct Resolver<'c> {
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
+
+    pub(crate) curr_scope: Option<ScopeId>,
 }
 
 impl<'c> Resolver<'c> {
@@ -28,15 +30,16 @@ impl<'c> Resolver<'c> {
             collector,
 
             expected_space: None,
+            curr_scope: None,
         }
     }
 
-    pub fn get_def_id(&self, space: DefSpace, name: Symbol) -> Option<DefId> {
+    pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
         // dbg!(&self.collector.scope_ctx);
         self.collector.scope_ctx.get_def_until_root(space, name)
     }
 
-    pub fn get_def(&self, space: DefSpace, name: Symbol) -> Option<&Definition> {
+    pub fn get_def(&self, space: Option<DefSpace>, name: Symbol) -> Option<&Definition> {
         let def_id = self.get_def_id(space, name)?;
         Some(self.collector.definitions.get(def_id))
     }

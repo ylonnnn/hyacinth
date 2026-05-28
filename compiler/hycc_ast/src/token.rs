@@ -123,9 +123,11 @@ pub enum TokenIdentKind {
 
     // Keywords
     Pub,
+    As,
+
+    Refer,
 
     Petal,
-
     Struct,
 
     Fn,
@@ -231,7 +233,9 @@ impl Display for TokenKind {
                 Self::String { .. } => "string",
                 Self::Ident(kind) => match kind {
                     TokenIdentKind::Pub => "pub",
+                    TokenIdentKind::As => "as",
 
+                    TokenIdentKind::Refer => "refer",
                     TokenIdentKind::Petal => "petal",
 
                     TokenIdentKind::Struct => "struct",

@@ -1,20 +1,79 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::DefSpace,
-    item::{HirItem, HirItemKind, HirPetalKind},
+    def::{DefId, DefSpace},
+    item::{HirItem, HirItemKind, HirPetalKind, HirReferTarget, HirReferTargetKind},
 };
 use hycc_util::bug;
 
-use crate::{ResolveResult, ident::resolver::Resolver};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagErrorKind},
+    ident::resolver::Resolver,
+};
 
 impl<'c> Resolver<'c> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
+            HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
         }
+    }
+
+    pub(crate) fn resolve_refer(&mut self, refer_item: &HirItem) -> ResolveResult {
+        let HirItemKind::Refer(refer) = &refer_item.kind else {
+            unreachable!();
+        };
+
+        self.curr_scope = Some(self.collector.scope_ctx.top_id());
+        if let Err(Some(diag)) = self.resolve_refer_target(&refer.target) {
+            self.dctx.add(diag);
+        }
+
+        while self.collector.scope_ctx.top_id() != self.curr_scope.unwrap() {
+            self.collector.scope_ctx.pop();
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn resolve_refer_target(&mut self, target: &HirReferTarget) -> ResolveResult {
+        match &target.kind {
+            HirReferTargetKind::Child(alias) => {
+                let sym = target.symbol.ident.ident;
+                let Some(def_id) = self.collector.scope_ctx.get_def_current_only(None, sym) else {
+                    Err(Some(ResolverDiag::error(
+                        target.symbol.span,
+                        ResolverDiagErrorKind::UnrecognizedSymbol(sym, None),
+                    )))?
+                };
+
+                let scope = self.collector.scope_ctx.get_mut(self.curr_scope.unwrap());
+
+                scope.define(
+                    self.collector.definitions.get(def_id).kind.space(),
+                    alias.unwrap_or(sym),
+                    def_id,
+                );
+            }
+
+            HirReferTargetKind::Parent(children) => {
+                let def_id =
+                    self.expect_space(DefSpace::Type, |s| s.resolve_ident(&target.symbol))?;
+                let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
+                self.collector.scope_ctx.push_id(scope_id);
+
+                for child in children {
+                    if let Err(Some(diag)) = self.resolve_refer_target(&child) {
+                        self.dctx.add(diag);
+                    }
+                }
+            }
+        };
+
+        Ok(())
     }
 
     pub(crate) fn resolve_petal(&mut self, petal_item: &HirItem) -> ResolveResult {
@@ -37,7 +96,7 @@ impl<'c> Resolver<'c> {
 
         let mut scopes = 0;
         for segment in &path.segments {
-            let Some(def_id) = self.get_def_id(DefSpace::Type, segment.ident.ident) else {
+            let Some(def_id) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident) else {
                 bug!("no def_id for ident: {:?}", segment.ident.ident)
             };
 
@@ -90,7 +149,7 @@ impl<'c> Resolver<'c> {
             self.collector.dctx.add(diag);
         }
 
-        let Some(def_id) = self.get_def_id(DefSpace::Value, func.ident.ident) else {
+        let Some(def_id) = self.get_def_id(Some(DefSpace::Value), func.ident.ident) else {
             bug!("no def_id for ident: {:?}", func.ident.ident)
         };
 

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{Block, Expr, Mutability, Path, Ty, token::Token};
+use crate::{Block, Expr, Identifier, Mutability, Path, Ty, token::Token};
 
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -8,6 +8,7 @@ use hycc_util::ternary;
 #[repr(u8)]
 #[derive(Debug, Clone)]
 pub enum ItemKind {
+    Refer(Box<Refer>),
     Petal(Box<Petal>),
     Struct(Box<Struct>),
     Fn(Box<Fn>),
@@ -17,6 +18,7 @@ pub enum ItemKind {
 impl ItemKind {
     pub fn span(&self) -> Span {
         match self {
+            Self::Refer(refer) => refer.span,
             Self::Petal(petal) => petal.span,
             Self::Struct(strct) => strct.ident.span,
             Self::VarDecl(var) => var.span(),
@@ -46,6 +48,25 @@ impl Item {
             accessibility: ItemAccessibility::Priv,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Refer {
+    pub target: ReferTarget,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReferTargetKind {
+    Child(Option<Token>),
+    Parent(Vec<ReferTarget>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ReferTarget {
+    pub symbol: Identifier,
+    pub kind: ReferTargetKind,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

@@ -7,6 +7,7 @@ use crate::{ResolveResult, ty::resolver::TyResolver};
 impl<'d> TyResolver<'d> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
+            HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),

@@ -97,7 +97,7 @@ pub enum ResolverDiagWarningKind {}
 
 #[derive(Debug, Clone)]
 pub enum ResolverDiagErrorKind {
-    UnrecognizedSymbol(Symbol, DefSpace),
+    UnrecognizedSymbol(Symbol, Option<DefSpace>),
     InvalidPetalResolution(Symbol, DefId),
     InvalidInference,
 }
@@ -155,6 +155,9 @@ impl<'i, 'd> Diag<ResolverDiagDataCtx<'i, 'd>> for ResolverDiag {
                         code,
                         match kind {
                             Err::UnrecognizedSymbol(symbol, space) => {
+                                let space = space
+                                    .map(|space| space.to_string())
+                                    .unwrap_or(String::from("symbol"));
                                 format!(
                                     "cannot resolve unrecognized {space} `{}`.",
                                     interner.get(*symbol)

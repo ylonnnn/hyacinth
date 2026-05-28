@@ -1,12 +1,18 @@
 use hycc_ast::item::{ItemAccessibility, StructFieldAccessibility};
 use hycc_span::Span;
+use hycc_symbol::Symbol;
 
 use crate::{
-    HirId, HirMutability, block::HirBlock, expr::HirExpr, path::{HirPath, HirRawIdent}, ty::HirTy
+    HirId, HirMutability,
+    block::HirBlock,
+    expr::HirExpr,
+    path::{HirIdent, HirPath, HirRawIdent},
+    ty::HirTy,
 };
 
 #[derive(Debug, Clone)]
 pub enum HirItemKind<'h> {
+    Refer(Box<HirRefer<'h>>),
     Petal(Box<HirPetal<'h>>),
     Struct(Box<HirStruct<'h>>),
     Fn(Box<HirFn<'h>>),
@@ -32,6 +38,25 @@ impl<'h> HirItem<'h> {
             accessibility: HirItemAccessibility::Priv,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct HirRefer<'h> {
+    pub target: HirReferTarget<'h>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum HirReferTargetKind<'h> {
+    Child(Option<Symbol>),
+    Parent(Vec<HirReferTarget<'h>>),
+}
+
+#[derive(Debug, Clone)]
+pub struct HirReferTarget<'h> {
+    pub symbol: &'h HirIdent<'h>,
+    pub kind: HirReferTargetKind<'h>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

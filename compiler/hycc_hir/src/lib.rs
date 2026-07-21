@@ -12,6 +12,8 @@ use crate::{
 
 pub mod builder;
 pub mod def;
+pub mod scope;
+pub mod petal;
 
 pub mod block;
 pub mod expr;

@@ -3,7 +3,11 @@ use std::{collections::HashMap, fmt::Display};
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 
-use crate::{HirId, item::HirItemAccessibility};
+use crate::{
+    HirId,
+    item::{HirItemAccessibility, HirPubAccessibilityKind},
+    petal::PetalId,
+};
 
 #[derive(Debug)]
 pub struct DefinitionTable {
@@ -209,12 +213,17 @@ impl Display for DefSpace {
     }
 }
 
+pub type DefPubAccessibilityKind = HirPubAccessibilityKind;
 pub type DefAccessibility = HirItemAccessibility;
 
 #[derive(Debug, Clone)]
 pub struct Definition {
     pub name: Symbol,
     pub kind: DefKind,
+
+    // The definition id of the petal that this defintion belongs to.
+    pub petal: Option<PetalId>,
+
     pub hir_id: HirId,
     pub span: Span,
     pub accessibility: DefAccessibility,
@@ -224,6 +233,7 @@ impl Definition {
     pub fn new(
         name: Symbol,
         kind: DefKind,
+        petal: Option<PetalId>,
         hir_id: HirId,
         span: Span,
         accessibility: DefAccessibility,
@@ -231,23 +241,36 @@ impl Definition {
         Self {
             name,
             kind,
+            petal,
             hir_id,
             span,
             accessibility,
         }
     }
 
-    pub fn builtin(name: Symbol, kind: BuiltinKind, accessibility: DefAccessibility) -> Self {
+    pub fn builtin(
+        name: Symbol,
+        kind: BuiltinKind,
+        petal: Option<PetalId>,
+        accessibility: DefAccessibility,
+    ) -> Self {
         Self::new(
             name,
             DefKind::Builtin(kind),
+            petal,
             HirId::Invalid,
             Span::default(),
             accessibility,
         )
     }
 
-    pub fn new_default(name: Symbol, kind: DefKind, hir_id: HirId, span: Span) -> Self {
-        Self::new(name, kind, hir_id, span, DefAccessibility::Priv)
+    pub fn new_default(
+        name: Symbol,
+        kind: DefKind,
+        petal: Option<PetalId>,
+        hir_id: HirId,
+        span: Span,
+    ) -> Self {
+        Self::new(name, kind, petal, hir_id, span, DefAccessibility::Priv)
     }
 }

@@ -185,12 +185,9 @@ impl<'s> Parser<'s> {
         if !matched {
             match tg.underlying() {
                 None => Err(None),
-                Some(tok) => Err(Some(ParserDiag::error(
-                    tok.span,
-                    ParserDiagErrorKind::UnexpectedToken {
-                        token: tok.clone(),
-                        expected: Some(UnexpectedTokenExpectation::TokenKind(kind)),
-                    },
+                Some(tok) => Err(Some(ParserDiag::unexpected_token_expected_token(
+                    tok.clone(),
+                    kind,
                 ))),
             }
         } else {

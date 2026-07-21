@@ -5,8 +5,8 @@ use hycc_diagnostic::{
 use hycc_hir::{
     HirTable,
     def::{DefId, DefinitionTable},
+    scope::ScopeCtx,
 };
-use hycc_scope::ScopeCtx;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 

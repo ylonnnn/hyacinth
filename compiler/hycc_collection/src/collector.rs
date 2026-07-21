@@ -1,25 +1,28 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{
-        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, Definition,
-        DefinitionTable,
+        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefPubAccessibilityKind,
+        Definition, DefinitionTable,
     },
-    item::HirPetal,
+    item::{HirItem, HirItemKind},
+    petal::{Petal, PetalCtx},
+    scope::{Scope, ScopeCtx, ScopeId},
 };
-use hycc_scope::{ScopeCtx, ScopeId};
 use hycc_span::Span;
 use hycc_symbol::SymbolInterner;
 use hycc_ty::{context::TyCtx, ty::Ty};
-use hycc_util::ternary;
+use hycc_util::{bug, ternary};
 
 use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
 #[derive(Debug)]
-pub struct Collector {
+pub struct Collector<'i> {
     pub tctx: TyCtx,
     pub scope_ctx: ScopeCtx,
     pub definitions: DefinitionTable,
     pub dctx: CollectorDiagCtx,
+    pub petal_ctx: PetalCtx,
+    pub interner: &'i mut SymbolInterner,
 
     // Default to top-level collection
     pub level: CollectionLevel,
@@ -35,19 +38,29 @@ pub enum CollectionLevel {
 
 pub type CollectResult<T = (), E = Option<CollectorDiag>> = Result<T, E>;
 
-impl Collector {
-    pub fn new() -> Self {
-        Self {
+impl<'i> Collector<'i> {
+    pub fn new(interner: &'i mut SymbolInterner) -> Self {
+        let mut inst = Self {
             definitions: DefinitionTable::new(),
             scope_ctx: ScopeCtx::new(),
             dctx: CollectorDiagCtx::new(),
             tctx: TyCtx::new(),
+            petal_ctx: PetalCtx::new(),
+            interner,
             level: CollectionLevel::Top,
             node_level: CollectionLevel::Top,
-        }
+        };
+
+        let root_petal_id = inst
+            .petal_ctx
+            .add_petal(Petal::Root(inst.scope_ctx.root_id()));
+        inst.petal_ctx.push(root_petal_id);
+
+        inst.init_builtin_ty();
+        inst
     }
 
-    pub fn init_builtin_ty(&mut self, interner: &mut SymbolInterner) {
+    pub fn init_builtin_ty(&mut self) {
         // Integers
         for signed in [true, false] {
             let prefix = ternary!(signed, "i", "u");
@@ -56,13 +69,14 @@ impl Collector {
                 let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
                 let def = Definition::builtin(
-                    interner.intern(&format!(
+                    self.interner.intern(&format!(
                         "{}{}",
                         prefix,
                         ternary!(width == u8::MAX, "size".into(), width.to_string())
                     )),
                     BuiltinKind::Ty(b_ty),
-                    DefAccessibility::Pub,
+                    Some(self.petal_ctx.top_id()),
+                    DefAccessibility::Pub(DefPubAccessibilityKind::All),
                 );
 
                 match self.define(def) {
@@ -81,9 +95,10 @@ impl Collector {
             let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
             let def = Definition::builtin(
-                interner.intern(&format!("f{}", width.to_string())),
+                self.interner.intern(&format!("f{}", width.to_string())),
                 BuiltinKind::Ty(b_ty),
-                DefAccessibility::Pub,
+                Some(self.petal_ctx.top_id()),
+                DefAccessibility::Pub(DefPubAccessibilityKind::All),
             );
 
             match self.define(def) {
@@ -102,9 +117,10 @@ impl Collector {
         ] {
             let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
             let def = Definition::builtin(
-                interner.intern(name),
+                self.interner.intern(name),
                 BuiltinKind::Ty(b_ty),
-                DefAccessibility::Pub,
+                Some(self.petal_ctx.top_id()),
+                DefAccessibility::Pub(DefPubAccessibilityKind::All),
             );
 
             match self.define(def) {
@@ -116,10 +132,12 @@ impl Collector {
             }
         }
 
+        let infer_sym = self.interner.intern("_");
         if let Err(Some(diag)) = self.define(Definition::builtin(
-            interner.intern("_"),
+            infer_sym,
             BuiltinKind::Ty(BuiltinTyKind::Infer),
-            DefAccessibility::Pub,
+            Some(self.petal_ctx.top_id()),
+            DefAccessibility::Pub(DefPubAccessibilityKind::All),
         )) {
             self.dctx.add(diag);
         }
@@ -185,25 +203,31 @@ impl Collector {
         self.level == CollectionLevel::Local && self.node_level == CollectionLevel::Top
     }
 
-    pub fn collect_top(&mut self, tree: &HirPetal) {
+    pub fn collect_top(&mut self, tree: &HirItem) {
         // Top-level collection
         self.level = CollectionLevel::Top;
         self.collect_tree(tree);
     }
 
-    pub fn collect_local(&mut self, tree: &HirPetal) {
+    pub fn collect_local(&mut self, tree: &HirItem) {
         // Local definitions collection
         self.level = CollectionLevel::Local;
         self.collect_tree(tree);
     }
 
-    fn collect_tree(&mut self, tree: &HirPetal) {
+    fn collect_tree(&mut self, tree: &HirItem) {
+        let hir_id = tree.id;
+        let HirItemKind::Petal(_) = &tree.kind else {
+            bug!("invalid item collection! collection must start at the tree (a petal)")
+        };
+
         self.node_level = CollectionLevel::Top;
 
-        for item in &tree.items {
-            if let Err(Some(diag)) = self.collect_item(item) {
-                self.dctx.add(diag);
-            }
+        let root_scope_id = self.scope_ctx.root_id();
+        self.scope_ctx.attach_id(hir_id, root_scope_id);
+
+        if let Err(Some(diag)) = self.collect_petal(tree) {
+            self.dctx.add(diag);
         }
     }
 }

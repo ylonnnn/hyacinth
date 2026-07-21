@@ -2,11 +2,12 @@ use std::collections::HashSet;
 
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::{HirTable, def::DefinitionTable, item::HirPetal};
+use hycc_hir::{HirTable, def::DefinitionTable, item::{HirItem, HirItemKind, HirPetal}};
 use hycc_ty::{
     context::{TyCtx, TyId},
     ty::Ty,
 };
+use hycc_util::bug;
 
 use crate::{
     diag::{InferDiag, InferDiagCtx, InferDiagErrorKind},
@@ -74,7 +75,11 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         data
     }
 
-    pub fn infer(&mut self, tree: &HirPetal) {
+    pub fn infer(&mut self, tree: &HirItem) {
+        let HirItemKind::Petal(tree) = &tree.kind else {
+            bug!("invalid type inference! type inference must start at the tree (a petal)")
+        };
+
         for item in &tree.items {
             if let Err(Some(diag)) = self.infer_item(&item) {
                 self.dctx.add(diag);

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hycc_hir::{
     block::HirBlock,
     def::{DefId, DefinitionTable},
-    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirFnCall},
+    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirFnCall, HirRefExpr},
     item::{HirItem, HirItemKind, HirPetal},
     path::HirPath,
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -17,7 +17,7 @@ use crate::{
     body::MirBodyId,
     local::{LocalDeclId, Mutability},
     scope::{MirScopeId, MirScopeTerminator, MirScopeTree},
-    stmt::{Location, MirStatement, MirStatementKind, Operand, RValue},
+    stmt::{Location, MirStatement, MirStatementKind, Operand, RValue, RefKind},
     table::MirTable,
     term::{MirTerminator, MirTerminatorKind},
 };
@@ -82,21 +82,19 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             .store(local_id, MirBasicBlockId(body.basic_blocks.len() - 1));
     }
 
-    pub fn lower(&mut self, tree: &HirPetal) {
+    pub fn lower(&mut self, tree: &HirItem) {
+        let HirItemKind::Petal(tree) = &tree.kind else {
+            bug!("invalid mir lowering! mir lowering must start at the tree (a petal)")
+        };
+
         for item in &tree.items {
             self.lower_item(&item);
         }
-
-        // dbg!(&self.scope_tree);
-        // for def_id in self.table.defs().keys().map(|key| *key).collect::<Vec<_>>() {
-        //     self.current_body.replace(def_id);
-        //     self.emit_dead(None);
-        //     self.current_body.take();
-        // }
     }
 
     fn lower_item(&mut self, item: &HirItem) {
         match &item.kind {
+            HirItemKind::Refer(_) => {}
             HirItemKind::Petal(petal) => self.lower_petal(&petal),
             HirItemKind::Struct(_) => {}
             HirItemKind::Fn(_) => self.lower_fn(&item),
@@ -165,7 +163,10 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
-        let body_id = self.current_body.unwrap();
+        let Some(body_id) = self.current_body else {
+            todo!("lower variable declarations outside of a local space (global declarations)");
+        };
+
         let body = self.table.get_body_mut(body_id);
 
         let Some(ty) = self.tctx.get_ty_of_hir(var_item.id) else {
@@ -344,7 +345,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     fn lower_expr_rvalue(&mut self, expr: &HirExpr) -> Option<RValue> {
         Some(match &expr.kind {
             HirExprKind::Path(path) => self.lower_path_expr_rvalue(&path),
-            HirExprKind::RefExpr(reference) => todo!("lower ref expr"),
+            HirExprKind::RefExpr(reference) => self.lower_ref_expr_rvalue(&reference),
             HirExprKind::Literal(lit) => RValue::Use(Operand::Const(lit.const_id())),
             HirExprKind::Binary(op, left, right) => {
                 self.lower_binary_expr_rvalue(*op, &left, &right)
@@ -370,14 +371,35 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         })
     }
 
+    fn lower_path(&mut self, path: &HirPath) -> Option<LocalDeclId> {
+        // TODO: improve?
+        self.def_map
+            .get(self.definitions.get_def_id(path.id).unwrap())
+            .cloned()
+    }
+
     fn lower_path_expr_rvalue(&mut self, path: &HirPath) -> RValue {
         // TODO: improve?
-        let def_id = self.definitions.get_def_id(path.id).unwrap();
-        if let Some(local_id) = self.def_map.get(def_id).cloned() {
-            RValue::Use(Operand::Move(Location::new(local_id)))
-        } else {
-            RValue::FnRef(*def_id)
-        }
+        self.lower_path(&path)
+            .map(|local_id| RValue::Use(Operand::Move(Location::new(local_id))))
+            .unwrap_or(RValue::FnRef(
+                *self.definitions.get_def_id(path.id).unwrap(),
+            ))
+    }
+
+    fn lower_ref_expr_rvalue(&mut self, reference: &HirRefExpr) -> RValue {
+        todo!("lower ref expr")
+        // let kind = match &reference.mutability {
+        //     Mutability::Mutable => RefKind::Mutable,
+        //     Mutability::Immutable => RefKind::Immutable,
+        // };
+
+        // let local_id = match &reference.expr.kind {
+        //     HirExprKind::Path(path) => self.lower_path(&path),
+        //     _ => Some(self.lower_expr(&reference.expr)),
+        // };
+
+        // RValue::Ref(kind, Location::new(local_id.unwrap()))
     }
 
     fn lower_binary_expr_rvalue(

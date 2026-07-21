@@ -1,10 +1,9 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::block::HirBlock;
-use hycc_scope::Scope;
+use hycc_hir::{block::HirBlock, scope::Scope};
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'c> Resolver<'c> {
+impl<'c, 'i> Resolver<'c, 'i> {
     pub(crate) fn resolve_block(&mut self, block: &HirBlock) -> ResolveResult {
         let scope_id = self.collector.scope_ctx.attach(block.id, Scope::new());
 

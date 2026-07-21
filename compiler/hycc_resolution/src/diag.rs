@@ -3,14 +3,8 @@ use hycc_diagnostic::{
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
 use hycc_hir::def::{DefId, DefSpace, DefinitionTable};
-// use hycc_hir::{
-//     HirTable,
-//     def::{DefId, DefinitionTable},
-// };
-// use hycc_scope::ScopeCtx;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
-// use hycc_symbol::{Symbol, SymbolInterner};
 
 #[derive(Debug)]
 pub struct ResolverDiagDataCtx<'i, 'd> {
@@ -100,6 +94,7 @@ pub enum ResolverDiagErrorKind {
     UnrecognizedSymbol(Symbol, Option<DefSpace>),
     InvalidPetalResolution(Symbol, DefId),
     InvalidInference,
+    InaccessibleSymbol(Symbol),
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +165,13 @@ impl<'i, 'd> Diag<ResolverDiagDataCtx<'i, 'd>> for ResolverDiag {
 
                             Err::InvalidInference => {
                                 format!("cannot infer type in this context.")
+                            }
+
+                            Err::InaccessibleSymbol(symbol) => {
+                                format!(
+                                    "symbol `{}` is inaccessible in this context.",
+                                    interner.get(*symbol)
+                                )
                             }
                         },
                     )

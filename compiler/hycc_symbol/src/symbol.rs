@@ -48,4 +48,8 @@ impl SymbolInterner {
     pub fn get(&self, id: Symbol) -> &str {
         &self.data[id.unwrap()]
     }
+
+    pub fn get_all(&self) -> &Vec<Box<str>> {
+        &self.data
+    }
 }

@@ -1,3 +1,5 @@
+use std::fs;
+
 use hycc_ast::{
     ItemKind,
     item::{Petal, PetalKind},
@@ -96,8 +98,6 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     };
 
-    // dbg!(&tree);
-
     let mut const_table = ConstTable::new();
 
     let hir_table = HirTable::new();
@@ -110,16 +110,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     let hir = hir_builder.lower(tree);
 
-    let mut collector = Collector::new();
-
-    collector.init_builtin_ty(&mut session.interner);
-    collector.collect_top(hir);
+    let mut collector = Collector::new(&mut session.interner);
+    collector.collect_top(&hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
     collector.dctx.emit(
         &mut session.dctx,
-        CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
+        CollectorDiagDataCtx::new(&collector.interner, &hir_table, &definitions, &scope_ctx),
     );
+
+    // TODO: TEMP
+    fs::write("symbols.txt", collector.interner.get_all().join("\n")).unwrap();
 
     if session.dctx.error_occurred() {
         return;
@@ -135,12 +136,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     resolver.collector.dctx.emit(
         &mut session.dctx,
-        CollectorDiagDataCtx::new(&session.interner, &hir_table, &definitions, &scope_ctx),
+        CollectorDiagDataCtx::new(
+            &mut resolver.collector.interner,
+            &hir_table,
+            &definitions,
+            &scope_ctx,
+        ),
     );
 
     resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&session.interner, &definitions),
+        ResolverDiagDataCtx::new(&resolver.collector.interner, &definitions),
     );
 
     if session.dctx.error_occurred() {

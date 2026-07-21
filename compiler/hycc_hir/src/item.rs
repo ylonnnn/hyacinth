@@ -1,4 +1,4 @@
-use hycc_ast::item::{ItemAccessibility, StructFieldAccessibility};
+use hycc_ast::item::{ItemAccessibility, PubAccessibilityKind, StructFieldAccessibility};
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 
@@ -19,6 +19,7 @@ pub enum HirItemKind<'h> {
     VarDecl(Box<HirVarDecl<'h>>),
 }
 
+pub type HirPubAccessibilityKind = PubAccessibilityKind;
 pub type HirItemAccessibility = ItemAccessibility;
 
 #[derive(Debug, Clone)]

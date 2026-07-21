@@ -1,13 +1,14 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},
-    item::HirPetal,
+    item::{HirItem, HirItemKind, HirPetal},
 };
 use hycc_span::Span;
 use hycc_ty::{
     context::{TyCtx, TyId},
     ty::InferKind,
 };
+use hycc_util::bug;
 
 use crate::{
     ResolveResult,
@@ -53,7 +54,11 @@ impl<'d> TyResolver<'d> {
         Ok(ty_id)
     }
 
-    pub fn resolve(&mut self, tree: &HirPetal) {
+    pub fn resolve(&mut self, tree: &HirItem) {
+        let HirItemKind::Petal(tree) = &tree.kind else {
+            bug!("invalid type resolution! type resolution must start at the tree (a petal)")
+        };
+
         for item in &tree.items {
             if let Err(Some(diag)) = self.resolve_item(&item) {
                 self.dctx.add(diag);

@@ -28,7 +28,6 @@ version = "0.1.0"
 dependencies = [
  "hycc_diagnostic",
  "hycc_hir",
- "hycc_scope",
  "hycc_span",
  "hycc_symbol",
  "hycc_ty",
@@ -127,19 +126,9 @@ dependencies = [
  "hycc_collection",
  "hycc_diagnostic",
  "hycc_hir",
- "hycc_scope",
  "hycc_span",
  "hycc_symbol",
  "hycc_ty",
- "hycc_util",
-]
-
-[[package]]
-name = "hycc_scope"
-version = "0.1.0"
-dependencies = [
- "hycc_hir",
- "hycc_symbol",
  "hycc_util",
 ]
 

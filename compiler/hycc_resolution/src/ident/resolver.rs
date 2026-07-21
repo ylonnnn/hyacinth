@@ -4,18 +4,25 @@ use hycc_collection::{
 };
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
-    def::{DefId, DefSpace, Definition},
-    item::HirPetal,
+    def::{DefAccessibility, DefId, DefSpace, Definition},
+    item::{HirItem, HirItemKind, HirPetal},
+    scope::ScopeId,
 };
-use hycc_scope::ScopeId;
+use hycc_span::Span;
 use hycc_symbol::Symbol;
+use hycc_util::bug;
 
-use crate::diag::{ResolverDiagCtx, ResolverDiagDataCtx};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagDataCtx, ResolverDiagErrorKind},
+    // ident::ctx::{Petal, ResolutionCtx},
+};
 
 #[derive(Debug)]
-pub struct Resolver<'c> {
+pub struct Resolver<'c, 'i> {
     pub dctx: ResolverDiagCtx,
-    pub collector: &'c mut Collector,
+    pub collector: &'c mut Collector<'i>,
+    // pub(crate) ctx: ResolutionCtx,
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
@@ -23,24 +30,32 @@ pub struct Resolver<'c> {
     pub(crate) curr_scope: Option<ScopeId>,
 }
 
-impl<'c> Resolver<'c> {
-    pub fn new(collector: &'c mut Collector) -> Self {
+impl<'c, 'i> Resolver<'c, 'i> {
+    pub fn new(collector: &'c mut Collector<'i>) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(),
             collector,
-
+            // ctx: ResolutionCtx::new(),
             expected_space: None,
             curr_scope: None,
         }
     }
 
-    pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
-        // dbg!(&self.collector.scope_ctx);
-        self.collector.scope_ctx.get_def_until_root(space, name)
+    pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<(DefId, ScopeId)> {
+        let scope_id = self
+            .collector
+            .petal_ctx
+            .top()
+            .scope_id(&self.collector.scope_ctx);
+
+        self.collector
+            .scope_ctx
+            .get_def_until_scope(space, name, scope_id)
+            .map(|def_id| (def_id, scope_id))
     }
 
     pub fn get_def(&self, space: Option<DefSpace>, name: Symbol) -> Option<&Definition> {
-        let def_id = self.get_def_id(space, name)?;
+        let (def_id, _) = self.get_def_id(space, name)?;
         Some(self.collector.definitions.get(def_id))
     }
 
@@ -72,6 +87,23 @@ impl<'c> Resolver<'c> {
         data
     }
 
+    // pub fn check_accessibility(
+    //     &mut self,
+    //     def_id: DefId,
+    //     symbol: Symbol,
+    //     span: Span,
+    // ) -> ResolveResult {
+    //     let definition = self.collector.definitions.get(def_id);
+    //     match definition.accessibility {
+    //         DefAccessibility::Pub(_) => Ok(()),
+
+    //         DefAccessibility::Priv => Err(Some(ResolverDiag::error(
+    //             span,
+    //             ResolverDiagErrorKind::InaccessibleSymbol(symbol),
+    //         )))?,
+    //     }
+    // }
+
     pub fn emit_dctx(
         &mut self,
         target: &mut DiagnosticCtx,
@@ -82,8 +114,16 @@ impl<'c> Resolver<'c> {
         self.dctx.emit(target, resolver_data_ctx);
     }
 
-    pub fn resolve(&mut self, tree: &HirPetal) {
+    pub fn resolve(&mut self, tree: &HirItem) {
         self.collector.level = CollectionLevel::Local;
+
+        let Some(scope_id) = self.collector.scope_ctx.get_id_by_hir(tree.id) else {
+            bug!("expected a scope attached to the tree")
+        };
+
+        let HirItemKind::Petal(tree) = &tree.kind else {
+            bug!("invalid resolution! resolution must start at the tree (a petal)")
+        };
 
         for item in &tree.items {
             if let Err(Some(diag)) = self.resolve_item(&item) {

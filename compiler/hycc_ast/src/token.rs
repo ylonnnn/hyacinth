@@ -123,6 +123,11 @@ pub enum TokenIdentKind {
 
     // Keywords
     Pub,
+
+    // This,
+    Super,
+    Spathe,
+
     As,
 
     Refer,
@@ -220,97 +225,115 @@ pub enum TokenKind {
     Eos,
 }
 
-impl Display for TokenKind {
+impl Display for TokenIdentKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
             match self {
-                Self::Int { .. } => "int",
-                Self::Float { .. } => "float",
-                Self::Bool => "bool",
-                Self::Char { .. } => "char",
-                Self::String { .. } => "string",
-                Self::Ident(kind) => match kind {
-                    TokenIdentKind::Pub => "pub",
-                    TokenIdentKind::As => "as",
+                TokenIdentKind::Pub => "pub",
 
-                    TokenIdentKind::Refer => "refer",
-                    TokenIdentKind::Petal => "petal",
+                TokenIdentKind::Super => "super",
+                TokenIdentKind::Spathe => "spathe",
 
-                    TokenIdentKind::Struct => "struct",
+                TokenIdentKind::As => "as",
 
-                    TokenIdentKind::Fn => "fn",
-                    TokenIdentKind::Let => "let",
+                TokenIdentKind::Refer => "refer",
+                TokenIdentKind::Petal => "petal",
 
-                    TokenIdentKind::Mut => "mut",
+                TokenIdentKind::Struct => "struct",
 
-                    TokenIdentKind::If => "if",
-                    TokenIdentKind::Else => "else",
+                TokenIdentKind::Fn => "fn",
+                TokenIdentKind::Let => "let",
 
-                    TokenIdentKind::For => "for",
-                    TokenIdentKind::While => "while",
+                TokenIdentKind::Mut => "mut",
 
-                    TokenIdentKind::Ret => "ret",
-                    TokenIdentKind::Pass => "pass",
+                TokenIdentKind::If => "if",
+                TokenIdentKind::Else => "else",
 
-                    TokenIdentKind::Normal => "ident",
-                },
+                TokenIdentKind::For => "for",
+                TokenIdentKind::While => "while",
 
-                Self::MacroIdent => "macro ident",
+                TokenIdentKind::Ret => "ret",
+                TokenIdentKind::Pass => "pass",
 
-                Self::Plus => "+",
-                Self::PlusEq => "+=",
-                Self::Minus => "-",
-                Self::MinusEq => "-=",
-                Self::Star => "*",
-                Self::StarEq => "*=",
-                Self::Slash => "/",
-                Self::SlashEq => "/=",
-                Self::Percent => "%",
-                Self::PercentEq => "%=",
-                Self::Caret => "^",
-                Self::CaretCaret => "^^",
-                Self::Eq => "=",
-                Self::EqEq => "==",
-                Self::BangEq => "!=",
-                Self::Less => "<",
-                Self::LessEq => "<=",
-                Self::LessLess => "<<",
-                Self::LessMinus => "<-",
-                Self::Greater => ">",
-                Self::GreaterEq => ">=",
-                Self::GreaterGreater => ">>",
-                Self::MinusGreater => "->",
-                Self::Ampersand => "&",
-                Self::AmpersandAmpersand => "&&",
-                Self::Pipe => "|",
-                Self::PipePipe => "||",
-                Self::Tilde => "~",
-                Self::Bang => "!",
-
-                // Delimiters
-                Self::Comma => ",",
-                Self::SemiColon => ";",
-                Self::Colon => ":",
-                Self::ColonColon => "::",
-                Self::Dot => ".",
-                Self::LeftParen => "(",
-                Self::RightParen => ")",
-                Self::LeftBrace => "{",
-                Self::RightBrace => "}",
-                Self::LeftBracket => "[",
-                Self::RightBracket => "]",
-
-                // Miscellaneous
-                Self::LnFeed => "\\n",
-                Self::DocComment => "// doc-comment",
-
-                Self::Invalid => "Invalid",
-                Self::Eof => "EOF",
-                Self::Eos => "EOS",
+                TokenIdentKind::Normal => "ident",
             }
         )
+    }
+}
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Self::Ident(kind) = &self {
+            write!(f, "{}", kind)
+        } else {
+            write!(
+                f,
+                "{}",
+                match self {
+                    Self::Int { .. } => "int",
+                    Self::Float { .. } => "float",
+                    Self::Bool => "bool",
+                    Self::Char { .. } => "char",
+                    Self::String { .. } => "string",
+
+                    Self::MacroIdent => "macro ident",
+                    Self::Ident(..) => unreachable!(),
+
+                    Self::Plus => "+",
+                    Self::PlusEq => "+=",
+                    Self::Minus => "-",
+                    Self::MinusEq => "-=",
+                    Self::Star => "*",
+                    Self::StarEq => "*=",
+                    Self::Slash => "/",
+                    Self::SlashEq => "/=",
+                    Self::Percent => "%",
+                    Self::PercentEq => "%=",
+                    Self::Caret => "^",
+                    Self::CaretCaret => "^^",
+                    Self::Eq => "=",
+                    Self::EqEq => "==",
+                    Self::BangEq => "!=",
+                    Self::Less => "<",
+                    Self::LessEq => "<=",
+                    Self::LessLess => "<<",
+                    Self::LessMinus => "<-",
+                    Self::Greater => ">",
+                    Self::GreaterEq => ">=",
+                    Self::GreaterGreater => ">>",
+                    Self::MinusGreater => "->",
+                    Self::Ampersand => "&",
+                    Self::AmpersandAmpersand => "&&",
+                    Self::Pipe => "|",
+                    Self::PipePipe => "||",
+                    Self::Tilde => "~",
+                    Self::Bang => "!",
+
+                    // Delimiters
+                    Self::Comma => ",",
+                    Self::SemiColon => ";",
+                    Self::Colon => ":",
+                    Self::ColonColon => "::",
+                    Self::Dot => ".",
+                    Self::LeftParen => "(",
+                    Self::RightParen => ")",
+                    Self::LeftBrace => "{",
+                    Self::RightBrace => "}",
+                    Self::LeftBracket => "[",
+                    Self::RightBracket => "]",
+
+                    // Miscellaneous
+                    Self::LnFeed => "\\n",
+                    Self::DocComment => "// doc-comment",
+
+                    Self::Invalid => "Invalid",
+                    Self::Eof => "EOF",
+                    Self::Eos => "EOS",
+                }
+            )
+        }
     }
 }
 

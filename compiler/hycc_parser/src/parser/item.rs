@@ -1,10 +1,11 @@
 use hycc_ast::{
     Expr, Item, ItemKind, Mutability, Ty,
     item::{
-        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, Refer, ReferTarget,
-        ReferTargetKind, Struct, StructField, StructFieldAccessibility, StructFieldList, VarDecl,
+        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, PubAccessibilityKind, Refer,
+        ReferTarget, ReferTargetKind, Struct, StructField, StructFieldAccessibility,
+        StructFieldList, VarDecl,
     },
-    token::{TokenGraph, TokenIdentKind, TokenKind},
+    token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
 use hycc_diagnostic::DiagnosticContext;
@@ -94,8 +95,37 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_item_with_accessibility(&mut self) -> ParseResult<Item> {
+        let mut pub_kind = PubAccessibilityKind::All;
+        if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
+            let TokenGraph::Collection { data, .. } = tg else {
+                unreachable!()
+            };
+
+            let n = data.len();
+            pub_kind = self.use_stream(
+                TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+                |s| -> ParseResult<PubAccessibilityKind> {
+                    let Some(tok) = s.peek_nonlf_token() else {
+                        Err(None)?
+                    };
+
+                    match &tok.kind {
+                        TokenKind::Ident(TokenIdentKind::Super) => Ok(PubAccessibilityKind::Super),
+                        TokenKind::Ident(TokenIdentKind::Spathe) => {
+                            Ok(PubAccessibilityKind::Spathe)
+                        }
+
+                        _ => Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                            tok.clone(),
+                            "public access modifier kind",
+                        )))?,
+                    }
+                },
+            )?;
+        }
+
         let mut item = self.parse_item_with_recovery()?;
-        item.accessibility = ItemAccessibility::Pub;
+        item.accessibility = ItemAccessibility::Pub(pub_kind);
 
         Ok(item)
     }

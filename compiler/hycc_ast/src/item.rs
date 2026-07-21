@@ -28,8 +28,16 @@ impl ItemKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PubAccessibilityKind {
+    All,
+    Spathe,
+    Super,
+    This,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemAccessibility {
-    Pub,
+    Pub(PubAccessibilityKind),
     Priv,
 }
 

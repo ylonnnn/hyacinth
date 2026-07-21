@@ -35,6 +35,8 @@ impl<'s> Lexer<'s> {
                 for ident in [
                     //
                     TokenIdentKind::Pub,
+                    TokenIdentKind::Super,
+                    TokenIdentKind::Spathe,
                     TokenIdentKind::As,
                     TokenIdentKind::Refer,
                     TokenIdentKind::Petal,

@@ -1,6 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefId, DefSpace},
+    def::DefSpace,
     item::{HirItem, HirItemKind, HirPetalKind, HirReferTarget, HirReferTargetKind},
 };
 use hycc_util::bug;
@@ -11,7 +11,7 @@ use crate::{
     ident::resolver::Resolver,
 };
 
-impl<'c> Resolver<'c> {
+impl<'c, 'i> Resolver<'c, 'i> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
@@ -43,7 +43,8 @@ impl<'c> Resolver<'c> {
         match &target.kind {
             HirReferTargetKind::Child(alias) => {
                 let sym = target.symbol.ident.ident;
-                let Some(def_id) = self.collector.scope_ctx.get_def_current_only(None, sym) else {
+                let Some((def_id, _)) = self.collector.scope_ctx.get_def_current_only(None, sym)
+                else {
                     Err(Some(ResolverDiag::error(
                         target.symbol.span,
                         ResolverDiagErrorKind::UnrecognizedSymbol(sym, None),
@@ -60,8 +61,10 @@ impl<'c> Resolver<'c> {
             }
 
             HirReferTargetKind::Parent(children) => {
-                let def_id =
-                    self.expect_space(DefSpace::Type, |s| s.resolve_ident(&target.symbol))?;
+                let def_id = self.expect_space(DefSpace::Type, |s| {
+                    s.resolve_ident(&target.symbol, None /* TODO */)
+                })?;
+
                 let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
                 self.collector.scope_ctx.push_id(scope_id);
 
@@ -81,9 +84,9 @@ impl<'c> Resolver<'c> {
             unreachable!()
         };
 
-        if matches!(petal.kind, HirPetalKind::Root) {
-            panic!("root petals cannot be collected!")
-        }
+        // if matches!(petal.kind, HirPetalKind::Root) {
+        //     bug!("root petals are not supposed to be collected!")
+        // }
 
         if let Err(Some(diag)) = self.collector.collect_petal(&petal_item) {
             self.collector.dctx.add(diag);
@@ -94,18 +97,24 @@ impl<'c> Resolver<'c> {
             _ => unreachable!(),
         };
 
-        let mut scopes = 0;
+        let (mut scopes, mut petals) = (0, 0);
         for segment in &path.segments {
-            let Some(def_id) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident) else {
+            let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident)
+            else {
                 bug!("no def_id for ident: {:?}", segment.ident.ident)
             };
 
-            let Some(scope_id) = self.collector.scope_ctx.get_id_from_def(def_id) else {
-                bug!("no scope for petal def: {:?}", def_id)
-            };
+            self.collector
+                .petal_ctx
+                .push(match self.collector.petal_ctx.get_id_by_def(def_id) {
+                    Some(petal_id) => petal_id,
+                    _ => bug!("no petal attached to def id {def_id:?}"),
+                });
 
+            let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
             self.collector.scope_ctx.push_id(scope_id);
-            scopes += 1;
+
+            (scopes += 1, petals += 1);
         }
 
         for item in &petal.items {
@@ -114,9 +123,18 @@ impl<'c> Resolver<'c> {
             }
         }
 
-        while scopes > 0 {
-            self.collector.scope_ctx.pop();
-            scopes -= 1;
+        loop {
+            if scopes > 0 {
+                (self.collector.scope_ctx.pop(), scopes -= 1);
+                continue;
+            }
+
+            if petals > 0 {
+                (self.collector.petal_ctx.pop(), petals -= 1);
+                continue;
+            }
+
+            break;
         }
 
         Ok(())
@@ -149,7 +167,7 @@ impl<'c> Resolver<'c> {
             self.collector.dctx.add(diag);
         }
 
-        let Some(def_id) = self.get_def_id(Some(DefSpace::Value), func.ident.ident) else {
+        let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Value), func.ident.ident) else {
             bug!("no def_id for ident: {:?}", func.ident.ident)
         };
 

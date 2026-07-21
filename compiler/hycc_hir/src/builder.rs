@@ -21,7 +21,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_util::{bug, digit_value, ternary};
 
 use crate::{
-    HirNode, HirTable,
+    HirId, HirNode, HirTable,
     block::HirBlock,
     expr::{
         BinaryOp, HirAnonFn, HirAnonFnParam, HirAnonFnParamList, HirArrayExpr, HirCallArguments,
@@ -74,7 +74,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         self.intern_str(token.view(&source.data))
     }
 
-    pub fn lower(&mut self, tree: Petal) -> &'h HirPetal<'h> {
+    pub fn lower(&mut self, tree: Petal) -> &'h HirItem<'h> {
         if let HirNode::Item(item) = self.hir_table.add(HirNode::Item(HirItem::new(
             HirItemKind::Petal(Box::new(HirPetal {
                 kind: HirPetalKind::Root,
@@ -87,11 +87,11 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             })),
             tree.span,
         ))) {
-            if let HirItemKind::Petal(petal) = &item.kind {
-                &petal
-            } else {
+            ternary!(
+                matches!(&item.kind, HirItemKind::Petal(_)),
+                item,
                 unreachable!()
-            }
+            )
         } else {
             unreachable!()
         }

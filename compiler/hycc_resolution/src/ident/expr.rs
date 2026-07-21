@@ -2,12 +2,12 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefAccessibility, DefKind, DefSpace, Definition},
     expr::{HirExpr, HirExprKind, HirUnary},
+    scope::Scope,
 };
-use hycc_scope::Scope;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'c> Resolver<'c> {
+impl<'c, 'i> Resolver<'c, 'i> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
             HirExprKind::Path(path) => s.resolve_path(&path),
@@ -70,6 +70,7 @@ impl<'c> Resolver<'c> {
                         if let Err(Some(diag)) = s.collector.define(Definition::new(
                             param.ident.ident,
                             DefKind::FnParam,
+                            Some(s.collector.petal_ctx.top_id()),
                             param.id,
                             param.span,
                             DefAccessibility::Priv,

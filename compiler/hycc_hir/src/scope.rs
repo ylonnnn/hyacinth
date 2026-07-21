@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hycc_hir::{
+use crate::{
     HirId,
     def::{DefId, DefSpace},
 };
@@ -49,7 +49,7 @@ impl ScopeId {
 #[derive(Debug, Clone)]
 pub struct ScopeCtx {
     table: ScopeTable,
-    stack: Vec<ScopeId>,
+    pub stack: Vec<ScopeId>, // TEMP
     node_table: HashMap<HirId, ScopeId>,
     def_table: HashMap<DefId, ScopeId>,
 }
@@ -65,6 +65,14 @@ impl ScopeCtx {
 
         inst.stack.push(inst.table.insert(Scope::new()));
         inst
+    }
+
+    pub fn scopes(&self) -> &[Scope] {
+        &self.table.data
+    }
+
+    pub fn root_id(&self) -> ScopeId {
+        ScopeId(0)
     }
 
     pub fn attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
@@ -227,34 +235,56 @@ impl ScopeCtx {
         self.pop();
     }
 
-    pub fn get_def(
+    pub fn get_def<F>(
         &self,
         space: Option<DefSpace>,
         name: Symbol,
-        mut depth: usize,
-    ) -> Option<DefId> {
+        mut stop_cond: F,
+    ) -> Option<(DefId, ScopeId)>
+    where
+        F: FnMut(&Self, ScopeId, usize) -> bool,
+    {
+        let mut depth = 0;
         for scope_id in self.stack.iter().rev() {
-            if depth == 0 {
-                break;
-            }
-
             let def_id = self.table.get(*scope_id).get(space, name);
             if def_id.is_some() {
-                return def_id;
+                return def_id.map(|def_id| (def_id, *scope_id));
             }
 
-            depth -= 1;
+            depth += 1;
+
+            if stop_cond(self, *scope_id, depth) {
+                break;
+            }
         }
 
         None
     }
 
-    pub fn get_def_current_only(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
-        self.get_def(space, name, 1)
+    pub fn get_def_current_only(
+        &self,
+        space: Option<DefSpace>,
+        name: Symbol,
+    ) -> Option<(DefId, ScopeId)> {
+        self.get_def(space, name, |_, _, _| true)
     }
 
-    pub fn get_def_until_root(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
-        self.get_def(space, name, usize::MAX)
+    pub fn get_def_until_scope(
+        &self,
+        space: Option<DefSpace>,
+        name: Symbol,
+        scope_id: ScopeId,
+    ) -> Option<DefId> {
+        self.get_def(space, name, |_, s_id, _| s_id == scope_id)
+            .map(|(def_id, _)| def_id)
+    }
+
+    pub fn get_def_until_root(
+        &self,
+        space: Option<DefSpace>,
+        name: Symbol,
+    ) -> Option<(DefId, ScopeId)> {
+        self.get_def(space, name, |_, _, _| false)
     }
 }
 

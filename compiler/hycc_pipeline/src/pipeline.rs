@@ -119,9 +119,6 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         CollectorDiagDataCtx::new(&collector.interner, &hir_table, &definitions, &scope_ctx),
     );
 
-    // TODO: TEMP
-    fs::write("symbols.txt", collector.interner.get_all().join("\n")).unwrap();
-
     if session.dctx.error_occurred() {
         return;
     }

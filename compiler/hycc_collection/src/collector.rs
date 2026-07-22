@@ -1,8 +1,9 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
+    HirId,
     def::{
-        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefPubAccessibilityKind,
-        Definition, DefinitionTable,
+        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefKind,
+        DefPubAccessibilityKind, Definition, DefinitionTable,
     },
     item::{HirItem, HirItemKind},
     petal::{Petal, PetalCtx},
@@ -56,11 +57,10 @@ impl<'i> Collector<'i> {
             .add_petal(Petal::Root(inst.scope_ctx.root_id()));
         inst.petal_ctx.push(root_petal_id);
 
-        inst.init_builtin_ty();
         inst
     }
 
-    pub fn init_builtin_ty(&mut self) {
+    pub fn init_builtin(&mut self) {
         // Integers
         for signed in [true, false] {
             let prefix = ternary!(signed, "i", "u");
@@ -140,6 +140,47 @@ impl<'i> Collector<'i> {
             DefAccessibility::Pub(DefPubAccessibilityKind::All),
         )) {
             self.dctx.add(diag);
+        }
+
+        // Petal-based Definitions
+        {
+            // spathe
+            let root_id = self.petal_ctx.root_petal_id();
+            let root_scope_id = self.petal_ctx.get(root_id).scope_id(&self.scope_ctx);
+
+            let spathe_def = Definition::new(
+                self.interner.intern("spathe"),
+                DefKind::Petal,
+                None,
+                HirId::Invalid,
+                Span::default(),
+                DefAccessibility::Pub(DefPubAccessibilityKind::This),
+            );
+            let spathe_def_id = self.define(spathe_def).unwrap();
+
+            self.scope_ctx
+                .attach_id_to_def(spathe_def_id, root_scope_id);
+            self.petal_ctx.attach_petal_id(spathe_def_id, root_id);
+        }
+
+        {
+            // super
+            if let Some(super_id) = self.petal_ctx.from_top_id(1) {
+                let super_scope_id = self.petal_ctx.get(super_id).scope_id(&self.scope_ctx);
+                let super_def = Definition::new(
+                    self.interner.intern("super"),
+                    DefKind::Petal,
+                    None,
+                    HirId::Invalid,
+                    Span::default(),
+                    DefAccessibility::Pub(DefPubAccessibilityKind::This),
+                );
+                let super_def_id = self.define(super_def).unwrap();
+
+                self.scope_ctx
+                    .attach_id_to_def(super_def_id, super_scope_id);
+                self.petal_ctx.attach_petal_id(super_def_id, super_id);
+            };
         }
     }
 

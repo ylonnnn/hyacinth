@@ -6,7 +6,6 @@ use hycc_hir::{
         StructFieldDef,
     },
     item::{HirItem, HirItemKind, HirPetalKind},
-    petal::PetalId,
     scope::Scope,
 };
 use hycc_span::Span;
@@ -16,96 +15,62 @@ use hycc_util::{bug, ternary};
 use crate::collector::{CollectResult, CollectionLevel, Collector};
 
 impl<'i> Collector<'i> {
-    pub fn define_spathe_at_current_petal(&mut self) {
-        let root_id = self.petal_ctx.root_petal_id();
-        let root_scope_id = self.petal_ctx.get(root_id).scope_id(&self.scope_ctx);
+    pub fn define_spathe_at_current_petal(&mut self) {}
 
-        let spathe_def = Definition::new(
-            self.interner.intern("spathe"),
-            DefKind::Petal,
-            None,
-            HirId::Invalid,
-            Span::default(),
-            DefAccessibility::Pub(DefPubAccessibilityKind::This),
-        );
-        let spathe_def_id = self.define(spathe_def).unwrap();
-
-        self.scope_ctx
-            .attach_id_to_def(spathe_def_id, root_scope_id);
-        self.petal_ctx.attach_petal_id(spathe_def_id, root_id);
-    }
-
-    pub fn define_super_at_current_petal(&mut self) {
-        let Some(super_id) = self.petal_ctx.from_top_id(1) else {
-            return;
-        };
-
-        let super_scope_id = self.petal_ctx.get(super_id).scope_id(&self.scope_ctx);
-
-        let super_def = Definition::new(
-            self.interner.intern("super"),
-            DefKind::Petal,
-            None,
-            HirId::Invalid,
-            Span::default(),
-            DefAccessibility::Pub(DefPubAccessibilityKind::This),
-        );
-        let super_def_id = self.define(super_def).unwrap();
-
-        self.scope_ctx
-            .attach_id_to_def(super_def_id, super_scope_id);
-        self.petal_ctx.attach_petal_id(super_def_id, super_id);
-    }
+    pub fn define_super_at_current_petal(&mut self) {}
 
     pub fn push_petal_item(&mut self, petal_item: &HirItem) -> CollectResult<usize> {
         let HirItemKind::Petal(petal) = &petal_item.kind else {
             unreachable!();
         };
 
-        let path = match &petal.kind {
-            HirPetalKind::File(path) | HirPetalKind::Inline(path) => Some(path),
-            _ => None,
-        };
-
         let mut pushed: usize = 0;
-        if let Some(path) = path {
-            for segment in &path.segments {
-                let (def_id, defined) =
-                    if let Some(def_id) = self.definitions.get_def_id(segment.id) {
-                        Ok((*def_id, true))
-                    } else {
-                        let def = Definition::new(
-                            segment.ident.ident,
-                            DefKind::Petal,
-                            Some(self.petal_ctx.top_id()),
-                            segment.id,
-                            petal_item.span,
-                            petal_item.accessibility,
-                        );
+        match &petal.kind {
+            HirPetalKind::File(path) | HirPetalKind::Inline(path) => {
+                for segment in &path.segments {
+                    let (def_id, defined) =
+                        if let Some(def_id) = self.definitions.get_def_id(segment.id) {
+                            Ok((*def_id, true))
+                        } else {
+                            let def = Definition::new(
+                                segment.ident.ident,
+                                DefKind::Petal,
+                                Some(self.petal_ctx.top_id()),
+                                segment.id,
+                                petal_item.span,
+                                petal_item.accessibility,
+                            );
 
-                        ternary!(
-                            petal.is_inline(),
-                            self.try_define(def),
-                            self.define(def).map(|def_id| (def_id, false))
-                        )
-                    }?;
+                            ternary!(
+                                petal.is_inline(),
+                                self.try_define(def),
+                                self.define(def).map(|def_id| (def_id, false))
+                            )
+                        }?;
 
-                self.definitions.define_id_hir(segment.id, def_id);
+                    self.definitions.define_id_hir(segment.id, def_id);
 
-                let petal_id = self.petal_ctx.try_create_child_petal(def_id);
-                self.petal_ctx.push(petal_id);
+                    let petal_id = self.petal_ctx.try_create_child_petal(def_id);
+                    self.petal_ctx.push(petal_id);
 
-                let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-                self.scope_ctx.push_id(scope_id);
+                    let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+                    self.scope_ctx.push_id(scope_id);
 
-                pushed += 1;
+                    pushed += 1;
 
-                if !defined {
-                    self.define_spathe_at_current_petal();
-                    self.define_super_at_current_petal();
+                    if !defined {
+                        self.init_builtin();
+                        // self.define_spathe_at_current_petal();
+                        // self.define_super_at_current_petal();
+                    }
                 }
             }
-        }
+            _ => {
+                self.init_builtin();
+                // self.define_spathe_at_current_petal();
+                // self.define_super_at_current_petal();
+            }
+        };
 
         Ok(pushed)
     }

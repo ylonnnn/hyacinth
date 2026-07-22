@@ -117,9 +117,9 @@ impl<'c, 'i> Resolver<'c, 'i> {
     pub fn resolve(&mut self, tree: &HirItem) {
         self.collector.level = CollectionLevel::Local;
 
-        let Some(scope_id) = self.collector.scope_ctx.get_id_by_hir(tree.id) else {
-            bug!("expected a scope attached to the tree")
-        };
+        // let Some(scope_id) = self.collector.scope_ctx.get_id_by_hir(tree.id) else {
+        //     bug!("expected a scope attached to the tree")
+        // };
 
         let HirItemKind::Petal(tree) = &tree.kind else {
             bug!("invalid resolution! resolution must start at the tree (a petal)")

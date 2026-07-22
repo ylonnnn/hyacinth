@@ -1,9 +1,10 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::DefSpace,
+    def::{DefKind, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirPetalKind, HirReferTarget, HirReferTargetKind},
+    scope::Scope,
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::{
     ResolveResult,
@@ -12,6 +13,116 @@ use crate::{
 };
 
 impl<'c, 'i> Resolver<'c, 'i> {
+    pub fn enter_petal_scope<T>(
+        &mut self,
+        petal_item: &HirItem,
+        mut f: impl FnMut(&mut Self) -> T,
+    ) -> Option<T> {
+        let pushed = self
+            .collector
+            .push_petal_item(&petal_item)
+            .map_err(|err| {
+                if let Some(diag) = err {
+                    self.collector.dctx.add(diag);
+                }
+
+                Option::<T>::None
+            })
+            .ok()?;
+
+        let result = f(self);
+        self.collector.pop_petals(pushed);
+
+        Some(result)
+
+        //     let HirItemKind::Petal(petal) = &petal_item.kind else {
+        //         unreachable!()
+        //     };
+
+        //     // if let Err(Some(diag)) = self.collector.collect_petal(&petal_item) {
+        //     //     self.collector.dctx.add(diag);
+        //     // }
+
+        //     let path = match &petal.kind {
+        //         HirPetalKind::File(path) | HirPetalKind::Inline(path) => path,
+        //         _ => unreachable!(),
+        //     };
+
+        //     let mut pushed: usize = 0;
+        //     for segment in &path.segments {
+        //         let result = if let Some(def_id) = self.collector.definitions.get_def_id(segment.id) {
+        //             Ok((*def_id, true))
+        //         } else {
+        //             let def = Definition::new(
+        //                 segment.ident.ident,
+        //                 DefKind::Petal,
+        //                 Some(self.collector.petal_ctx.top_id()),
+        //                 segment.id,
+        //                 petal_item.span,
+        //                 petal_item.accessibility,
+        //             );
+
+        //             ternary!(
+        //                 petal.is_inline(),
+        //                 self.collector.try_define(def),
+        //                 self.collector.define(def).map(|def_id| (def_id, false))
+        //             )
+        //         };
+
+        //         let (def_id, defined) = match result {
+        //             Ok(res) => res,
+        //             Err(diag) => {
+        //                 diag.map(|diag| self.collector.dctx.add(diag));
+        //                 break;
+        //             }
+        //         };
+
+        //         self.collector.definitions.define_id_hir(segment.id, def_id);
+
+        //         let petal_id = self.collector.petal_ctx.try_create_child_petal(def_id);
+        //         self.collector.petal_ctx.push(petal_id);
+
+        //         let scope_id = self
+        //             .collector
+        //             .scope_ctx
+        //             .try_attach_to_def(def_id, Scope::new());
+        //         self.collector.scope_ctx.push_id(scope_id);
+
+        //         pushed += 1;
+
+        //         if !defined {
+        //             self.collector.define_spathe_at_current_petal();
+        //             self.collector.define_super_at_current_petal();
+        //         }
+
+        //         // let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident)
+        //         // else {
+        //         //     bug!("no def_id for ident: {:?}", segment.ident.ident)
+        //         // };
+
+        //         // self.collector
+        //         //     .petal_ctx
+        //         //     .push(match self.collector.petal_ctx.get_id_by_def(def_id) {
+        //         //         Some(petal_id) => petal_id,
+        //         //         _ => bug!("no petal attached to def id {def_id:?}"),
+        //         //     });
+
+        //         // let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
+        //         // self.collector.scope_ctx.push_id(scope_id);
+
+        //         // pushed += 1;
+        //     }
+
+        //     let result = f(self);
+
+        //     for _ in 0..pushed {
+        //         self.collector.scope_ctx.pop();
+        //         self.collector.petal_ctx.pop();
+        //     }
+
+        //     Ok(result)
+    }
+
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
@@ -80,62 +191,17 @@ impl<'c, 'i> Resolver<'c, 'i> {
     }
 
     pub(crate) fn resolve_petal(&mut self, petal_item: &HirItem) -> ResolveResult {
-        let HirItemKind::Petal(petal) = &petal_item.kind else {
-            unreachable!()
-        };
-
-        // if matches!(petal.kind, HirPetalKind::Root) {
-        //     bug!("root petals are not supposed to be collected!")
-        // }
-
-        if let Err(Some(diag)) = self.collector.collect_petal(&petal_item) {
-            self.collector.dctx.add(diag);
-        }
-
-        let path = match &petal.kind {
-            HirPetalKind::File(path) | HirPetalKind::Inline(path) => path,
-            _ => unreachable!(),
-        };
-
-        let (mut scopes, mut petals) = (0, 0);
-        for segment in &path.segments {
-            let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident)
-            else {
-                bug!("no def_id for ident: {:?}", segment.ident.ident)
+        self.enter_petal_scope(&petal_item, |s| {
+            let HirItemKind::Petal(petal) = &petal_item.kind else {
+                unreachable!()
             };
 
-            self.collector
-                .petal_ctx
-                .push(match self.collector.petal_ctx.get_id_by_def(def_id) {
-                    Some(petal_id) => petal_id,
-                    _ => bug!("no petal attached to def id {def_id:?}"),
-                });
-
-            let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
-            self.collector.scope_ctx.push_id(scope_id);
-
-            (scopes += 1, petals += 1);
-        }
-
-        for item in &petal.items {
-            if let Err(Some(diag)) = self.resolve_item(&item) {
-                self.dctx.add(diag);
+            for item in &petal.items {
+                if let Err(Some(diag)) = s.resolve_item(&item) {
+                    s.dctx.add(diag);
+                }
             }
-        }
-
-        loop {
-            if scopes > 0 {
-                (self.collector.scope_ctx.pop(), scopes -= 1);
-                continue;
-            }
-
-            if petals > 0 {
-                (self.collector.petal_ctx.pop(), petals -= 1);
-                continue;
-            }
-
-            break;
-        }
+        });
 
         Ok(())
     }

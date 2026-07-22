@@ -1,5 +1,3 @@
-use std::fs;
-
 use hycc_ast::{
     ItemKind,
     item::{Petal, PetalKind},
@@ -111,7 +109,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let hir = hir_builder.lower(tree);
 
     let mut collector = Collector::new(&mut session.interner);
-    collector.collect_top(&hir);
+    collector.collect(&hir);
 
     let (definitions, scope_ctx) = (&collector.definitions, &collector.scope_ctx);
     collector.dctx.emit(

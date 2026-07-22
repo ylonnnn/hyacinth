@@ -163,17 +163,17 @@ impl<'i> Collector<'i> {
         }
     }
 
-    pub fn try_define(&mut self, definition: Definition) -> CollectResult<DefId> {
+    pub fn try_define(&mut self, definition: Definition) -> CollectResult<(DefId, bool)> {
         let top = self.scope_ctx.top_mut();
 
         let (name, space) = (definition.name, definition.kind.space());
         if let Some(earlier_def) = top.get(Some(space), name) {
-            Ok(earlier_def)
+            Ok((earlier_def, true))
         } else {
             let def_id = self.definitions.define_hir(definition.hir_id, definition);
             top.define(space, name, def_id);
 
-            Ok(def_id)
+            Ok((def_id, false))
         }
     }
 
@@ -203,24 +203,13 @@ impl<'i> Collector<'i> {
         self.level == CollectionLevel::Local && self.node_level == CollectionLevel::Top
     }
 
-    pub fn collect_top(&mut self, tree: &HirItem) {
-        // Top-level collection
-        self.level = CollectionLevel::Top;
-        self.collect_tree(tree);
-    }
-
-    pub fn collect_local(&mut self, tree: &HirItem) {
-        // Local definitions collection
-        self.level = CollectionLevel::Local;
-        self.collect_tree(tree);
-    }
-
-    fn collect_tree(&mut self, tree: &HirItem) {
+    pub fn collect(&mut self, tree: &HirItem) {
         let hir_id = tree.id;
         let HirItemKind::Petal(_) = &tree.kind else {
             bug!("invalid item collection! collection must start at the tree (a petal)")
         };
 
+        self.level = CollectionLevel::Top;
         self.node_level = CollectionLevel::Top;
 
         let root_scope_id = self.scope_ctx.root_id();

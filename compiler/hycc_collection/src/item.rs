@@ -16,16 +16,6 @@ use hycc_util::{bug, ternary};
 use crate::collector::{CollectResult, CollectionLevel, Collector};
 
 impl<'i> Collector<'i> {
-    pub fn collect_item(&mut self, item: &HirItem) -> CollectResult {
-        match &item.kind {
-            HirItemKind::Refer(_) => Ok(()),
-            HirItemKind::Petal(_) => self.collect_petal(&item),
-            HirItemKind::Struct(_) => self.collect_struct(&item),
-            HirItemKind::Fn(_) => self.collect_fn(&item),
-            HirItemKind::VarDecl(_) => self.collect_var(&item),
-        }
-    }
-
     pub fn define_spathe_at_current_petal(&mut self) {
         let root_id = self.petal_ctx.root_petal_id();
         let root_scope_id = self.petal_ctx.get(root_id).scope_id(&self.scope_ctx);
@@ -67,7 +57,7 @@ impl<'i> Collector<'i> {
         self.petal_ctx.attach_petal_id(super_def_id, super_id);
     }
 
-    pub fn collect_petal(&mut self, petal_item: &HirItem) -> CollectResult {
+    pub fn push_petal_item(&mut self, petal_item: &HirItem) -> CollectResult<usize> {
         let HirItemKind::Petal(petal) = &petal_item.kind else {
             unreachable!();
         };
@@ -77,19 +67,13 @@ impl<'i> Collector<'i> {
             _ => None,
         };
 
-        let (mut scopes, mut petals) = (0, 0);
-        let expected = self.is_expected_to_be_collected();
-
+        let mut pushed: usize = 0;
         if let Some(path) = path {
             for segment in &path.segments {
-                let def_id = ternary!(
-                    expected,
+                let (def_id, defined) =
                     if let Some(def_id) = self.definitions.get_def_id(segment.id) {
-                        *def_id
+                        Ok((*def_id, true))
                     } else {
-                        return Ok(());
-                    },
-                    {
                         let def = Definition::new(
                             segment.ident.ident,
                             DefKind::Petal,
@@ -99,9 +83,12 @@ impl<'i> Collector<'i> {
                             petal_item.accessibility,
                         );
 
-                        ternary!(petal.is_inline(), self.try_define(def), self.define(def))?
-                    }
-                );
+                        ternary!(
+                            petal.is_inline(),
+                            self.try_define(def),
+                            self.define(def).map(|def_id| (def_id, false))
+                        )
+                    }?;
 
                 self.definitions.define_id_hir(segment.id, def_id);
 
@@ -111,36 +98,59 @@ impl<'i> Collector<'i> {
                 let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
                 self.scope_ctx.push_id(scope_id);
 
-                (scopes += 1, petals += 1);
+                pushed += 1;
 
-                if !expected {
+                if !defined {
                     self.define_spathe_at_current_petal();
                     self.define_super_at_current_petal();
                 }
             }
         }
 
-        for item in &petal.items {
-            if let Err(Some(diag)) = self.collect_item(&item) {
-                self.dctx.add(diag);
-            }
+        Ok(pushed)
+    }
+
+    pub fn pop_petals(&mut self, pushed: usize) {
+        for _ in 0..pushed {
+            self.scope_ctx.pop();
+            self.petal_ctx.pop();
         }
+    }
 
-        loop {
-            if scopes > 0 {
-                (self.scope_ctx.pop(), scopes -= 1);
-                continue;
-            }
+    pub fn enter_petal_scope<T>(
+        &mut self,
+        petal_item: &HirItem,
+        mut f: impl FnMut(&mut Self) -> T,
+    ) -> CollectResult<T> {
+        let pushed = self.push_petal_item(&petal_item)?;
+        let result = f(self);
+        self.pop_petals(pushed);
 
-            if petals > 0 {
-                (self.petal_ctx.pop(), petals -= 1);
-                continue;
-            }
+        Ok(result)
+    }
 
-            break;
+    pub fn collect_item(&mut self, item: &HirItem) -> CollectResult {
+        match &item.kind {
+            HirItemKind::Refer(_) => Ok(()),
+            HirItemKind::Petal(_) => self.collect_petal(&item),
+            HirItemKind::Struct(_) => self.collect_struct(&item),
+            HirItemKind::Fn(_) => self.collect_fn(&item),
+            HirItemKind::VarDecl(_) => self.collect_var(&item),
         }
+    }
 
-        Ok(())
+    pub fn collect_petal(&mut self, petal_item: &HirItem) -> CollectResult {
+        self.enter_petal_scope(&petal_item, |s| {
+            let HirItemKind::Petal(petal) = &petal_item.kind else {
+                unreachable!()
+            };
+
+            for item in &petal.items {
+                if let Err(Some(diag)) = s.collect_item(&item) {
+                    s.dctx.add(diag);
+                }
+            }
+        })
     }
 
     pub fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
@@ -149,7 +159,7 @@ impl<'i> Collector<'i> {
         }
 
         let HirItemKind::Struct(strct) = &struct_item.kind else {
-            bug!("item is ensured to be a struct")
+            unreachable!()
         };
 
         let def_id = self.define(Definition::new(

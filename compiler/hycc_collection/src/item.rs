@@ -1,24 +1,15 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirId,
-    def::{
-        DefAccessibility, DefKind, DefPubAccessibilityKind, Definition, FnDef, StructDef,
-        StructFieldDef,
-    },
+    def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
     item::{HirItem, HirItemKind, HirPetalKind},
     scope::Scope,
 };
-use hycc_span::Span;
 use hycc_ty::ty::Ty;
 use hycc_util::{bug, ternary};
 
 use crate::collector::{CollectResult, CollectionLevel, Collector};
 
 impl<'i> Collector<'i> {
-    pub fn define_spathe_at_current_petal(&mut self) {}
-
-    pub fn define_super_at_current_petal(&mut self) {}
-
     pub fn push_petal_item(&mut self, petal_item: &HirItem) -> CollectResult<usize> {
         let HirItemKind::Petal(petal) = &petal_item.kind else {
             unreachable!();
@@ -60,15 +51,11 @@ impl<'i> Collector<'i> {
 
                     if !defined {
                         self.init_builtin();
-                        // self.define_spathe_at_current_petal();
-                        // self.define_super_at_current_petal();
                     }
                 }
             }
             _ => {
                 self.init_builtin();
-                // self.define_spathe_at_current_petal();
-                // self.define_super_at_current_petal();
             }
         };
 

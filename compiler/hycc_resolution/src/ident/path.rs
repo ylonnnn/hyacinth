@@ -29,13 +29,17 @@ impl<'c, 'i> Resolver<'c, 'i> {
             let is_last = i == n - 1;
             // let (is_first, is_last) = (i == 0, i == n - 1);
 
-            segment_scope.replace(self.expect_space(
+            segment_scope = self.expect_space(
                 ternary!(is_last, space, DefSpace::Type),
-                |s| -> ResolveResult<ScopeId> {
+                |s| -> ResolveResult<Option<ScopeId>> {
                     let def_id = s.resolve_ident(&segment, segment_scope)?;
-                    s.collector.scope_ctx.get_id_from_def(def_id).ok_or(None)
+                    Ok(ternary!(
+                        is_last,
+                        None,
+                        s.collector.scope_ctx.get_id_from_def(def_id)
+                    ))
                 },
-            )?);
+            )?;
 
             if is_last {
                 let def_id = self.collector.definitions.get_def_id(segment.id).cloned();

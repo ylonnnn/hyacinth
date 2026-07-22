@@ -3,7 +3,7 @@ use hycc_hir::{
     HirId,
     def::{
         BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefKind,
-        DefPubAccessibilityKind, Definition, DefinitionTable,
+        DefPubAccessibilityKind, DefSpace, Definition, DefinitionTable,
     },
     item::{HirItem, HirItemKind},
     petal::{Petal, PetalCtx},

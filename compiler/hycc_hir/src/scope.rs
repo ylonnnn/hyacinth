@@ -246,6 +246,8 @@ impl ScopeCtx {
     {
         let mut depth = 0;
         for scope_id in self.stack.iter().rev() {
+            let stop = stop_cond(self, *scope_id, depth);
+
             let def_id = self.table.get(*scope_id).get(space, name);
             if def_id.is_some() {
                 return def_id.map(|def_id| (def_id, *scope_id));
@@ -253,7 +255,7 @@ impl ScopeCtx {
 
             depth += 1;
 
-            if stop_cond(self, *scope_id, depth) {
+            if stop {
                 break;
             }
         }

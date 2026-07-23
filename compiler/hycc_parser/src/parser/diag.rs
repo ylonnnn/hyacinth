@@ -141,6 +141,8 @@ pub enum ParserDiagErrorKind {
         path: PathBuf,
     },
 
+    IllegalLocalNonInlinePetalDeclaration,
+
     InvalidStructFieldCount(u8),
 }
 
@@ -263,12 +265,16 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
 
                     Err::UnrecognizedPetalFile { path } => {
                         format!(
-                            "cannot find corresponding petal file for petal `{}`",
+                            "cannot find corresponding petal file for petal `{}`.",
                             path.to_str().unwrap().replace(
                                 path::MAIN_SEPARATOR_STR,
                                 &config::HYC_PATH_SEP_TOK_KIND.to_string()
                             )
                         )
+                    }
+
+                    Err::IllegalLocalNonInlinePetalDeclaration => {
+                        format!("cannot declare non-inline petals locally within local blocks.")
                     }
 
                     Err::InvalidStructFieldCount(n) => {

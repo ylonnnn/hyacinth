@@ -328,6 +328,13 @@ impl<'s> Parser<'s> {
             }
         }
 
+        if self.level == ParseLevel::Local && matches!(petal.kind, PetalKind::File(..)) {
+            Err(Some(ParserDiag::error(
+                span,
+                ParserDiagErrorKind::IllegalLocalNonInlinePetalDeclaration,
+            )))?;
+        }
+
         self.require_terminator(ParserTerminatorKind::LnFeed)?;
 
         Ok(petal)

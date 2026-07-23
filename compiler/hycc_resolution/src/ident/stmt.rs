@@ -12,7 +12,6 @@ impl<'c, 'i> Resolver<'c, 'i> {
                 Ok(())
             ),
             HirStmtKind::Pass(pass) => {
-                // TODO: resolve block label used in pass
                 ternary!(
                     pass.value.is_some(),
                     self.resolve_expr(&pass.value.unwrap()),

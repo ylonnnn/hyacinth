@@ -1,6 +1,9 @@
 use crate::{ResolveResult, ty::resolver::TyResolver};
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::expr::{HirExpr, HirExprKind, HirUnary};
+use hycc_hir::{
+    expr::{HirExpr, HirExprKind, HirUnary},
+    path::HirIdentArgument,
+};
 use hycc_ty::ty::{InferKind, Ty};
 
 impl<'d> TyResolver<'d> {
@@ -8,7 +11,27 @@ impl<'d> TyResolver<'d> {
         match &expr.kind {
             HirExprKind::Block(block) => self.resolve_block(&block),
 
-            HirExprKind::Path(path) => Ok(()), // TODO: try to resolve expression arguments
+            HirExprKind::Path(path) => {
+                for segment in &path.segments {
+                    let Some(arguments) = &segment.arguments else {
+                        break;
+                    };
+
+                    for argument in &arguments.data {
+                        let result = match &argument {
+                            HirIdentArgument::Ty(ty) => self.resolve_ty(&ty).map(|_| ()),
+                            HirIdentArgument::Expr(expr) => self.resolve_expr(&expr),
+                        };
+
+                        if let Err(Some(diag)) = result {
+                            self.dctx.add(diag);
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
             HirExprKind::RefExpr(reference) => self.resolve_expr(&reference.expr),
 
             HirExprKind::Literal(_) => Ok(()),

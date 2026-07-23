@@ -31,7 +31,6 @@ impl<'s> Parser<'s> {
 
         let ty = match tok.kind {
             TokenKind::LeftParen => {
-                // TODO: allow the parser to diverge from a grouped type, or a tuple
                 Ok(Ty::new(self.parse_paren_enclosed_ty()?))
             }
 

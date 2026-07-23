@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     HirId,
-    def::{DefId, DefSpace},
+    def::{Binding, DefId, DefSpace},
 };
 use hycc_symbol::Symbol;
 use hycc_util::ternary;
@@ -240,7 +240,7 @@ impl ScopeCtx {
         space: Option<DefSpace>,
         name: Symbol,
         mut stop_cond: F,
-    ) -> Option<(DefId, ScopeId)>
+    ) -> Option<(&Binding, ScopeId)>
     where
         F: FnMut(&Self, ScopeId, usize) -> bool,
     {
@@ -248,9 +248,9 @@ impl ScopeCtx {
         for scope_id in self.stack.iter().rev() {
             let stop = stop_cond(self, *scope_id, depth);
 
-            let def_id = self.table.get(*scope_id).get(space, name);
-            if def_id.is_some() {
-                return def_id.map(|def_id| (def_id, *scope_id));
+            let binding = self.table.get(*scope_id).get(space, name);
+            if binding.is_some() {
+                return binding.map(|binding| (binding, *scope_id));
             }
 
             depth += 1;
@@ -267,7 +267,7 @@ impl ScopeCtx {
         &self,
         space: Option<DefSpace>,
         name: Symbol,
-    ) -> Option<(DefId, ScopeId)> {
+    ) -> Option<(&Binding, ScopeId)> {
         self.get_def(space, name, |_, _, _| true)
     }
 
@@ -276,23 +276,23 @@ impl ScopeCtx {
         space: Option<DefSpace>,
         name: Symbol,
         scope_id: ScopeId,
-    ) -> Option<DefId> {
+    ) -> Option<&Binding> {
         self.get_def(space, name, |_, s_id, _| s_id == scope_id)
-            .map(|(def_id, _)| def_id)
+            .map(|(binding, _)| binding)
     }
 
     pub fn get_def_until_root(
         &self,
         space: Option<DefSpace>,
         name: Symbol,
-    ) -> Option<(DefId, ScopeId)> {
+    ) -> Option<(&Binding, ScopeId)> {
         self.get_def(space, name, |_, _, _| false)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Scope {
-    definitions: HashMap<DefSpace, HashMap<Symbol, DefId>>,
+    definitions: HashMap<(DefSpace, Symbol), Binding>,
 }
 
 impl Scope {
@@ -302,38 +302,19 @@ impl Scope {
         }
     }
 
-    pub fn define(&mut self, space: DefSpace, name: Symbol, def_id: DefId) {
-        use std::collections::hash_map::Entry;
-
-        match self.definitions.entry(space) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().insert(name, def_id);
-            }
-
-            Entry::Vacant(entry) => {
-                entry.insert(HashMap::new());
-                self.define(space, name, def_id);
-            }
-        }
+    pub fn define(&mut self, space: DefSpace, name: Symbol, binding: Binding) -> &mut Binding {
+        self.definitions.insert((space, name), binding);
+        self.definitions.get_mut(&(space, name)).unwrap()
     }
 
-    pub fn get(&self, space: Option<DefSpace>, name: Symbol) -> Option<DefId> {
-        if let Some(space) = space {
-            let Some(defs) = self.definitions.get(&space) else {
-                return None;
-            };
-
-            Some(*defs.get(&name)?)
-        } else {
-            for space in [DefSpace::Type, DefSpace::Value] {
-                let Some(def_id) = self.get(Some(space), name) else {
-                    continue;
-                };
-
-                return Some(def_id);
-            }
-
-            None
+    pub fn get(&self, space: Option<DefSpace>, name: Symbol) -> Option<&Binding> {
+        match space {
+            Some(space) => self.definitions.get(&(space, name)),
+            None => [DefSpace::Type, DefSpace::Value]
+                .into_iter()
+                .map(|space| self.definitions.get(&(space, name)))
+                .find(|def| def.is_some())
+                .unwrap(),
         }
     }
 }

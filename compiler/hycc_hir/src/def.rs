@@ -77,6 +77,8 @@ impl DefId {
 pub enum DefKind {
     Builtin(BuiltinKind),
 
+    Refer(Box<DefKind>, DefId),
+
     Petal,
 
     Fn(Box<FnDef>),
@@ -91,6 +93,7 @@ impl DefKind {
     pub fn article(&self) -> &'static str {
         match self {
             Self::Builtin(_)
+            | Self::Refer(..)
             | Self::Petal
             | Self::Fn(_)
             | Self::FnParam
@@ -102,6 +105,9 @@ impl DefKind {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Builtin(_) => "built-in",
+
+            Self::Refer(..) => "reference/alias",
+
             Self::Petal => "petal",
 
             Self::Fn(_) => "function",
@@ -122,6 +128,8 @@ impl DefKind {
 
         match self {
             Self::Builtin(_) => unreachable!(),
+
+            Self::Refer(def_kind, _) => def_kind.space(),
 
             Self::Petal | Self::Struct(_) => DefSpace::Type,
 
@@ -272,5 +280,20 @@ impl Definition {
         span: Span,
     ) -> Self {
         Self::new(name, kind, petal, hir_id, span, DefAccessibility::Priv)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Binding {
+    pub def_id: DefId,
+    pub accessibility: DefAccessibility,
+}
+
+impl Binding {
+    pub fn new(def_id: DefId, accessibility: DefAccessibility) -> Self {
+        Self {
+            def_id,
+            accessibility,
+        }
     }
 }

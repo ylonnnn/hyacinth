@@ -2,7 +2,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirId,
     def::{
-        BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefKind,
+        Binding, BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility, DefId, DefKind,
         DefPubAccessibilityKind, DefSpace, Definition, DefinitionTable,
     },
     item::{HirItem, HirItemKind},
@@ -80,7 +80,7 @@ impl<'i> Collector<'i> {
                 );
 
                 match self.define(def) {
-                    Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                    Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
                     Err(Some(diag)) => {
                         self.dctx.add(diag);
                     }
@@ -102,7 +102,7 @@ impl<'i> Collector<'i> {
             );
 
             match self.define(def) {
-                Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
                 Err(Some(diag)) => {
                     self.dctx.add(diag);
                 }
@@ -124,7 +124,7 @@ impl<'i> Collector<'i> {
             );
 
             match self.define(def) {
-                Ok(def_id) => self.tctx.attach_to_def(def_id, ty),
+                Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
                 Err(Some(diag)) => {
                     self.dctx.add(diag);
                 }
@@ -156,7 +156,7 @@ impl<'i> Collector<'i> {
                 Span::default(),
                 DefAccessibility::Pub(DefPubAccessibilityKind::This),
             );
-            let spathe_def_id = self.define(spathe_def).unwrap();
+            let spathe_def_id = self.define(spathe_def).unwrap().def_id;
 
             self.scope_ctx
                 .attach_id_to_def(spathe_def_id, root_scope_id);
@@ -175,7 +175,7 @@ impl<'i> Collector<'i> {
                     Span::default(),
                     DefAccessibility::Pub(DefPubAccessibilityKind::This),
                 );
-                let super_def_id = self.define(super_def).unwrap();
+                let super_def_id = self.define(super_def).unwrap().def_id;
 
                 self.scope_ctx
                     .attach_id_to_def(super_def_id, super_scope_id);
@@ -184,7 +184,7 @@ impl<'i> Collector<'i> {
         }
     }
 
-    pub fn define(&mut self, definition: Definition) -> CollectResult<DefId> {
+    pub fn define(&mut self, definition: Definition) -> CollectResult<&Binding> {
         let top = self.scope_ctx.top_mut();
 
         let (name, space) = (definition.name, definition.kind.space());
@@ -193,28 +193,34 @@ impl<'i> Collector<'i> {
                 definition.span,
                 CollectorDiagErrorKind::Duplication {
                     ident: name,
-                    earlier_def,
+                    earlier_def: earlier_def.def_id,
                 },
             )))
         } else {
-            let def_id = self.definitions.define_hir(definition.hir_id, definition);
-            top.define(space, name, def_id);
+            let accessibility = definition.accessibility;
+            let binding = Binding::new(
+                self.definitions.define_hir(definition.hir_id, definition),
+                accessibility,
+            );
 
-            Ok(def_id)
+            Ok(top.define(space, name, binding))
         }
     }
 
-    pub fn try_define(&mut self, definition: Definition) -> CollectResult<(DefId, bool)> {
+    pub fn try_define(&mut self, definition: Definition) -> CollectResult<(&Binding, bool)> {
         let top = self.scope_ctx.top_mut();
-
         let (name, space) = (definition.name, definition.kind.space());
-        if let Some(earlier_def) = top.get(Some(space), name) {
-            Ok((earlier_def, true))
-        } else {
-            let def_id = self.definitions.define_hir(definition.hir_id, definition);
-            top.define(space, name, def_id);
 
-            Ok((def_id, false))
+        if top.get(Some(space), name).is_some() {
+            Ok((top.get(Some(space), name).unwrap(), true))
+        } else {
+            let accessibility = definition.accessibility;
+            let binding = Binding::new(
+                self.definitions.define_hir(definition.hir_id, definition),
+                accessibility,
+            );
+
+            Ok((top.define(space, name, binding), false))
         }
     }
 

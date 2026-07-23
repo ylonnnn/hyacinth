@@ -4,7 +4,7 @@ use hycc_collection::{
 };
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
-    def::{DefAccessibility, DefId, DefSpace, Definition},
+    def::{Binding, DefAccessibility, DefId, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirPetal},
     scope::ScopeId,
 };
@@ -41,7 +41,11 @@ impl<'c, 'i> Resolver<'c, 'i> {
         }
     }
 
-    pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<(DefId, ScopeId)> {
+    pub fn get_binding(
+        &self,
+        space: Option<DefSpace>,
+        name: Symbol,
+    ) -> Option<(&Binding, ScopeId)> {
         let scope_id = self
             .collector
             .petal_ctx
@@ -51,7 +55,12 @@ impl<'c, 'i> Resolver<'c, 'i> {
         self.collector
             .scope_ctx
             .get_def_until_scope(space, name, scope_id)
-            .map(|def_id| (def_id, scope_id))
+            .map(|binding| (binding, scope_id))
+    }
+
+    pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<(DefId, ScopeId)> {
+        self.get_binding(space, name)
+            .map(|(binding, scope_id)| (binding.def_id, scope_id))
     }
 
     pub fn get_def(&self, space: Option<DefSpace>, name: Symbol) -> Option<&Definition> {

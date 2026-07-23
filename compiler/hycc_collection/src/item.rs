@@ -1,6 +1,6 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
+    def::{Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
     item::{HirItem, HirItemKind, HirPetalKind},
     scope::Scope,
 };
@@ -34,8 +34,9 @@ impl<'i> Collector<'i> {
 
                             ternary!(
                                 petal.is_inline(),
-                                self.try_define(def),
-                                self.define(def).map(|def_id| (def_id, false))
+                                self.try_define(def)
+                                    .map(|(binding, defined)| (binding.def_id, defined)),
+                                self.define(def).map(|binding| (binding.def_id, false))
                             )
                         }?;
 
@@ -114,14 +115,16 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        let def_id = self.define(Definition::new(
-            strct.ident.ident,
-            DefKind::Struct(Box::new(StructDef::new())),
-            Some(self.petal_ctx.top_id()),
-            struct_item.id,
-            struct_item.span,
-            struct_item.accessibility,
-        ))?;
+        let def_id = self
+            .define(Definition::new(
+                strct.ident.ident,
+                DefKind::Struct(Box::new(StructDef::new())),
+                Some(self.petal_ctx.top_id()),
+                struct_item.id,
+                struct_item.span,
+                struct_item.accessibility,
+            ))?
+            .def_id;
 
         self.scope_ctx.try_attach_to_def(def_id, Scope::new());
 
@@ -171,6 +174,7 @@ impl<'i> Collector<'i> {
                 fn_item.span,
                 fn_item.accessibility,
             ))?
+            .def_id
         );
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
@@ -191,7 +195,7 @@ impl<'i> Collector<'i> {
                 ));
 
                 match res {
-                    Ok(def_id) => {
+                    Ok(&Binding { def_id, .. }) => {
                         if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
                             def.params.push(def_id)
                         }

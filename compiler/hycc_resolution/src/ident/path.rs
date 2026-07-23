@@ -59,25 +59,25 @@ impl<'c, 'i> Resolver<'c, 'i> {
         ident: &HirIdent,
         lookup_scope: Option<ScopeId>,
     ) -> ResolveResult<DefId> {
-        let Some(space) = self.expected_space else {
-            bug!("expected space must not be `None`");
-        };
-
         let name = ident.ident.ident;
-        let def_id = if let Some(scope) = lookup_scope {
-            self.collector.scope_ctx.get(scope).get(Some(space), name)
+        let binding = if let Some(scope) = lookup_scope {
+            self.collector
+                .scope_ctx
+                .get(scope)
+                .get(self.expected_space, name)
         } else {
-            self.get_def_id(Some(space), name).map(|(def_id, _)| def_id)
+            self.get_binding(self.expected_space, name)
+                .map(|(binding, _)| binding)
         };
 
-        let Some(def_id) = def_id else {
+        let Some(binding) = binding else {
             Err(Some(ResolverDiag::error(
                 ident.span,
-                ResolverDiagErrorKind::UnrecognizedSymbol(name, Some(space)),
+                ResolverDiagErrorKind::UnrecognizedSymbol(name, self.expected_space),
             )))?
         };
 
-        let definition = self.collector.definitions.get(def_id);
+        let definition = self.collector.definitions.get(binding.def_id);
         if let Some(petal_id) = definition.petal {
             let current = self.collector.petal_ctx.top_id();
             let relationship = self.collector.petal_ctx.relationship(current, petal_id);
@@ -106,6 +106,8 @@ impl<'c, 'i> Resolver<'c, 'i> {
                 )))?
             }
         }
+
+        let def_id = binding.def_id;
 
         if let Some(arguments) = &ident.arguments {
             for argument in &arguments.data {

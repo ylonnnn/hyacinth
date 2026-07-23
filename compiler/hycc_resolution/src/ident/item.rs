@@ -1,8 +1,8 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{DefKind, DefSpace, Definition},
+    def::{Binding, DefAccessibility, DefKind, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirPetalKind, HirReferTarget, HirReferTargetKind},
-    scope::Scope,
+    scope::{Scope, ScopeId},
 };
 use hycc_util::{bug, ternary};
 
@@ -138,54 +138,72 @@ impl<'c, 'i> Resolver<'c, 'i> {
             unreachable!();
         };
 
-        self.curr_scope = Some(self.collector.scope_ctx.top_id());
-        if let Err(Some(diag)) = self.resolve_refer_target(&refer.target) {
+        dbg!(refer_item.accessibility);
+        if let Err(Some(diag)) =
+            self.resolve_refer_target(&refer.target, refer_item.accessibility, None)
+        {
             self.dctx.add(diag);
-        }
-
-        while self.collector.scope_ctx.top_id() != self.curr_scope.unwrap() {
-            self.collector.scope_ctx.pop();
         }
 
         Ok(())
     }
 
-    pub(crate) fn resolve_refer_target(&mut self, target: &HirReferTarget) -> ResolveResult {
+    pub(crate) fn resolve_refer_target(
+        &mut self,
+        target: &HirReferTarget,
+        accessibility: DefAccessibility,
+        mut lookup_scope: Option<ScopeId>,
+    ) -> ResolveResult {
         match &target.kind {
             HirReferTargetKind::Child(alias) => {
-                let sym = target.symbol.ident.ident;
-                let Some((def_id, _)) = self.collector.scope_ctx.get_def_current_only(None, sym)
-                else {
-                    Err(Some(ResolverDiag::error(
-                        target.symbol.span,
-                        ResolverDiagErrorKind::UnrecognizedSymbol(sym, None),
-                    )))?
-                };
+                let target = target.symbol;
+                let def_id = self.resolve_ident(&target, lookup_scope)?;
 
-                let scope = self.collector.scope_ctx.get_mut(self.curr_scope.unwrap());
+                let sym = target.ident.ident;
+                let actual = self.collector.definitions.get(def_id);
 
-                scope.define(
-                    self.collector.definitions.get(def_id).kind.space(),
+                // self.collector.scope_ctx.top_mut().define(
+                //     actual.kind.space(),
+                //     alias.unwrap_or(sym),
+                //     def_id,
+                // );
+
+                self.collector.scope_ctx.top_mut().define(
+                    actual.kind.space(),
                     alias.unwrap_or(sym),
-                    def_id,
+                    Binding::new(def_id, accessibility),
                 );
+
+                // if let Err(Some(diag)) = self.collector.define(Definition::new(
+                //     alias.unwrap_or(sym),
+                //     DefKind::Refer(Box::new(actual.kind.clone()), def_id),
+                //     actual.petal,
+                //     actual.hir_id,
+                //     target.span,
+                //     actual.accessibility, /* TODO: use the accessibility of the refer item */
+                // )) {
+                //     self.collector.dctx.add(diag);
+                // }
             }
 
             HirReferTargetKind::Parent(children) => {
-                let def_id = self.expect_space(DefSpace::Type, |s| {
-                    s.resolve_ident(&target.symbol, None /* TODO */)
-                })?;
-
-                let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
-                self.collector.scope_ctx.push_id(scope_id);
+                lookup_scope.replace(self.expect_space(
+                    DefSpace::Type,
+                    |s| -> ResolveResult<ScopeId> {
+                        let def_id = s.resolve_ident(&target.symbol, lookup_scope)?;
+                        Ok(s.collector.scope_ctx.get_id_from_def(def_id).unwrap())
+                    },
+                )?);
 
                 for child in children {
-                    if let Err(Some(diag)) = self.resolve_refer_target(&child) {
+                    if let Err(Some(diag)) =
+                        self.resolve_refer_target(&child, accessibility, lookup_scope)
+                    {
                         self.dctx.add(diag);
                     }
                 }
             }
-        };
+        }
 
         Ok(())
     }

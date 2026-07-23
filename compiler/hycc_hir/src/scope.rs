@@ -313,8 +313,7 @@ impl Scope {
             None => [DefSpace::Type, DefSpace::Value]
                 .into_iter()
                 .map(|space| self.definitions.get(&(space, name)))
-                .find(|def| def.is_some())
-                .unwrap(),
+                .find(|def| def.is_some())?,
         }
     }
 }

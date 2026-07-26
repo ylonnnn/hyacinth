@@ -65,14 +65,20 @@ impl<'i> Collector<'i> {
         for signed in [true, false] {
             let prefix = ternary!(signed, "i", "u");
             for width in [8, 16, 32, 64, u8::MAX] {
-                let b_ty = BuiltinTyKind::Int(BuiltinIntTy::Fixed(width, signed));
+                let size = width == u8::MAX;
+
+                let b_ty = BuiltinTyKind::Int(ternary!(
+                    size,
+                    BuiltinIntTy::Size(signed),
+                    BuiltinIntTy::Fixed(width, signed)
+                ));
                 let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
                 let def = Definition::builtin(
                     self.interner.intern(&format!(
                         "{}{}",
                         prefix,
-                        ternary!(width == u8::MAX, "size".into(), width.to_string())
+                        ternary!(size, "size".into(), width.to_string())
                     )),
                     BuiltinKind::Ty(b_ty),
                     Some(self.petal_ctx.top_id()),

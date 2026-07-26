@@ -297,7 +297,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     }
 
     fn lower_path_expr_rvalue(&mut self, path: &HirPath, dest: &Place) -> Option<RValue> {
-        // TODO: improve?
         let rvalue = match self.lower_path(&path) {
             MirDef::Local(local_id) => RValue::Use(Operand::Move(Place::local(local_id))),
             MirDef::Global(global_id) => RValue::Use(Operand::Move(Place::global(global_id))),

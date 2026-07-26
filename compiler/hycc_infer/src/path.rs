@@ -11,7 +11,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         };
 
         let def = self.definitions.get(def_id);
-        let Some(mut ty) = self.tctx.get_ty_of_hir(def.hir_id).cloned() else {
+        let Some(mut ty) = self.tctx.get_hir_ty(def.hir_id).cloned() else {
             bug!("hir id {:?} of def does not have a ty attached", def.hir_id);
         };
 

@@ -79,25 +79,16 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         self.ctx.define(def_id, MirDef::Body(def_id));
 
         let unit_ty = self.tctx.make_unit_ty();
-        let ret_ty = func
-            .ret_ty
-            .map(|ret_ty| {
-                self.tctx
-                    .get_ty_of_hir(ret_ty.id)
-                    .map(|ty| ty.id)
-                    .unwrap_or(unit_ty)
-            })
-            .unwrap_or(unit_ty);
+        let ret_ty = func.ret_ty.map_or(unit_ty, |ret_ty| {
+            self.tctx.get_hir_ty_id(ret_ty.id).unwrap_or(unit_ty)
+        });
 
         let ret_local = self.ctx.table.get_mut(body_id).declare_local_ret(ret_ty);
 
         for param in &func.params.list {
-            let Some(ty) = self.tctx.get_ty_of_hir(param.ty.id) else {
-                bug!("param {:?} has no attached ty!", param.id)
-            };
-
+            let ty_id = self.tctx.expect_hir_ty_id(param.ty.id);
             let local_id = self.ctx.table.get_mut(body_id).declare_local_param(
-                ty.id,
+                ty_id,
                 Mutability::Mutable,
                 param.span,
             );
@@ -125,11 +116,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             return;
         };
 
-        let ty = self.tctx.get_ty_of_hir(var_item.id).unwrap();
+        let ty_id = self.tctx.expect_hir_ty_id(var_item.id);
         let var_def_id = self.definitions.get_def_id(var_item.id).unwrap();
 
         if let Some(body) = self.ctx.table.top_mut() {
-            let var_local_id = body.declare_local_var(ty.id, decl.mutability, decl.span);
+            let var_local_id = body.declare_local_var(ty_id, decl.mutability, decl.span);
 
             body.insert_stmt(MirStatement::new(
                 MirStatementKind::StorageLive(var_local_id),
@@ -141,7 +132,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             self.lower_expr(&expr, &Place::local(var_local_id));
         } else {
             let body_id = self.ctx.table.push_new();
-            let var_global_id = self.ctx.declare_global(ty.id, decl.mutability, decl.span);
+            let var_global_id = self.ctx.declare_global(ty_id, decl.mutability, decl.span);
             self.ctx.define(var_def_id, MirDef::Global(var_global_id));
             let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
 
@@ -335,7 +326,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::RefExpr(_) => self.lower_ref_expr_rvalue(&reference.expr),
 
             _ => {
-                let ty_id = self.tctx.get_ty_of_hir(ref_expr.id).unwrap().id;
+                let ty_id = self.tctx.expect_hir_ty_id(ref_expr.id);
                 let expr_place = Place::local(
                     self.ctx
                         .table
@@ -360,8 +351,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         let body = self.ctx.table.top_mut().unwrap();
 
         let (left_ty, right_ty) = (
-            self.tctx.get_ty_of_hir(left.id).unwrap().id,
-            self.tctx.get_ty_of_hir(right.id).unwrap().id,
+            self.tctx.expect_hir_ty_id(left.id),
+            self.tctx.expect_hir_ty_id(right.id),
         );
         let (left_dest, right_dest) = (
             Place::local(body.declare_local_temp(left_ty, left.span)),
@@ -391,15 +382,9 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         let body_id = self.ctx.table.push_new();
 
         let unit_ty = self.tctx.make_unit_ty();
-        let ret_ty = anfn
-            .ret_ty
-            .map(|ret_ty| {
-                self.tctx
-                    .get_ty_of_hir(ret_ty.id)
-                    .map(|ty| ty.id)
-                    .unwrap_or(unit_ty)
-            })
-            .unwrap_or(unit_ty);
+        let ret_ty = anfn.ret_ty.map_or(unit_ty, |ret_ty| {
+            self.tctx.get_hir_ty_id(ret_ty.id).unwrap_or(unit_ty)
+        });
 
         let ret_local_id = self.ctx.table.get_mut(body_id).declare_local_ret(ret_ty);
 
@@ -408,12 +393,9 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 continue;
             };
 
-            let Some(ty) = self.tctx.get_ty_of_hir(ty.id) else {
-                bug!("param {:?} has no attached ty!", param.id)
-            };
-
+            let ty_id = self.tctx.expect_hir_ty_id(ty.id);
             let local_id = self.ctx.table.get_mut(body_id).declare_local_param(
-                ty.id,
+                ty_id,
                 Mutability::Mutable,
                 param.span,
             );
@@ -444,7 +426,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         let body_id = self.ctx.table.top_id().unwrap();
         let body = self.ctx.table.get_mut(body_id);
-        let ty_id = self.tctx.get_ty_of_hir(call_expr.id).unwrap().id;
+        let ty_id = self.tctx.expect_hir_ty_id(call_expr.id);
 
         // Callee
         let callee_place = Place::local(body.declare_local_temp(ty_id, call.callee.span));
@@ -456,15 +438,12 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             .data
             .iter()
             .map(|arg| {
-                let Some(ty) = self.tctx.get_ty_of_hir(arg.id).map(|ty| ty.id) else {
-                    bug!("argument {:?} is expected to have an attached type", arg.id);
-                };
-
+                let ty_id = self.tctx.expect_hir_ty_id(arg.id);
                 let arg_dest = Place::local(
                     self.ctx
                         .table
                         .get_mut(body_id)
-                        .declare_local_temp(ty, arg.span),
+                        .declare_local_temp(ty_id, arg.span),
                 );
 
                 self.lower_expr(&arg, &arg_dest);
@@ -500,7 +479,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         let body_id = self.ctx.table.top_id().unwrap();
-        let ty_id = self.tctx.get_ty_of_hir(if_expr.id).unwrap().id;
+        let ty_id = self.tctx.expect_hir_ty_id(if_expr.id);
 
         let cond_place = Place::local(
             self.ctx

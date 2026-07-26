@@ -172,7 +172,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                 }
             };
 
-            let Some(t_field_ty) = self.tctx.get_ty_of_hir(strct_def.fields[*idx].ty).cloned()
+            let Some(t_field_ty) = self.tctx.get_hir_ty(strct_def.fields[*idx].ty).cloned()
             else {
                 unreachable!()
             };
@@ -192,7 +192,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             ));
         }
 
-        Ok(self.tctx.get_ty_of_hir(def.hir_id).unwrap().id)
+        Ok(self.tctx.get_hir_ty(def.hir_id).unwrap().id)
     }
 
     pub(crate) fn infer_anon_fn(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
@@ -200,7 +200,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             unreachable!()
         };
 
-        let Some(fn_ty) = self.tctx.get_ty_of_hir(anfn_expr.id).cloned() else {
+        let Some(fn_ty) = self.tctx.get_hir_ty(anfn_expr.id).cloned() else {
             bug!(
                 "anon fn hir {:?} does not have an attached ty",
                 anfn_expr.id
@@ -245,7 +245,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             Ok(())
         })?;
 
-        Ok(self.tctx.get_ty_of_hir(anfn_expr.id).unwrap().id)
+        Ok(self.tctx.get_hir_ty(anfn_expr.id).unwrap().id)
     }
 
     pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {
@@ -332,7 +332,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                     };
 
                     let field = &struct_def.fields[*field];
-                    let Some(field_ty) = self.tctx.get_ty_of_hir(field.ty) else {
+                    let Some(field_ty) = self.tctx.get_hir_ty(field.ty) else {
                         bug!("hir {:?} does not have an attached ty_id", field.ty)
                     };
 

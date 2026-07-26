@@ -6,7 +6,7 @@ use crate::inferer::{InferResult, TyInferer};
 
 impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
-        let expected_ty: Option<Ty> = self.tctx.get_ty_of_hir(block.id).cloned();
+        let expected_ty: Option<Ty> = self.tctx.get_hir_ty(block.id).cloned();
         self.tctx.dettach_hir(block.id);
 
         for stmt in &block.stmts {
@@ -16,7 +16,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
 
             match &stmt.kind {
                 HirStmtKind::Ret(_) => {
-                    if self.tctx.get_ty_of_hir(block.id).is_none() {
+                    if self.tctx.get_hir_ty(block.id).is_none() {
                         let never_ty = self.tctx.make_never_ty();
                         self.tctx
                             .attach_to_hir(block.id, Ty::new(never_ty, block.span));
@@ -24,11 +24,11 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                 }
 
                 HirStmtKind::Pass(_) => {
-                    let Some(stmt_ty) = self.tctx.get_ty_of_hir(stmt.id).cloned() else {
+                    let Some(stmt_ty) = self.tctx.get_hir_ty(stmt.id).cloned() else {
                         continue;
                     };
 
-                    if self.tctx.get_ty_of_hir(block.id).is_none() {
+                    if self.tctx.get_hir_ty(block.id).is_none() {
                         self.tctx.attach_to_hir(block.id, stmt_ty.clone());
                     }
 
@@ -47,7 +47,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         let unit_ty = self.tctx.make_unit_ty();
         let ty_id = self
             .tctx
-            .get_ty_of_hir(block.id)
+            .get_hir_ty(block.id)
             .map(|ty| expected_ty.map(|ty| ty.id).unwrap_or(ty.id))
             .unwrap_or(unit_ty);
 

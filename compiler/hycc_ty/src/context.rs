@@ -256,12 +256,30 @@ impl TyCtx {
         self.node_ty_map.remove(&hir_id);
     }
 
-    pub fn get_ty_of_hir(&self, hir_id: HirId) -> Option<&Ty> {
+    pub fn get_hir_ty(&self, hir_id: HirId) -> Option<&Ty> {
         self.node_ty_map.get(&hir_id)
     }
 
-    pub fn get_mut_ty_of_hir(&mut self, hir_id: HirId) -> Option<&mut Ty> {
+    pub fn get_hir_mut_ty(&mut self, hir_id: HirId) -> Option<&mut Ty> {
         self.node_ty_map.get_mut(&hir_id)
+    }
+
+    pub fn get_hir_ty_id(&self, hir_id: HirId) -> Option<TyId> {
+        self.get_hir_ty(hir_id).map(|ty| ty.id)
+    }
+
+    pub fn expect_hir_ty(&self, hir_id: HirId) -> &Ty {
+        self.get_hir_ty(hir_id)
+            .expect(&format!("no type attached for hir {:?}", hir_id))
+    }
+
+    pub fn expect_hir_mut_ty(&mut self, hir_id: HirId) -> &mut Ty {
+        self.get_hir_mut_ty(hir_id)
+            .expect(&format!("no type attached for hir {:?}", hir_id))
+    }
+
+    pub fn expect_hir_ty_id(&self, hir_id: HirId) -> TyId {
+        self.expect_hir_ty(hir_id).id
     }
 
     pub fn attach_to_def(&mut self, def_id: DefId, ty: Ty) {

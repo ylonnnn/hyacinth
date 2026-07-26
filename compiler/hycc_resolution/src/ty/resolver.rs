@@ -1,7 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},
-    item::{HirItem, HirItemKind, HirPetal},
+    item::{HirItem, HirItemKind},
 };
 use hycc_span::Span;
 use hycc_ty::{
@@ -41,7 +41,7 @@ impl<'d> TyResolver<'d> {
                 _ => self.tctx.get_ty_of_def(def_id).unwrap().id,
             },
 
-            DefKind::Struct(_) => self.tctx.get_ty_of_hir(def.hir_id).unwrap().id,
+            DefKind::Struct(_) => self.tctx.expect_hir_ty_id(def.hir_id),
 
             DefKind::Petal => Err(Some(ResolverDiag::error(
                 span,

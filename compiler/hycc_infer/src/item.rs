@@ -40,7 +40,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             unreachable!()
         };
 
-        let Some(fn_ty) = self.tctx.get_ty_of_hir(fn_item.id).cloned() else {
+        let Some(fn_ty) = self.tctx.get_hir_ty(fn_item.id).cloned() else {
             bug!("fn hir {:?} does not have an attached ty", fn_item.id)
         };
 
@@ -71,7 +71,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         };
 
         let ty = decl.ty.map(|ty| {
-            let Some(ty) = self.tctx.get_ty_of_hir(ty.id).cloned() else {
+            let Some(ty) = self.tctx.get_hir_ty(ty.id).cloned() else {
                 bug!("var decl ty hir is not attached to a Ty: {:?}", ty.id)
             };
 

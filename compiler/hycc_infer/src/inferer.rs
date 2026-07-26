@@ -106,7 +106,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         let mut checked = HashSet::<TyId>::new();
 
         for hir_id in tys {
-            let Some(ty) = self.tctx.get_ty_of_hir(hir_id) else {
+            let Some(ty) = self.tctx.get_hir_ty(hir_id) else {
                 continue;
             };
 

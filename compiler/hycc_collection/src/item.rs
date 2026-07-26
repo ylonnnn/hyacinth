@@ -21,7 +21,7 @@ impl<'i> Collector<'i> {
                 for segment in &path.segments {
                     let (def_id, defined) =
                         if let Some(def_id) = self.definitions.get_def_id(segment.id) {
-                            Ok((*def_id, true))
+                            Ok((def_id, true))
                         } else {
                             let def = Definition::new(
                                 segment.ident.ident,
@@ -162,7 +162,7 @@ impl<'i> Collector<'i> {
         let def_id = ternary!(
             expected,
             if let Some(def_id) = self.definitions.get_def_id(fn_item.id) {
-                *def_id
+                def_id
             } else {
                 return Ok(());
             },

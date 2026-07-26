@@ -193,7 +193,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     //     );
     // }
 
-    for (i, body) in mir_builder.table.bodies().iter().enumerate() {
+    for (i, body) in mir_builder.ctx.table.bodies().iter().enumerate() {
         println!("MirBody({i}):\n{}", body);
     }
 }

@@ -4,13 +4,16 @@ use hycc_const::table::ConstId;
 use hycc_hir::{def::DefId, expr};
 use hycc_span::Span;
 
-use crate::{body::MirBodyId, local::LocalDeclId};
+use crate::{
+    body::MirBodyId,
+    decl::{GlobalDeclId, LocalDeclId},
+};
 
 #[derive(Debug, Clone)]
 pub enum MirStatementKind {
     Nop,
 
-    Assign(Box<(Location, RValue)>),
+    Assign(Box<(Place, RValue)>),
     StorageLive(LocalDeclId),
     StorageDead(LocalDeclId),
     // Deinit(Location),
@@ -33,8 +36,11 @@ impl Display for MirStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             MirStatementKind::Assign(assign) => {
-                write!(f, "_{} = {}", assign.0.decl.0, assign.1)
+                write!(f, "{} = {}", assign.0, assign.1)
             }
+
+            MirStatementKind::StorageLive(local_id) => write!(f, "Live({})", local_id),
+            MirStatementKind::StorageDead(local_id) => write!(f, "Dead({})", local_id),
 
             _ => write!(f, "{:?}", self.kind),
         }
@@ -42,17 +48,44 @@ impl Display for MirStatement {
 }
 
 #[derive(Debug, Clone)]
-pub struct Location {
-    pub decl: LocalDeclId,
+pub enum PlaceKind {
+    Local(LocalDeclId),
+    Global(GlobalDeclId),
+}
+
+#[derive(Debug, Clone)]
+pub struct Place {
+    pub kind: PlaceKind,
     pub projection: Vec<Projection>,
 }
 
-impl Location {
-    pub fn new(decl: LocalDeclId) -> Self {
+impl Place {
+    pub fn new(kind: PlaceKind) -> Self {
         Self {
-            decl,
+            kind,
             projection: Vec::new(),
         }
+    }
+
+    pub fn local(local_id: LocalDeclId) -> Self {
+        Self::new(PlaceKind::Local(local_id))
+    }
+
+    pub fn global(global_id: GlobalDeclId) -> Self {
+        Self::new(PlaceKind::Global(global_id))
+    }
+}
+
+impl Display for Place {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self.kind {
+                PlaceKind::Local(local_id) => format!("{}", local_id),
+                PlaceKind::Global(global_id) => format!("{}", global_id),
+            }
+        )
     }
 }
 
@@ -74,7 +107,7 @@ pub type BinaryOp = expr::BinaryOp;
 #[derive(Debug, Clone)]
 pub enum RValue {
     Use(Operand),
-    Ref(RefKind, Location),
+    Ref(RefKind, Place),
 
     FnRef(DefId),
     AnonFn {
@@ -87,7 +120,7 @@ pub enum RValue {
     Binary(BinaryOp, Box<(Operand, Operand)>),
     // UnaryOp(UnOp, Operand),
     // NullaryOp(NullOp, Ty),
-    Discriminant(Location),
+    Discriminant(Place),
     // Aggregate(Box<AggregateKind>, Vec<Operand>),
 }
 
@@ -109,17 +142,17 @@ pub enum RefKind {
 
 #[derive(Debug, Clone)]
 pub enum Operand {
-    Copy(Location),
-    Move(Location),
+    Copy(Place),
+    Move(Place),
     Const(ConstId),
 }
 
 impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Self::Copy(loc) => write!(f, "copy _{}", loc.decl.0),
-            Self::Move(loc) => write!(f, "move _{}", loc.decl.0),
-            Self::Const(id) => write!(f, "const {:?}", id),
+            Self::Copy(loc) => write!(f, "copy {}", &loc),
+            Self::Move(loc) => write!(f, "move {}", &loc),
+            Self::Const(id) => write!(f, "{:?}", &id),
         }
     }
 }

@@ -3,12 +3,16 @@ use std::collections::HashMap;
 use hycc_hir::def::DefId;
 use hycc_util::bug;
 
-use crate::body::{MirBody, MirBodyId};
+use crate::{
+    body::{MirBody, MirBodyId},
+    scope::MirScopeCtx,
+};
 
 #[derive(Debug)]
 pub struct MirTable {
     data: Vec<MirBody>,
     defs: HashMap<DefId, MirBodyId>,
+    stack: Vec<MirBodyId>,
 }
 
 impl MirTable {
@@ -16,6 +20,7 @@ impl MirTable {
         Self {
             data: Vec::new(),
             defs: HashMap::new(),
+            stack: Vec::new(),
         }
     }
 
@@ -51,11 +56,11 @@ impl MirTable {
         body_id
     }
 
-    pub fn get_body(&self, id: MirBodyId) -> &MirBody {
+    pub fn get(&self, id: MirBodyId) -> &MirBody {
         &self.data[id.unwrap()]
     }
 
-    pub fn get_body_mut(&mut self, id: MirBodyId) -> &mut MirBody {
+    pub fn get_mut(&mut self, id: MirBodyId) -> &mut MirBody {
         &mut self.data[id.unwrap()]
     }
 
@@ -64,16 +69,56 @@ impl MirTable {
     }
 
     pub fn get_by_def(&self, def_id: DefId) -> &MirBody {
-        match self.get_id_by_def(def_id) {
-            Some(id) => self.get_body(id),
-            _ => bug!("def id {def_id:?} has no attached body"),
-        }
+        let Some(id) = self.get_id_by_def(def_id) else {
+            bug!("def id {def_id:?} has no attached body")
+        };
+
+        self.get(id)
     }
 
     pub fn get_mut_by_def(&mut self, def_id: DefId) -> &mut MirBody {
-        match self.get_id_by_def(def_id) {
-            Some(id) => self.get_body_mut(id),
-            _ => bug!("def id {def_id:?} has no attached body"),
-        }
+        let Some(id) = self.get_id_by_def(def_id) else {
+            bug!("def id {def_id:?} has no attached body")
+        };
+
+        self.get_mut(id)
+    }
+
+    pub fn push_new(&mut self) -> MirBodyId {
+        self.push(MirBody::new())
+    }
+
+    pub fn push_new_for(&mut self, def_id: DefId) -> MirBodyId {
+        let body_id = self.new_body_for(def_id);
+        self.push_id(body_id);
+
+        body_id
+    }
+
+    pub fn push(&mut self, body: MirBody) -> MirBodyId {
+        let body_id = self.insert_body(body);
+        self.push_id(body_id);
+
+        body_id
+    }
+
+    pub fn push_id(&mut self, body_id: MirBodyId) {
+        self.stack.push(body_id);
+    }
+
+    pub fn pop(&mut self) {
+        self.stack.pop();
+    }
+
+    pub fn top_id(&self) -> Option<MirBodyId> {
+        self.stack.last().cloned()
+    }
+
+    pub fn top(&self) -> Option<&MirBody> {
+        self.top_id().map(|body_id| self.get(body_id))
+    }
+
+    pub fn top_mut(&mut self) -> Option<&mut MirBody> {
+        self.top_id().map(|body_id| self.get_mut(body_id))
     }
 }

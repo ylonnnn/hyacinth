@@ -4,7 +4,7 @@ use hycc_span::Span;
 
 use crate::{
     basic_block::MirBasicBlockId,
-    stmt::{Location, Operand},
+    stmt::{Operand, Place},
 };
 
 #[derive(Debug, Clone)]
@@ -17,9 +17,9 @@ pub enum MirTerminatorKind {
     Call {
         func: Operand,
         args: Vec<Operand>,
-        dest: Location,
-        // target: Option<BasicBlockId>,
-        // unwind: UnwindAction,
+        dest: Place,
+        target: Option<MirBasicBlockId>,
+        unwind: Option<MirBasicBlockId>,
     },
 
     SwitchInt {
@@ -28,7 +28,7 @@ pub enum MirTerminatorKind {
     },
 
     Drop {
-        location: Location,
+        location: Place,
         // target: BasicBlockId,
         // unwind: UnwindAction,
     },
@@ -61,16 +61,25 @@ impl Display for MirTerminator {
 
             MirTerminatorKind::Ret => write!(f, "ret"),
 
-            MirTerminatorKind::Call { func, args, dest } => {
+            MirTerminatorKind::Call {
+                func,
+                args,
+                dest,
+                target,
+                ..
+            } => {
                 write!(
                     f,
-                    "_{} = call {}({})",
-                    dest.decl.0,
+                    "{} = call {}({}) -> {}",
+                    dest,
                     func,
                     args.iter()
                         .map(|arg| format!("{}", arg))
                         .collect::<Vec<_>>()
-                        .join(", ")
+                        .join(", "),
+                    target
+                        .map(|target| target.to_string())
+                        .unwrap_or(String::from("!"))
                 )
             }
 

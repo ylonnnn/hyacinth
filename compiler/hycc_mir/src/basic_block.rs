@@ -47,3 +47,9 @@ impl MirBasicBlockId {
         self.0
     }
 }
+
+impl Display for MirBasicBlockId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "bb{}", self.0)
+    }
+}

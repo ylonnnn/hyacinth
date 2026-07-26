@@ -51,12 +51,12 @@ impl DefinitionTable {
         self.map.insert(hir_id, def_id);
     }
 
-    pub fn get_def_id(&self, hir_id: HirId) -> Option<&DefId> {
-        self.map.get(&hir_id)
+    pub fn get_def_id(&self, hir_id: HirId) -> Option<DefId> {
+        self.map.get(&hir_id).map(|def_id| *def_id)
     }
 
     pub fn get_def(&self, hir_id: HirId) -> Option<&Definition> {
-        self.get_def_id(hir_id).map(|def_id| self.get(*def_id))
+        self.get_def_id(hir_id).map(|def_id| self.get(def_id))
     }
 }
 

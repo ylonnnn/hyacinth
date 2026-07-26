@@ -10,7 +10,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             bug!("def id of resolved path does not exist: {:?}", path.id);
         };
 
-        let def = self.definitions.get(*def_id);
+        let def = self.definitions.get(def_id);
         let Some(mut ty) = self.tctx.get_ty_of_hir(def.hir_id).cloned() else {
             bug!("hir id {:?} of def does not have a ty attached", def.hir_id);
         };

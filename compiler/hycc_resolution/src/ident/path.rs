@@ -42,8 +42,10 @@ impl<'c, 'i> Resolver<'c, 'i> {
             )?;
 
             if is_last {
-                let def_id = self.collector.definitions.get_def_id(segment.id).cloned();
-                def_id.map(|def_id| self.collector.definitions.define_id_hir(path.id, def_id));
+                self.collector
+                    .definitions
+                    .get_def_id(segment.id)
+                    .map(|def_id| self.collector.definitions.define_id_hir(path.id, def_id));
             }
         }
 

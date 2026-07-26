@@ -121,13 +121,13 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             unreachable!()
         };
 
-        let def = self.definitions.get(*def_id);
+        let def = self.definitions.get(def_id);
         let DefKind::Struct(strct_def) = &def.kind else {
             return Err(Some(InferDiag::error(
                 strct.path.span,
                 InferDiagErrorKind::InvalidNonStructInstantiation {
                     name: def.name,
-                    def_id: *def_id,
+                    def_id,
                 },
             )));
         };
@@ -141,7 +141,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                     field.ident.span,
                     InferDiagErrorKind::UnrecognizedFieldInitialization {
                         field: field.ident.ident,
-                        struct_def: *def_id,
+                        struct_def: def_id,
                     },
                 ));
 
@@ -187,7 +187,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                 strct.span,
                 InferDiagErrorKind::MissingFields {
                     field_mask: missing_mask,
-                    def_id: *def_id,
+                    def_id,
                 },
             ));
         }

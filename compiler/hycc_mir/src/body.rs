@@ -5,28 +5,15 @@ use hycc_ty::context::TyId;
 
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
-    local::{LocalDecl, LocalDeclId, LocalDeclKind, Mutability},
+    decl::{Decl, DeclKind, LocalDeclId, LocalDeclKind, Mutability},
+    scope::MirScopeCtx,
     stmt::MirStatement,
     term::MirTerminator,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MirBodyId(pub(crate) usize);
-
-impl MirBodyId {
-    #[allow(non_upper_case_globals)]
-    pub const Invalid: Self = Self(usize::MAX);
-
-    pub fn unwrap(&self) -> usize {
-        assert_ne!(self.0, usize::MAX, "mir body id is invalid!");
-        self.0
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct MirBody {
     pub basic_blocks: Vec<MirBasicBlock>,
-    pub(crate) local_decls: Vec<LocalDecl>,
+    pub local_decls: Vec<Decl>,
 
     new_bb: bool,
 }
@@ -34,11 +21,15 @@ pub struct MirBody {
 impl MirBody {
     pub fn new() -> Self {
         Self {
+            // basic_blocks: vec![MirBasicBlock::new()],
             basic_blocks: Vec::new(),
             local_decls: Vec::new(),
-
             new_bb: true,
         }
+    }
+
+    pub fn insert_new(&mut self) -> MirBasicBlockId {
+        self.insert(MirBasicBlock::new())
     }
 
     pub fn insert(&mut self, basic_block: MirBasicBlock) -> MirBasicBlockId {
@@ -79,7 +70,7 @@ impl MirBody {
 
     pub fn attach_term(&mut self, term: MirTerminator) {
         if self.new_bb {
-            self.insert(MirBasicBlock::new());
+            self.insert_new();
             self.new_bb = false;
         }
 
@@ -90,17 +81,31 @@ impl MirBody {
             .replace(term);
     }
 
-    pub fn declare_local(&mut self, decl: LocalDecl) -> LocalDeclId {
+    pub fn try_attach_term(&mut self, term: MirTerminator) {
+        if self
+            .basic_blocks
+            .last()
+            .is_some_and(|bb| bb.terminator.is_some())
+        {
+            return;
+        }
+
+        self.attach_term(term);
+    }
+
+    pub fn declare_local(&mut self, decl: Decl) -> LocalDeclId {
+        assert!(matches!(decl.kind, DeclKind::Local(..)));
+
         self.local_decls.push(decl);
         LocalDeclId(self.local_decls.len() - 1)
     }
 
-    pub fn get_local(&self, id: LocalDeclId) -> &LocalDecl {
-        &self.local_decls[id.unwrap()]
-    }
+    // pub fn get_local(&self, id: LocalDeclId) -> &LocalDecl {
+    //     &self.local_decls[id.unwrap()]
+    // }
 
     pub fn declare_local_ret(&mut self, ty: TyId) -> LocalDeclId {
-        self.declare_local(LocalDecl::new(
+        self.declare_local(Decl::local(
             LocalDeclKind::Ret,
             ty,
             Mutability::Mutable,
@@ -114,7 +119,7 @@ impl MirBody {
         mutability: Mutability,
         span: Span,
     ) -> LocalDeclId {
-        self.declare_local(LocalDecl::new(LocalDeclKind::Param, ty, mutability, span))
+        self.declare_local(Decl::local(LocalDeclKind::Param, ty, mutability, span))
     }
 
     pub fn declare_local_var(
@@ -123,11 +128,11 @@ impl MirBody {
         mutability: Mutability,
         span: Span,
     ) -> LocalDeclId {
-        self.declare_local(LocalDecl::new(LocalDeclKind::Var, ty, mutability, span))
+        self.declare_local(Decl::local(LocalDeclKind::Var, ty, mutability, span))
     }
 
     pub fn declare_local_temp(&mut self, ty: TyId, span: Span) -> LocalDeclId {
-        self.declare_local(LocalDecl::new(
+        self.declare_local(Decl::local(
             LocalDeclKind::Temp,
             ty,
             Mutability::Immutable,
@@ -143,5 +148,18 @@ impl Display for MirBody {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MirBodyId(pub(crate) usize);
+
+impl MirBodyId {
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(usize::MAX);
+
+    pub fn unwrap(&self) -> usize {
+        assert_ne!(self.0, usize::MAX, "mir body id is invalid!");
+        self.0
     }
 }

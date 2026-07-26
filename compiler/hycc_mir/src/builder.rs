@@ -52,6 +52,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         match &item.kind {
             HirItemKind::Refer(_) => {}
             HirItemKind::Petal(petal) => self.lower_petal(&petal),
+            HirItemKind::Proto(proto) => todo!("(mir) lower proto"),
             HirItemKind::Struct(_) => {}
             HirItemKind::Fn(_) => self.lower_fn(&item),
             HirItemKind::VarDecl(_) => self.lower_var_decl(&item),
@@ -79,13 +80,13 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         self.ctx.define(def_id, MirDef::Body(def_id));
 
         let unit_ty = self.tctx.make_unit_ty();
-        let ret_ty = func.ret_ty.map_or(unit_ty, |ret_ty| {
+        let ret_ty = func.sig.ret_ty.map_or(unit_ty, |ret_ty| {
             self.tctx.get_hir_ty_id(ret_ty.id).unwrap_or(unit_ty)
         });
 
         let ret_local = self.ctx.table.get_mut(body_id).declare_local_ret(ret_ty);
 
-        for param in &func.params.list {
+        for param in &func.sig.params.list {
             let ty_id = self.tctx.expect_hir_ty_id(param.ty.id);
             let local_id = self.ctx.table.get_mut(body_id).declare_local_param(
                 ty_id,

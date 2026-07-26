@@ -1,9 +1,9 @@
 use hycc_ast::{
     Expr, Item, ItemKind, Mutability, Ty,
     item::{
-        Fn, FnParam, FnParamList, ItemAccessibility, Petal, PetalKind, PubAccessibilityKind, Refer,
-        ReferTarget, ReferTargetKind, Struct, StructField, StructFieldAccessibility,
-        StructFieldList, VarDecl,
+        Fn, FnParam, FnParamList, FnSig, ItemAccessibility, Petal, PetalKind, Proto, ProtoItem,
+        ProtoItemAssocFnKind, PubAccessibilityKind, Refer, ReferTarget, ReferTargetKind, Struct,
+        StructField, StructFieldAccessibility, StructFieldList, VarDecl,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
@@ -67,6 +67,10 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ident(TokenIdentKind::Refer) => {
                 ItemKind::Refer(Box::new(self.parse_refer_with_recovery()?))
+            }
+
+            TokenKind::Ident(TokenIdentKind::Proto) => {
+                ItemKind::Proto(Box::new(self.parse_proto_with_recovery()?))
             }
 
             TokenKind::Ident(TokenIdentKind::Petal) => {
@@ -340,6 +344,87 @@ impl<'s> Parser<'s> {
         Ok(petal)
     }
 
+    pub fn parse_proto_with_recovery(&mut self) -> ParseResult<Proto> {
+        let data = self.parse_proto();
+        self.try_sync(&[TokenKind::RightBrace]);
+
+        data
+    }
+
+    // proto IDENT (GENERIC_PARAMS)? { PROTO_ITEM* }
+    // proto IDENT (< GENERIC_PARAM (, GENERIC_PARAM)* >)? { PROTO_ITEM* }
+    pub fn parse_proto(&mut self) -> ParseResult<Proto> {
+        // IDENT
+        let ident = self.parse_raw_ident()?;
+
+        // TODO: generic params
+
+        // { PROTO_ITEM* }
+        let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
+            TokenGraph::Collection { data, .. } => data,
+            _ => Err(None)?,
+        };
+
+        let n = data.len();
+        let items = self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| -> Vec<ProtoItem> {
+                let mut items = Vec::new();
+                if s.stream.is_empty() {
+                    return items;
+                }
+
+                while !s.eos() {
+                    match s.parse_proto_item() {
+                        Ok(item) => items.push(item),
+                        Err(diag) => {
+                            diag.map(|diag| s.dctx.add(diag));
+                        }
+                    }
+                }
+
+                items
+            },
+        );
+
+        // todo!("parse proto")
+        Ok(Proto {
+            span: ident.span,
+            ident,
+            items,
+        })
+    }
+
+    pub fn parse_proto_item(&mut self) -> ParseResult<ProtoItem> {
+        let Some(tok) = self.next_nonlf_token() else {
+            return Err(None);
+        };
+
+        Ok(match tok.kind {
+            TokenKind::Ident(TokenIdentKind::Fn) => {
+                let sig = self.parse_fn_sig(false)?;
+                let kind = if self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0 {
+                    ProtoItemAssocFnKind::Impl(Box::new(Fn {
+                        sig,
+                        body: self.parse_block()?,
+                    }))
+                } else {
+                    self.require_terminator(ParserTerminatorKind::Both)?;
+                    ProtoItemAssocFnKind::Sig(Box::new(sig))
+                };
+
+                ProtoItem::AssocFn(kind)
+            }
+
+            TokenKind::Ident(TokenIdentKind::Let) => {
+                ProtoItem::AssocConst(Box::new(self.parse_var_decl_with_recovery()?))
+            }
+
+            // TODO: associated types
+            _ => Err(None)?,
+        })
+    }
+
     pub fn parse_struct_with_recovery(&mut self) -> ParseResult<Struct> {
         let data = self.parse_struct();
         self.try_sync(&[TokenKind::RightBrace]);
@@ -436,11 +521,13 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // fn IDENT(GENERIC_PARAMS)?((PARAM_LIST)?) RET_TY? BLOCK
-    // fn IDENT < GENERIC_PARAM (, GENERIC_PARAM)* > ( PARAM (, PARAM)? ) RET_TY? B{ STMT* }
-    pub fn parse_fn(&mut self) -> ParseResult<Fn> {
+    // fn IDENT(GENERIC_PARAMS)?((PARAM_LIST)?) RET_TY?
+    // fn IDENT < GENERIC_PARAM (, GENERIC_PARAM)* > ( PARAM (, PARAM)? ) RET_TY?
+    pub fn parse_fn_sig(&mut self, require_term: bool) -> ParseResult<FnSig> {
         // IDENT
         let ident = self.parse_raw_ident();
+
+        // TODO: generic params
 
         // (PARAM (, PARAM)*)
         let params = self.parse_fn_param_list()?;
@@ -452,15 +539,30 @@ impl<'s> Parser<'s> {
             ret_ty = Some(self.parse_ty()?);
         }
 
+        if require_term {
+            self.require_terminator(ParserTerminatorKind::LnFeed)?;
+        }
+
+        Ok(FnSig {
+            ident: ident?,
+            params,
+            ret_ty: ret_ty.map(Box::new),
+        })
+    }
+
+    // FN_SIG BLOCK
+    // fn IDENT < GENERIC_PARAM (, GENERIC_PARAM)* > ( PARAM (, PARAM)? ) RET_TY? { STMT* }
+    pub fn parse_fn(&mut self) -> ParseResult<Fn> {
+        // FN SIG
+        let sig = self.parse_fn_sig(false);
+
         // { STMT* }
         let body = self.parse_block();
 
         self.require_terminator(ParserTerminatorKind::LnFeed)?;
 
         Ok(Fn {
-            ident: ident?,
-            params,
-            ret_ty: ret_ty.map(Box::new),
+            sig: sig?,
             body: body?,
         })
     }

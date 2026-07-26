@@ -14,6 +14,7 @@ use crate::{
 pub enum HirItemKind<'h> {
     Refer(Box<HirRefer<'h>>),
     Petal(Box<HirPetal<'h>>),
+    Proto(Box<HirProto<'h>>),
     Struct(Box<HirStruct<'h>>),
     Fn(Box<HirFn<'h>>),
     VarDecl(Box<HirVarDecl<'h>>),
@@ -81,6 +82,27 @@ impl<'h> HirPetal<'h> {
 }
 
 #[derive(Debug, Clone)]
+pub enum HirProtoItemAssocFnKind<'h> {
+    Sig(HirFnSig<'h>),
+    Impl(HirFn<'h>),
+}
+
+#[derive(Debug, Clone)]
+pub enum HirProtoItem<'h> {
+    AssocTy(&'h HirTy<'h>),
+    AssocConst(HirVarDecl<'h>),
+    AssocFn(HirProtoItemAssocFnKind<'h>),
+}
+
+#[derive(Debug, Clone)]
+pub struct HirProto<'h> {
+    pub ident: &'h HirRawIdent,
+    // TODO: generic_params
+    pub items: Vec<HirProtoItem<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct HirStruct<'h> {
     pub ident: &'h HirRawIdent,
     pub fields: HirStructFieldList<'h>,
@@ -121,10 +143,15 @@ impl<'h> HirStructField<'h> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HirFn<'h> {
+pub struct HirFnSig<'h> {
     pub ident: &'h HirRawIdent,
     pub params: HirFnParamList<'h>,
     pub ret_ty: Option<&'h HirTy<'h>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFn<'h> {
+    pub sig: HirFnSig<'h>,
     pub body: &'h HirBlock<'h>,
     pub span: Span,
 }

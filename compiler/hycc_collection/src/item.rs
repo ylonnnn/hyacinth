@@ -86,6 +86,7 @@ impl<'i> Collector<'i> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item),
+            HirItemKind::Proto(_) => todo!("collect proto"),
             HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
             HirItemKind::VarDecl(_) => self.collect_var(&item),
@@ -167,8 +168,8 @@ impl<'i> Collector<'i> {
                 return Ok(());
             },
             self.define(Definition::new(
-                func.ident.ident,
-                DefKind::Fn(Box::new(FnDef::new(func.ret_ty.map(|ty| ty.id)))),
+                func.sig.ident.ident,
+                DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
                 Some(self.petal_ctx.top_id()),
                 fn_item.id,
                 fn_item.span,
@@ -184,7 +185,7 @@ impl<'i> Collector<'i> {
             }
 
             // Define the function parameters
-            for param in &func.params.list {
+            for param in &func.sig.params.list {
                 let res = s.define(Definition::new(
                     param.ident.ident,
                     DefKind::FnParam,

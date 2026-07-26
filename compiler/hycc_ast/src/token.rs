@@ -128,9 +128,12 @@ pub enum TokenIdentKind {
     Super,
     Spathe,
 
+    Refer,
     As,
 
-    Refer,
+    Proto,
+    Extend,
+    With,
 
     Petal,
     Struct,
@@ -236,11 +239,14 @@ impl Display for TokenIdentKind {
                 TokenIdentKind::Super => "super",
                 TokenIdentKind::Spathe => "spathe",
 
+                TokenIdentKind::Refer => "refer",
                 TokenIdentKind::As => "as",
 
-                TokenIdentKind::Refer => "refer",
-                TokenIdentKind::Petal => "petal",
+                TokenIdentKind::Proto => "proto",
+                TokenIdentKind::Extend => "extend",
+                TokenIdentKind::With => "with",
 
+                TokenIdentKind::Petal => "petal",
                 TokenIdentKind::Struct => "struct",
 
                 TokenIdentKind::Fn => "fn",

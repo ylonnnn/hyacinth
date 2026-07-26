@@ -14,6 +14,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
+            HirItemKind::Proto(proto) => todo!("infer proto"),
             HirItemKind::Struct(strct) => self.infer_struct(&strct),
             HirItemKind::Fn(_) => self.infer_fn(&item),
             HirItemKind::VarDecl(_) => self.infer_var_decl(&item),
@@ -53,7 +54,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
 
             let ret_ty = Ty::new(
                 fn_ty.ret_ty,
-                func.ret_ty.map(|ty| ty.span).unwrap_or(Span::default()),
+                func.sig.ret_ty.map(|ty| ty.span).unwrap_or(Span::default()),
             );
             s.tctx.attach_to_hir(func.body.id, ret_ty.clone());
 

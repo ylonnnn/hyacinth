@@ -9,6 +9,7 @@ impl<'d> TyResolver<'d> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
+            HirItemKind::Proto(_) => todo!("(ty) resolve proto"),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -41,7 +42,7 @@ impl<'d> TyResolver<'d> {
         };
 
         let mut params = Vec::new();
-        for param in &func.params.list {
+        for param in &func.sig.params.list {
             let ty_id = match self.resolve_as_non_inferable_ty(&param.ty) {
                 Ok(ty_id) => ty_id,
                 Err(diag) => {
@@ -56,7 +57,7 @@ impl<'d> TyResolver<'d> {
         }
 
         let mut ret_ty = self.tctx.make_unit_ty();
-        if let Some(r_ty) = &func.ret_ty {
+        if let Some(r_ty) = &func.sig.ret_ty {
             match self.resolve_as_non_inferable_ty(&r_ty) {
                 Ok(ty_id) => ret_ty = ty_id,
                 Err(diag) => {

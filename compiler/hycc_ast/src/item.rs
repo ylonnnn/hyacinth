@@ -10,6 +10,7 @@ use hycc_util::ternary;
 pub enum ItemKind {
     Refer(Box<Refer>),
     Petal(Box<Petal>),
+    Proto(Box<Proto>),
     Struct(Box<Struct>),
     Fn(Box<Fn>),
     VarDecl(Box<VarDecl>),
@@ -20,6 +21,7 @@ impl ItemKind {
         match self {
             Self::Refer(refer) => refer.span,
             Self::Petal(petal) => petal.span,
+            Self::Proto(proto) => proto.span,
             Self::Struct(strct) => strct.ident.span,
             Self::VarDecl(var) => var.span(),
             Self::Fn(func) => func.span(),
@@ -98,6 +100,28 @@ impl Petal {
 }
 
 #[derive(Debug, Clone)]
+pub enum ProtoItemAssocFnKind {
+    Sig(Box<FnSig>),
+    Impl(Box<Fn>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ProtoItem {
+    AssocTy(Box<Ty>),
+    AssocConst(Box<VarDecl>),
+    AssocFn(ProtoItemAssocFnKind),
+}
+
+/// Protocol Node
+#[derive(Debug, Clone)]
+pub struct Proto {
+    pub ident: Token,
+    // TODO: generic_params
+    pub items: Vec<ProtoItem>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct Struct {
     pub ident: Token,
     pub fields: StructFieldList,
@@ -119,14 +143,13 @@ pub struct StructField {
 }
 
 #[derive(Debug, Clone)]
-pub struct Fn {
+pub struct FnSig {
     pub ident: Token,
     pub params: FnParamList,
     pub ret_ty: Option<Box<Ty>>,
-    pub body: Block,
 }
 
-impl Fn {
+impl FnSig {
     pub fn span(&self) -> Span {
         let end = ternary!(
             self.ret_ty.is_some(),
@@ -135,6 +158,18 @@ impl Fn {
         );
 
         self.ident.span.merge(&end)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Fn {
+    pub sig: FnSig,
+    pub body: Block,
+}
+
+impl Fn {
+    pub fn span(&self) -> Span {
+        self.sig.span()
     }
 }
 

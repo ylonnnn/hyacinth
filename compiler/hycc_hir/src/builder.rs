@@ -7,8 +7,8 @@ use hycc_ast::{
         RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
     item::{
-        Fn, FnParamList, Petal, PetalKind, Refer, ReferTarget, ReferTargetKind, Struct,
-        StructFieldList, VarDecl,
+        Fn, FnParamList, FnSig, Petal, PetalKind, Proto, ProtoItem, ProtoItemAssocFnKind, Refer,
+        ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
     },
     path::{IdentifierArgument, IdentifierArguments},
     stmt::{PassStmt, RetStmt},
@@ -30,9 +30,9 @@ use crate::{
         HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     item::{
-        HirFn, HirFnParam, HirFnParamList, HirItem, HirItemKind, HirPetal, HirPetalKind, HirRefer,
-        HirReferTarget, HirReferTargetKind, HirStruct, HirStructField, HirStructFieldList,
-        HirVarDecl,
+        HirFn, HirFnParam, HirFnParamList, HirFnSig, HirItem, HirItemKind, HirPetal, HirPetalKind,
+        HirProto, HirProtoItem, HirProtoItemAssocFnKind, HirRefer, HirReferTarget,
+        HirReferTargetKind, HirStruct, HirStructField, HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -100,6 +100,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     fn lower_item(&mut self, item: &Item) -> &'h HirItem<'h> {
         let kind = match &item.kind {
             ItemKind::Refer(refer) => HirItemKind::Refer(Box::new(self.lower_refer(&refer))),
+            ItemKind::Proto(proto) => HirItemKind::Proto(Box::new(self.lower_proto(&proto))),
             ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(&petal))),
             ItemKind::Struct(strct) => HirItemKind::Struct(Box::new(self.lower_struct(&strct))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
@@ -161,6 +162,34 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         }
     }
 
+    fn lower_proto(&mut self, proto: &Proto) -> HirProto<'h> {
+        HirProto {
+            ident: self.lower_raw_ident(&proto.ident),
+            items: proto
+                .items
+                .iter()
+                .map(|item| self.lower_proto_item(&item))
+                .collect::<Vec<_>>(),
+            span: proto.span,
+        }
+    }
+
+    fn lower_proto_item(&mut self, item: &ProtoItem) -> HirProtoItem<'h> {
+        match &item {
+            ProtoItem::AssocTy(ty) => HirProtoItem::AssocTy(self.lower_ty(&ty)),
+            ProtoItem::AssocConst(decl) => HirProtoItem::AssocConst(self.lower_var_decl(&decl)),
+            ProtoItem::AssocFn(kind) => HirProtoItem::AssocFn(match &kind {
+                ProtoItemAssocFnKind::Sig(sig) => {
+                    HirProtoItemAssocFnKind::Sig(self.lower_fn_sig(&sig))
+                }
+
+                ProtoItemAssocFnKind::Impl(func) => {
+                    HirProtoItemAssocFnKind::Impl(self.lower_fn(&func))
+                }
+            }),
+        }
+    }
+
     fn lower_struct(&mut self, strct: &Struct) -> HirStruct<'h> {
         HirStruct {
             ident: self.lower_raw_ident(&strct.ident),
@@ -193,11 +222,17 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         }
     }
 
+    fn lower_fn_sig(&mut self, sig: &FnSig) -> HirFnSig<'h> {
+        HirFnSig {
+            ident: self.lower_raw_ident(&sig.ident),
+            params: self.lower_fn_params(&sig.params),
+            ret_ty: sig.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
+        }
+    }
+
     fn lower_fn(&mut self, func: &Fn) -> HirFn<'h> {
         HirFn {
-            ident: self.lower_raw_ident(&func.ident),
-            params: self.lower_fn_params(&func.params),
-            ret_ty: func.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
+            sig: self.lower_fn_sig(&func.sig),
             body: self.lower_block(&func.body),
             span: func.span(),
         }

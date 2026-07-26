@@ -7,9 +7,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_source::Source;
 use hycc_span::Span;
 
-use crate::parser::diag::{
-    ParserDiag, ParserDiagCtx, ParserDiagErrorKind, UnexpectedTokenExpectation,
-};
+use crate::parser::diag::{ParserDiag, ParserDiagCtx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseLevel {

@@ -127,6 +127,7 @@ impl<'c, 'i> Resolver<'c, 'i> {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
+            HirItemKind::Proto(_) => todo!("(ident) resolve proto"),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -251,8 +252,8 @@ impl<'c, 'i> Resolver<'c, 'i> {
             self.collector.dctx.add(diag);
         }
 
-        let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Value), func.ident.ident) else {
-            bug!("no def_id for ident: {:?}", func.ident.ident)
+        let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Value), func.sig.ident.ident) else {
+            bug!("no def_id for ident: {:?}", func.sig.ident.ident)
         };
 
         let Some(scope_id) = self.collector.scope_ctx.get_id_from_def(def_id) else {
@@ -260,13 +261,13 @@ impl<'c, 'i> Resolver<'c, 'i> {
         };
 
         self.enter_scope(scope_id, |s| {
-            for param in &func.params.list {
+            for param in &func.sig.params.list {
                 if let Err(Some(diag)) = s.resolve_ty(&param.ty) {
                     s.dctx.add(diag);
                 }
             }
 
-            if let Some(ret_ty) = &func.ret_ty {
+            if let Some(ret_ty) = &func.sig.ret_ty {
                 if let Err(Some(diag)) = s.resolve_ty(&ret_ty) {
                     s.dctx.add(diag);
                 }

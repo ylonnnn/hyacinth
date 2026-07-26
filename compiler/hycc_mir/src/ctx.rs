@@ -12,6 +12,7 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub enum MirDef {
     Local(LocalDeclId),
+    Global(GlobalDeclId),
     Body(DefId),
 }
 

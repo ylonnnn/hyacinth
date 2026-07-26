@@ -109,7 +109,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         self.lower_block(&func.body, &Place::local(ret_local));
 
         self.scope_ctx = saved_scope_ctx;
-
         self.ctx
             .table
             .get_mut(body_id)
@@ -122,19 +121,15 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
-        if let Some(body_id) = self.ctx.table.top_id() {
-            let body = self.ctx.table.get_mut(body_id);
+        let Some(expr) = decl.val else {
+            return;
+        };
 
-            let Some(ty) = self.tctx.get_ty_of_hir(var_item.id) else {
-                bug!("var decl {:?} does not have an attached ty!", var_item.id)
-            };
+        let ty = self.tctx.get_ty_of_hir(var_item.id).unwrap();
+        let var_def_id = self.definitions.get_def_id(var_item.id).unwrap();
 
-            let Some(expr) = decl.val else {
-                return;
-            };
-
+        if let Some(body) = self.ctx.table.top_mut() {
             let var_local_id = body.declare_local_var(ty.id, decl.mutability, decl.span);
-            let var_def_id = self.definitions.get_def_id(var_item.id).unwrap();
 
             body.insert_stmt(MirStatement::new(
                 MirStatementKind::StorageLive(var_local_id),
@@ -145,7 +140,19 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             self.scope_ctx.top_mut().map(|top| top.store(var_local_id));
             self.lower_expr(&expr, &Place::local(var_local_id));
         } else {
-            todo!("lower variable declarations outside of a local space (global declarations)");
+            let body_id = self.ctx.table.push_new();
+            let var_global_id = self.ctx.declare_global(ty.id, decl.mutability, decl.span);
+            self.ctx.define(var_def_id, MirDef::Global(var_global_id));
+            let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
+
+            self.lower_expr(&expr, &Place::global(var_global_id));
+
+            self.scope_ctx = saved_scope_ctx;
+            self.ctx
+                .table
+                .get_mut(body_id)
+                .try_attach_term(MirTerminator::new(MirTerminatorKind::Ret, Span::default()));
+            self.ctx.table.pop();
         }
     }
 
@@ -293,6 +300,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         // TODO: improve?
         let rvalue = match self.lower_path(&path) {
             MirDef::Local(local_id) => RValue::Use(Operand::Move(Place::local(local_id))),
+            MirDef::Global(global_id) => RValue::Use(Operand::Move(Place::global(global_id))),
             MirDef::Body(def_id) => RValue::FnRef(def_id),
         };
 
@@ -321,6 +329,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         match &reference.expr.kind {
             HirExprKind::Path(path) => match self.lower_path(&path) {
                 MirDef::Local(local_id) => RValue::Ref(kind, Place::local(local_id)),
+                MirDef::Global(global_id) => RValue::Ref(kind, Place::global(global_id)),
                 MirDef::Body(def_id) => RValue::FnRef(def_id),
             },
 
@@ -417,7 +426,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         self.lower_block(&anfn.body, &Place::local(ret_local_id));
 
         self.scope_ctx = saved_scope_ctx;
-
         self.ctx
             .table
             .get_mut(body_id)

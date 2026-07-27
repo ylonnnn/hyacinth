@@ -102,13 +102,13 @@ impl Petal {
 #[derive(Debug, Clone)]
 pub enum ProtoItemAssocFnKind {
     Sig(Box<FnSig>),
-    Impl(Box<Fn>),
+    Impl(Box<Item>),
 }
 
 #[derive(Debug, Clone)]
 pub enum ProtoItem {
-    AssocTy(Box<Ty>),
-    AssocConst(Box<VarDecl>),
+    // AssocTy(Box<Ty>),
+    AssocConst(Box<Item>), // VarDecl Item
     AssocFn(ProtoItemAssocFnKind),
 }
 

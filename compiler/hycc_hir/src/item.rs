@@ -84,13 +84,13 @@ impl<'h> HirPetal<'h> {
 #[derive(Debug, Clone)]
 pub enum HirProtoItemAssocFnKind<'h> {
     Sig(HirFnSig<'h>),
-    Impl(HirFn<'h>),
+    Impl(&'h HirItem<'h>),
 }
 
 #[derive(Debug, Clone)]
 pub enum HirProtoItem<'h> {
-    AssocTy(&'h HirTy<'h>),
-    AssocConst(HirVarDecl<'h>),
+    // AssocTy(&'h HirTy<'h>),
+    AssocConst(&'h HirItem<'h>),
     AssocFn(HirProtoItemAssocFnKind<'h>),
 }
 

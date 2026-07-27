@@ -80,8 +80,9 @@ pub enum DefKind {
     Refer(Box<DefKind>, DefId),
 
     Petal,
+    Proto,
 
-    Fn(Box<FnDef>),
+    Fn(Box<FnSig>),
     FnParam,
 
     Struct(Box<StructDef>),
@@ -95,6 +96,7 @@ impl DefKind {
             Self::Builtin(_)
             | Self::Refer(..)
             | Self::Petal
+            | Self::Proto
             | Self::Fn(_)
             | Self::FnParam
             | Self::Struct(_)
@@ -109,6 +111,7 @@ impl DefKind {
             Self::Refer(..) => "reference/alias",
 
             Self::Petal => "petal",
+            Self::Proto => "protocol",
 
             Self::Fn(_) => "function",
             Self::FnParam => "function parameter",
@@ -131,7 +134,7 @@ impl DefKind {
 
             Self::Refer(def_kind, _) => def_kind.space(),
 
-            Self::Petal | Self::Struct(_) => DefSpace::Type,
+            Self::Petal | Self::Struct(_) | Self::Proto => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var => DefSpace::Value,
         }
@@ -165,6 +168,12 @@ pub enum BuiltinIntTy {
 }
 
 #[derive(Debug, Clone)]
+pub struct ProtoDef {}
+
+#[derive(Debug, Clone)]
+pub enum ProtoDefItem {}
+
+#[derive(Debug, Clone)]
 pub struct StructDef {
     pub fields: Vec<StructFieldDef>,
     pub field_map: HashMap<Symbol, usize>,
@@ -188,12 +197,12 @@ pub struct StructFieldDef {
 }
 
 #[derive(Debug, Clone)]
-pub struct FnDef {
+pub struct FnSig {
     pub params: Vec<DefId>,
     pub ret_ty: Option<HirId>,
 }
 
-impl FnDef {
+impl FnSig {
     pub fn new(ret_ty: Option<HirId>) -> Self {
         Self {
             params: Vec::new(),

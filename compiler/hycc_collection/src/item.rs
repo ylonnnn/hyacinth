@@ -1,7 +1,7 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
-    item::{HirItem, HirItemKind, HirPetalKind},
+    def::{Binding, DefAccessibility, DefKind, Definition, FnSig, StructDef, StructFieldDef},
+    item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
 use hycc_ty::ty::Ty;
@@ -86,7 +86,7 @@ impl<'i> Collector<'i> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item),
-            HirItemKind::Proto(_) => todo!("collect proto"),
+            HirItemKind::Proto(_) => self.collect_proto(&item),
             HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
             HirItemKind::VarDecl(_) => self.collect_var(&item),
@@ -105,6 +105,54 @@ impl<'i> Collector<'i> {
                 }
             }
         })
+    }
+
+    pub fn collect_proto(&mut self, proto_item: &HirItem) -> CollectResult {
+        if self.is_expected_to_be_collected() {
+            return Ok(());
+        }
+
+        let HirItemKind::Proto(proto) = &proto_item.kind else {
+            unreachable!()
+        };
+
+        println!("collecting {:?}...", proto.ident);
+
+        let def_id = self
+            .define(Definition::new(
+                proto.ident.ident,
+                DefKind::Proto,
+                Some(self.petal_ctx.top_id()),
+                proto_item.id,
+                proto_item.span,
+                proto_item.accessibility,
+            ))?
+            .def_id;
+
+        let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+        self.scope_ctx.push_id(scope_id);
+
+        for item in &proto.items {
+            if let Err(Some(diag)) = self.collect_proto_item(&item) {
+                self.dctx.add(diag);
+            }
+        }
+
+        self.scope_ctx.pop();
+        Ok(())
+    }
+
+    fn collect_proto_item(&mut self, item: &HirProtoItem) -> CollectResult {
+        match &item {
+            HirProtoItem::AssocConst(decl) => self.collect_var(&decl),
+
+            HirProtoItem::AssocFn(kind) => match &kind {
+                HirProtoItemAssocFnKind::Sig(sig) => todo!(),
+                HirProtoItemAssocFnKind::Impl(func) => self.collect_fn(&func),
+            },
+
+            _ => todo!("collect proto item"),
+        }
     }
 
     pub fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
@@ -133,7 +181,7 @@ impl<'i> Collector<'i> {
         self.tctx.attach_to_hir(struct_item.id, ty);
 
         let DefKind::Struct(def) = &mut self.definitions.get_mut(def_id).kind else {
-            bug!("struct definition is expected to be defined after definition")
+            unreachable!()
         };
 
         for field in &strct.fields.list {
@@ -169,7 +217,7 @@ impl<'i> Collector<'i> {
             },
             self.define(Definition::new(
                 func.sig.ident.ident,
-                DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
+                DefKind::Fn(Box::new(FnSig::new(func.sig.ret_ty.map(|ty| ty.id)))),
                 Some(self.petal_ctx.top_id()),
                 fn_item.id,
                 fn_item.span,

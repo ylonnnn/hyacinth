@@ -176,15 +176,15 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_proto_item(&mut self, item: &ProtoItem) -> HirProtoItem<'h> {
         match &item {
-            ProtoItem::AssocTy(ty) => HirProtoItem::AssocTy(self.lower_ty(&ty)),
-            ProtoItem::AssocConst(decl) => HirProtoItem::AssocConst(self.lower_var_decl(&decl)),
+            // ProtoItem::AssocTy(ty) => HirProtoItem::AssocTy(self.lower_ty(&ty)),
+            ProtoItem::AssocConst(decl) => HirProtoItem::AssocConst(self.lower_item(&decl)),
             ProtoItem::AssocFn(kind) => HirProtoItem::AssocFn(match &kind {
                 ProtoItemAssocFnKind::Sig(sig) => {
                     HirProtoItemAssocFnKind::Sig(self.lower_fn_sig(&sig))
                 }
 
                 ProtoItemAssocFnKind::Impl(func) => {
-                    HirProtoItemAssocFnKind::Impl(self.lower_fn(&func))
+                    HirProtoItemAssocFnKind::Impl(self.lower_item(&func))
                 }
             }),
         }

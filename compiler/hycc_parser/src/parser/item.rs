@@ -404,10 +404,10 @@ impl<'s> Parser<'s> {
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 let sig = self.parse_fn_sig(false)?;
                 let kind = if self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0 {
-                    ProtoItemAssocFnKind::Impl(Box::new(Fn {
+                    ProtoItemAssocFnKind::Impl(Box::new(Item::new(ItemKind::Fn(Box::new(Fn {
                         sig,
                         body: self.parse_block()?,
-                    }))
+                    })))))
                 } else {
                     self.require_terminator(ParserTerminatorKind::Both)?;
                     ProtoItemAssocFnKind::Sig(Box::new(sig))
@@ -416,9 +416,9 @@ impl<'s> Parser<'s> {
                 ProtoItem::AssocFn(kind)
             }
 
-            TokenKind::Ident(TokenIdentKind::Let) => {
-                ProtoItem::AssocConst(Box::new(self.parse_var_decl_with_recovery()?))
-            }
+            TokenKind::Ident(TokenIdentKind::Let) => ProtoItem::AssocConst(Box::new(Item::new(
+                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?)),
+            ))),
 
             // TODO: associated types
             _ => Err(None)?,

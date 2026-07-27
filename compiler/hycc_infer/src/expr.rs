@@ -172,8 +172,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                 }
             };
 
-            let Some(t_field_ty) = self.tctx.get_hir_ty(strct_def.fields[*idx].ty).cloned()
-            else {
+            let Some(t_field_ty) = self.tctx.get_hir_ty(strct_def.fields[*idx].ty).cloned() else {
                 unreachable!()
             };
 
@@ -297,24 +296,26 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
         let init_lead_ty_id = self.infer_expr(&access.leading)?;
         let mut lead_ty_id = init_lead_ty_id;
 
-        let err = Err(Some(InferDiag::error(
-            access.field.span,
-            InferDiagErrorKind::UnrecognizedField {
-                field: access.field.kind,
-                ty_id: init_lead_ty_id,
-            },
-        )));
-
         loop {
             let lead_ty_kind = self.tctx.get(lead_ty_id);
-            match &lead_ty_kind {
+            let err = || {
+                Err(Some(InferDiag::error(
+                    access.field.span,
+                    InferDiagErrorKind::UnrecognizedField {
+                        field: access.field.kind,
+                        ty_id: lead_ty_id,
+                    },
+                )))
+            };
+
+            match lead_ty_kind {
                 TyKind::Tuple(tup) => {
                     return if let HirFieldAccessFieldKind::Index(idx) = &access.field.kind
                         && *idx < tup.len()
                     {
                         Ok(tup[*idx])
                     } else {
-                        err
+                        err()
                     };
                 }
 
@@ -328,7 +329,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                         HirFieldAccessFieldKind::Ident(ident) => struct_def.field_map.get(&ident),
                         _ => None,
                     }) else {
-                        return err;
+                        return err();
                     };
 
                     let field = &struct_def.fields[*field];
@@ -343,7 +344,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
                     lead_ty_id = *ty_id;
                 }
 
-                _ => return err,
+                _ => return err(),
             }
         }
     }

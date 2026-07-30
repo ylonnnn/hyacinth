@@ -1,3 +1,4 @@
+use hycc_collection::extension::ExtensionTable;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},

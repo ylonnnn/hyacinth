@@ -1,5 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_span::Span;
 use hycc_ty::ty::{InferKind, Ty, TyKind};
 use hycc_util::bug;
@@ -15,7 +15,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
             HirItemKind::Proto(proto) => todo!("infer proto"),
-            HirItemKind::Extend(extend) => todo!("infer extend"),
+            HirItemKind::Extend(extend) => self.infer_extend(&extend),
             HirItemKind::Struct(strct) => self.infer_struct(&strct),
             HirItemKind::Fn(_) => self.infer_fn(&item),
             HirItemKind::VarDecl(_) => self.infer_var_decl(&item),
@@ -24,6 +24,20 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
 
     pub(crate) fn infer_petal(&mut self, petal: &HirPetal) -> InferResult {
         for item in &petal.items {
+            if let Err(Some(diag)) = self.infer_item(&item) {
+                self.dctx.add(diag);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn infer_extend(&mut self, extend: &HirExtend) -> InferResult {
+        // Infer target
+        self.infer_path(&extend.target)?;
+
+        // Infer items of the extension
+        for item in &extend.items {
             if let Err(Some(diag)) = self.infer_item(&item) {
                 self.dctx.add(diag);
             }

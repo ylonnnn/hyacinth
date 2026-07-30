@@ -233,13 +233,13 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     .enumerate()
                                     .filter(|(i, _)| ((field_mask >> i) & 1) == 1)
                                     .map(|(_, field)| format!("`{}`", fmt.interner.get(field.name)))
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
+                                    .collect::<Vec<_>>();
 
                                 format!(
-                                    "missing fields in initializer of `{}`: {}",
+                                    "missing field{} in initializer of `{}`: {}",
+                                    ternary!(missing_fields.len() > 1, "s", ""),
                                     fmt.interner.get(def.name),
-                                    missing_fields
+                                    missing_fields.join(", ")
                                 )
                             }
 

@@ -6,7 +6,6 @@ use hycc_symbol::Symbol;
 use crate::{
     HirId,
     item::{HirItemAccessibility, HirPubAccessibilityKind},
-    path::HirIdent,
     petal::PetalId,
 };
 
@@ -78,8 +77,6 @@ impl DefId {
 pub enum DefKind {
     Builtin(BuiltinKind),
 
-    Refer(Box<DefKind>, DefId),
-
     Petal,
     Proto,
 
@@ -95,7 +92,6 @@ impl DefKind {
     pub fn article(&self) -> &'static str {
         match self {
             Self::Builtin(_)
-            | Self::Refer(..)
             | Self::Petal
             | Self::Proto
             | Self::Fn(_)
@@ -108,8 +104,6 @@ impl DefKind {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Builtin(_) => "built-in",
-
-            Self::Refer(..) => "reference/alias",
 
             Self::Petal => "petal",
             Self::Proto => "protocol",
@@ -132,8 +126,6 @@ impl DefKind {
 
         match self {
             Self::Builtin(_) => unreachable!(),
-
-            Self::Refer(def_kind, _) => def_kind.space(),
 
             Self::Petal | Self::Struct(_) | Self::Proto => DefSpace::Type,
 

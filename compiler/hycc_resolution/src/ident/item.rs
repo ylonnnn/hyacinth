@@ -1,10 +1,11 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirNode,
-    def::{Binding, DefAccessibility, DefSpace},
+    HirId, HirNode,
+    def::{Binding, BuiltinKind, BuiltinTyKind, DefAccessibility, DefKind, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirItemLevel, HirReferTarget, HirReferTargetKind},
     scope::ScopeId,
 };
+use hycc_span::Span;
 use hycc_util::bug;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
@@ -146,6 +147,13 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
 
         self.enter_scope(scope_id, |s| {
+            let target_def = s.collector.definitions.get(target_def_id);
+            s.collector.scope_ctx.get_mut(scope_id).define(
+                target_def.kind.space(),
+                s.collector.interner.intern("Self"),
+                Binding::new(target_def_id, DefAccessibility::Priv),
+            );
+
             s.collector.redirect.replace(target_scope_id);
 
             // Pre-collection

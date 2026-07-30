@@ -28,8 +28,19 @@ impl<'d> TyResolver<'d> {
     }
 
     pub(crate) fn resolve_extend(&mut self, extend: &HirExtend) -> ResolveResult {
-        extend.target;
-        todo!("(ty) resolve extend")
+        // let ext = self.ex
+
+        // Resolve the target type
+        self.resolve_path(&extend.target)?;
+
+        // Resolve the items of the extension
+        for item in &extend.items {
+            if let Err(Some(diag)) = self.resolve_item(&item) {
+                self.dctx.add(diag);
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {

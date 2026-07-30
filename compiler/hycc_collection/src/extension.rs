@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hycc_hir::{HirId, item::HirItem, path::HirIdent};
+use hycc_hir::HirId;
 
 #[derive(Debug, Clone)]
 pub struct ExtensionTable {

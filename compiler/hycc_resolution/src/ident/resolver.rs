@@ -1,23 +1,15 @@
-use hycc_collection::{
-    collector::{CollectionLevel, Collector},
-    diag::CollectorDiagDataCtx,
-};
+use hycc_collection::{collector::Collector, diag::CollectorDiagDataCtx};
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
     HirTable,
-    def::{Binding, DefAccessibility, DefId, DefSpace, Definition},
-    item::{HirItem, HirItemKind, HirPetal},
+    def::{Binding, DefId, DefSpace, Definition},
+    item::{HirItem, HirItemKind},
     scope::ScopeId,
 };
-use hycc_span::Span;
 use hycc_symbol::Symbol;
 use hycc_util::bug;
 
-use crate::{
-    ResolveResult,
-    diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagDataCtx, ResolverDiagErrorKind},
-    // ident::ctx::{Petal, ResolutionCtx},
-};
+use crate::diag::{ResolverDiagCtx, ResolverDiagDataCtx};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ResolutionCtx {
@@ -38,8 +30,6 @@ pub struct Resolver<'c, 'i, 'h> {
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
-
-    pub(crate) curr_scope: Option<ScopeId>,
 }
 
 impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
@@ -50,7 +40,6 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             hir_table,
             // resolution: ResolutionCtx::Default,
             expected_space: None,
-            curr_scope: None,
         }
     }
 

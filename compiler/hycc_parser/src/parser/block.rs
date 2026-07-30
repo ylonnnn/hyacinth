@@ -5,10 +5,7 @@ use hycc_ast::{
 };
 use hycc_diagnostic::DiagnosticContext;
 
-use crate::parser::{
-    Parser,
-    parser::{ParseLevel, ParseResult},
-};
+use crate::parser::{Parser, parser::ParseResult};
 
 impl<'s> Parser<'s> {
     pub fn parse_block(&mut self) -> ParseResult<Block> {
@@ -26,8 +23,7 @@ impl<'s> Parser<'s> {
             .span
             .merge(&data.last().unwrap().underlying().unwrap().span);
 
-        let prev_level = self.level;
-        self.level = ParseLevel::Local;
+        self.depth += 1;
 
         let block = self.use_stream(
             TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
@@ -52,7 +48,7 @@ impl<'s> Parser<'s> {
             },
         );
 
-        self.level = prev_level;
+        self.depth -= 1;
         block
     }
 }

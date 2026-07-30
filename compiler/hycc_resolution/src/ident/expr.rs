@@ -7,7 +7,7 @@ use hycc_hir::{
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'c, 'i> Resolver<'c, 'i> {
+impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
             HirExprKind::Path(path) => s.resolve_path(&path),

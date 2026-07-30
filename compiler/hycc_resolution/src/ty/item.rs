@@ -1,5 +1,5 @@
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_ty::ty::Ty;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
@@ -10,6 +10,7 @@ impl<'d> TyResolver<'d> {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Proto(_) => todo!("(ty) resolve proto"),
+            HirItemKind::Extend(extend) => self.resolve_extend(&extend),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -24,6 +25,11 @@ impl<'d> TyResolver<'d> {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn resolve_extend(&mut self, extend: &HirExtend) -> ResolveResult {
+        extend.target;
+        todo!("(ty) resolve extend")
     }
 
     pub(crate) fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {

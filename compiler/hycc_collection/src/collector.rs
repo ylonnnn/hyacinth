@@ -14,21 +14,27 @@ use hycc_symbol::SymbolInterner;
 use hycc_ty::{context::TyCtx, ty::Ty};
 use hycc_util::{bug, ternary};
 
-use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
+use crate::{
+    diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind},
+    extension::ExtensionTable,
+};
 
 #[derive(Debug)]
 pub struct Collector<'i> {
     pub tctx: TyCtx,
     pub scope_ctx: ScopeCtx,
+    pub petal_ctx: PetalCtx,
     pub definitions: DefinitionTable,
     pub dctx: CollectorDiagCtx,
-    pub petal_ctx: PetalCtx,
+    pub ext_table: ExtensionTable,
     pub interner: &'i mut SymbolInterner,
 
-    // Default to top-level collection
-    pub level: CollectionLevel,
-    // The current collection level of the current node
-    pub node_level: CollectionLevel,
+    // // Default to top-level collection
+    // pub level: CollectionLevel,
+    // // The current collection level of the current node
+    // pub node_level: CollectionLevel,
+    // Definition scope re-direction
+    pub redirect: Option<ScopeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,14 +48,17 @@ pub type CollectResult<T = (), E = Option<CollectorDiag>> = Result<T, E>;
 impl<'i> Collector<'i> {
     pub fn new(interner: &'i mut SymbolInterner) -> Self {
         let mut inst = Self {
-            definitions: DefinitionTable::new(),
-            scope_ctx: ScopeCtx::new(),
-            dctx: CollectorDiagCtx::new(),
             tctx: TyCtx::new(),
+            scope_ctx: ScopeCtx::new(),
             petal_ctx: PetalCtx::new(),
+            definitions: DefinitionTable::new(),
+            dctx: CollectorDiagCtx::new(),
+            ext_table: ExtensionTable::new(),
             interner,
-            level: CollectionLevel::Top,
-            node_level: CollectionLevel::Top,
+
+            // level: CollectionLevel::Top,
+            // node_level: CollectionLevel::Top,
+            redirect: None,
         };
 
         let root_petal_id = inst
@@ -109,10 +118,9 @@ impl<'i> Collector<'i> {
 
             match self.define(def) {
                 Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
-                Err(Some(diag)) => {
-                    self.dctx.add(diag);
+                Err(diag) => {
+                    diag.map(|diag| self.dctx.add(diag));
                 }
-                _ => {}
             }
         }
 
@@ -131,10 +139,9 @@ impl<'i> Collector<'i> {
 
             match self.define(def) {
                 Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
-                Err(Some(diag)) => {
-                    self.dctx.add(diag);
+                Err(diag) => {
+                    diag.map(|diag| self.dctx.add(diag));
                 }
-                _ => {}
             }
         }
 
@@ -190,11 +197,19 @@ impl<'i> Collector<'i> {
         }
     }
 
+    // }
     pub fn define(&mut self, definition: Definition) -> CollectResult<&Binding> {
-        let top = self.scope_ctx.top_mut();
+        let scope_id = self.redirect.unwrap_or(self.scope_ctx.top_id());
+        let scope = self.scope_ctx.get_mut(scope_id);
 
         let (name, space) = (definition.name, definition.kind.space());
-        if let Some(earlier_def) = top.get(Some(space), name) {
+        if scope.get(Some(space), name).is_some() {
+            let earlier_def = scope.get(Some(space), name).unwrap();
+            let def = self.definitions.get(earlier_def.def_id);
+            if def.hir_id == definition.hir_id {
+                return Ok(earlier_def);
+            }
+
             Err(Some(CollectorDiag::error(
                 definition.span,
                 CollectorDiagErrorKind::Duplication {
@@ -209,7 +224,7 @@ impl<'i> Collector<'i> {
                 accessibility,
             );
 
-            Ok(top.define(space, name, binding))
+            Ok(scope.define(space, name, binding))
         }
     }
 
@@ -233,27 +248,23 @@ impl<'i> Collector<'i> {
     pub fn enter_scope<F, U>(
         &mut self,
         scope_id: ScopeId,
-        level: CollectionLevel,
+        // level: CollectionLevel,
         mut handler: F,
     ) -> U
     where
         F: FnMut(&mut Self) -> U,
     {
-        let prev_node_level = self.node_level;
+        // let prev_node_level = self.node_level;
+        // self.node_level = level;
 
-        self.node_level = level;
         self.scope_ctx.push_id(scope_id);
 
         let data = handler(self);
 
         self.scope_ctx.pop();
-        self.node_level = prev_node_level;
+        // self.node_level = prev_node_level;
 
         data
-    }
-
-    pub fn is_expected_to_be_collected(&self) -> bool {
-        self.level == CollectionLevel::Local && self.node_level == CollectionLevel::Top
     }
 
     pub fn collect(&mut self, tree: &HirItem) {
@@ -262,8 +273,8 @@ impl<'i> Collector<'i> {
             bug!("invalid item collection! collection must start at the tree (a petal)")
         };
 
-        self.level = CollectionLevel::Top;
-        self.node_level = CollectionLevel::Top;
+        // self.level = CollectionLevel::Top;
+        // self.node_level = CollectionLevel::Top;
 
         let root_scope_id = self.scope_ctx.root_id();
         self.scope_ctx.attach_id(hir_id, root_scope_id);

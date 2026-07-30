@@ -10,10 +10,10 @@ use hycc_util::{bug, ternary};
 use crate::{
     ResolveResult,
     diag::{ResolverDiag, ResolverDiagErrorKind},
-    ident::resolver::Resolver,
+    ident::resolver::{ResolutionCtx, Resolver},
 };
 
-impl<'c, 'i> Resolver<'c, 'i> {
+impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
     pub(crate) fn resolve_path(&mut self, path: &HirPath) -> ResolveResult {
         let Some(space) = self.expected_space else {
             bug!("expected definition space must exist!")
@@ -67,16 +67,20 @@ impl<'c, 'i> Resolver<'c, 'i> {
                 .scope_ctx
                 .get(scope)
                 .get(self.expected_space, name)
+                .map(|binding| (binding, scope))
         } else {
             self.get_binding(self.expected_space, name)
-                .map(|(binding, _)| binding)
         };
 
-        let Some(binding) = binding else {
+        let err = || {
             Err(Some(ResolverDiag::error(
                 ident.span,
                 ResolverDiagErrorKind::UnrecognizedSymbol(name, self.expected_space),
-            )))?
+            )))
+        };
+
+        let Some((binding, scope_id)) = binding else {
+            err()?
         };
 
         let definition = self.collector.definitions.get(binding.def_id);
@@ -107,7 +111,7 @@ impl<'c, 'i> Resolver<'c, 'i> {
                     ResolverDiagErrorKind::InaccessibleSymbol(name),
                 )))?
             }
-        }
+        };
 
         let def_id = binding.def_id;
 

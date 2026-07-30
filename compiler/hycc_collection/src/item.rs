@@ -1,13 +1,16 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{Binding, DefAccessibility, DefKind, Definition, FnSig, StructDef, StructFieldDef},
+    def::{Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
 use hycc_ty::ty::Ty;
 use hycc_util::{bug, ternary};
 
-use crate::collector::{CollectResult, CollectionLevel, Collector};
+use crate::{
+    collector::{CollectResult, CollectionLevel, Collector},
+    extension::Extension,
+};
 
 impl<'i> Collector<'i> {
     pub fn push_petal_item(&mut self, petal_item: &HirItem) -> CollectResult<usize> {
@@ -86,7 +89,11 @@ impl<'i> Collector<'i> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item),
-            HirItemKind::Proto(_) => self.collect_proto(&item),
+            HirItemKind::Proto(_) => {
+                // self.collect_proto(&item)
+                todo!()
+            }
+            HirItemKind::Extend(_) => self.collect_extend(&item),
             HirItemKind::Struct(_) => self.collect_struct(&item),
             HirItemKind::Fn(_) => self.collect_fn(&item),
             HirItemKind::VarDecl(_) => self.collect_var(&item),
@@ -108,15 +115,13 @@ impl<'i> Collector<'i> {
     }
 
     pub fn collect_proto(&mut self, proto_item: &HirItem) -> CollectResult {
-        if self.is_expected_to_be_collected() {
+        if self.definitions.get_def_id(proto_item.id).is_some() {
             return Ok(());
         }
 
         let HirItemKind::Proto(proto) = &proto_item.kind else {
             unreachable!()
         };
-
-        println!("collecting {:?}...", proto.ident);
 
         let def_id = self
             .define(Definition::new(
@@ -151,12 +156,39 @@ impl<'i> Collector<'i> {
                 HirProtoItemAssocFnKind::Impl(func) => self.collect_fn(&func),
             },
 
+            #[allow(unreachable_patterns)]
             _ => todo!("collect proto item"),
         }
     }
 
+    pub fn collect_extend(&mut self, extend_item: &HirItem) -> CollectResult {
+        if self.ext_table.get_id_by_hir(extend_item.id).is_some() {
+            return Ok(());
+        }
+
+        let HirItemKind::Extend(extend) = &extend_item.kind else {
+            unreachable!()
+        };
+
+        // NOTE: Currently, extension items are not collected during collection as the
+        // target of the extension cannot be resolved as of this point.
+        // Extension items are pre-collected during the resolution of the
+        // extension.
+
+        self.scope_ctx.attach(extend_item.id, Scope::new());
+        self.ext_table.attach(
+            extend_item.id,
+            Extension {
+                target: extend.target.id,
+                items: extend.items.iter().map(|item| item.id).collect::<Vec<_>>(),
+            },
+        );
+
+        Ok(())
+    }
+
     pub fn collect_struct(&mut self, struct_item: &HirItem) -> CollectResult {
-        if self.is_expected_to_be_collected() {
+        if self.definitions.get_def_id(struct_item.id).is_some() {
             return Ok(());
         }
 
@@ -207,28 +239,26 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        let expected = self.is_expected_to_be_collected();
-        let def_id = ternary!(
-            expected,
-            if let Some(def_id) = self.definitions.get_def_id(fn_item.id) {
-                def_id
-            } else {
-                return Ok(());
-            },
-            self.define(Definition::new(
-                func.sig.ident.ident,
-                DefKind::Fn(Box::new(FnSig::new(func.sig.ret_ty.map(|ty| ty.id)))),
-                Some(self.petal_ctx.top_id()),
-                fn_item.id,
-                fn_item.span,
-                fn_item.accessibility,
-            ))?
-            .def_id
-        );
+        let (def_id, collected) = if let Some(def_id) = self.definitions.get_def_id(fn_item.id) {
+            (def_id, true)
+        } else {
+            (
+                self.define(Definition::new(
+                    func.sig.ident.ident,
+                    DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
+                    Some(self.petal_ctx.top_id()),
+                    fn_item.id,
+                    fn_item.span,
+                    fn_item.accessibility,
+                ))?
+                .def_id,
+                false,
+            )
+        };
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-        self.enter_scope(scope_id, CollectionLevel::Local, |s| {
-            if expected {
+        self.enter_scope(scope_id, /* CollectionLevel::Local, */ |s| {
+            if collected {
                 return;
             }
 
@@ -265,7 +295,7 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        if !self.is_expected_to_be_collected() {
+        if self.definitions.get_def_id(var_item.id).is_none() {
             self.define(Definition::new(
                 var.ident.ident,
                 DefKind::Var,

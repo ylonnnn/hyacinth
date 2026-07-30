@@ -4,6 +4,7 @@ use hycc_collection::{
 };
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
+    HirTable,
     def::{Binding, DefAccessibility, DefId, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirPetal},
     scope::ScopeId,
@@ -18,11 +19,22 @@ use crate::{
     // ident::ctx::{Petal, ResolutionCtx},
 };
 
+#[derive(Debug, Clone, Copy)]
+pub enum ResolutionCtx {
+    /// The default/normal resolution context
+    Default,
+
+    /// The resolution context during `Extension`/`extend` fresolution
+    Extension,
+}
+
 #[derive(Debug)]
-pub struct Resolver<'c, 'i> {
+pub struct Resolver<'c, 'i, 'h> {
     pub dctx: ResolverDiagCtx,
     pub collector: &'c mut Collector<'i>,
-    // pub(crate) ctx: ResolutionCtx,
+    pub hir_table: &'h HirTable<'h>,
+
+    // pub(crate) resolution: ResolutionCtx,
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
@@ -30,12 +42,13 @@ pub struct Resolver<'c, 'i> {
     pub(crate) curr_scope: Option<ScopeId>,
 }
 
-impl<'c, 'i> Resolver<'c, 'i> {
-    pub fn new(collector: &'c mut Collector<'i>) -> Self {
+impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
+    pub fn new(collector: &'c mut Collector<'i>, hir_table: &'h HirTable<'h>) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(),
             collector,
-            // ctx: ResolutionCtx::new(),
+            hir_table,
+            // resolution: ResolutionCtx::Default,
             expected_space: None,
             curr_scope: None,
         }
@@ -59,6 +72,8 @@ impl<'c, 'i> Resolver<'c, 'i> {
     }
 
     pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<(DefId, ScopeId)> {
+        println!("space: {space:?}, name: {name:?}");
+        dbg!(self.get_binding(space, name));
         self.get_binding(space, name)
             .map(|(binding, scope_id)| (binding.def_id, scope_id))
     }
@@ -72,13 +87,13 @@ impl<'c, 'i> Resolver<'c, 'i> {
     where
         F: FnMut(&mut Self) -> U,
     {
-        let prev_level = self.collector.node_level;
-        self.collector.node_level = CollectionLevel::Local;
+        // let prev_level = self.collector.node_level;
+        // self.collector.node_level = CollectionLevel::Local;
         self.collector.scope_ctx.push_id(scope_id);
 
         let data = handler(self);
         self.collector.scope_ctx.pop();
-        self.collector.node_level = prev_level;
+        // self.collector.node_level = prev_level;
 
         data
     }
@@ -124,7 +139,7 @@ impl<'c, 'i> Resolver<'c, 'i> {
     }
 
     pub fn resolve(&mut self, tree: &HirItem) {
-        self.collector.level = CollectionLevel::Local;
+        // self.collector.level = CollectionLevel::Local;
 
         // let Some(scope_id) = self.collector.scope_ctx.get_id_by_hir(tree.id) else {
         //     bug!("expected a scope attached to the tree")

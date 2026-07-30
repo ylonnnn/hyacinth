@@ -15,6 +15,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
             HirItemKind::Proto(proto) => todo!("infer proto"),
+            HirItemKind::Extend(extend) => todo!("infer extend"),
             HirItemKind::Struct(strct) => self.infer_struct(&strct),
             HirItemKind::Fn(_) => self.infer_fn(&item),
             HirItemKind::VarDecl(_) => self.infer_var_decl(&item),

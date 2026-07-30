@@ -53,6 +53,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirItemKind::Refer(_) => {}
             HirItemKind::Petal(petal) => self.lower_petal(&petal),
             HirItemKind::Proto(proto) => todo!("(mir) lower proto"),
+            HirItemKind::Extend(extend) => todo!("(mir) lower extend"),
             HirItemKind::Struct(_) => {}
             HirItemKind::Fn(_) => self.lower_fn(&item),
             HirItemKind::VarDecl(_) => self.lower_var_decl(&item),

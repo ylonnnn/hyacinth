@@ -3,7 +3,7 @@ use hycc_hir::{block::HirBlock, scope::Scope};
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'c, 'i> Resolver<'c, 'i> {
+impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
     pub(crate) fn resolve_block(&mut self, block: &HirBlock) -> ResolveResult {
         let scope_id = self.collector.scope_ctx.attach(block.id, Scope::new());
 

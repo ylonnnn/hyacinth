@@ -121,7 +121,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let mut resolver = Resolver::new(&mut collector);
+    let mut resolver = Resolver::new(&mut collector, &hir_table);
     resolver.resolve(&hir);
 
     let (definitions, scope_ctx) = (

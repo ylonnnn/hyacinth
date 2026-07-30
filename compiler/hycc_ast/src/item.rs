@@ -11,6 +11,7 @@ pub enum ItemKind {
     Refer(Box<Refer>),
     Petal(Box<Petal>),
     Proto(Box<Proto>),
+    Extend(Box<Extend>),
     Struct(Box<Struct>),
     Fn(Box<Fn>),
     VarDecl(Box<VarDecl>),
@@ -18,13 +19,26 @@ pub enum ItemKind {
 
 impl ItemKind {
     pub fn span(&self) -> Span {
-        match self {
+        match &self {
             Self::Refer(refer) => refer.span,
             Self::Petal(petal) => petal.span,
             Self::Proto(proto) => proto.span,
+            Self::Extend(extend) => extend.span(),
             Self::Struct(strct) => strct.ident.span,
             Self::VarDecl(var) => var.span(),
             Self::Fn(func) => func.span(),
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match &self {
+            Self::Refer(_) => "reference/alias delcaration",
+            Self::Petal(_) => "petal",
+            Self::Proto(_) => "proto",
+            Self::Extend(_) => "extend",
+            Self::Struct(_) => "struct",
+            Self::VarDecl(_) => "variable declaration",
+            Self::Fn(_) => "function",
         }
     }
 }
@@ -43,19 +57,27 @@ pub enum ItemAccessibility {
     Priv,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ItemLevel {
+    Top,
+    Local(usize),
+}
+
 #[derive(Debug, Clone)]
 pub struct Item {
     pub kind: ItemKind,
     pub span: Span,
     pub accessibility: ItemAccessibility,
+    pub level: ItemLevel,
 }
 
 impl Item {
-    pub fn new(kind: ItemKind) -> Self {
+    pub fn new(kind: ItemKind, level: ItemLevel) -> Self {
         Self {
             span: kind.span(),
             kind,
             accessibility: ItemAccessibility::Priv,
+            level,
         }
     }
 }
@@ -119,6 +141,19 @@ pub struct Proto {
     // TODO: generic_params
     pub items: Vec<ProtoItem>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Extend {
+    pub target: Path,
+    // TODO: with: Option<[PROTO]>
+    pub items: Vec<Item>,
+}
+
+impl Extend {
+    pub fn span(&self) -> Span {
+        self.target.span
+    }
 }
 
 #[derive(Debug, Clone)]

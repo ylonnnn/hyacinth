@@ -6,6 +6,7 @@ use hycc_symbol::Symbol;
 use crate::{
     HirId,
     item::{HirItemAccessibility, HirPubAccessibilityKind},
+    path::HirIdent,
     petal::PetalId,
 };
 
@@ -82,7 +83,7 @@ pub enum DefKind {
     Petal,
     Proto,
 
-    Fn(Box<FnSig>),
+    Fn(Box<FnDef>),
     FnParam,
 
     Struct(Box<StructDef>),
@@ -197,12 +198,12 @@ pub struct StructFieldDef {
 }
 
 #[derive(Debug, Clone)]
-pub struct FnSig {
+pub struct FnDef {
     pub params: Vec<DefId>,
     pub ret_ty: Option<HirId>,
 }
 
-impl FnSig {
+impl FnDef {
     pub fn new(ret_ty: Option<HirId>) -> Self {
         Self {
             params: Vec::new(),

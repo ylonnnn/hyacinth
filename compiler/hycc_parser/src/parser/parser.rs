@@ -10,12 +10,6 @@ use hycc_span::Span;
 use crate::parser::diag::{ParserDiag, ParserDiagCtx};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ParseLevel {
-    Global,
-    Local,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParserCtx {
     Normal,
 
@@ -28,11 +22,10 @@ pub enum ParserCtx {
 pub struct Parser<'s> {
     pub(super) stream: TokenStream,
     pub dctx: ParserDiagCtx,
-    pub(super) source: &'s Source,
-
-    pub(super) ctx: ParserCtx,
-    pub(super) level: ParseLevel,
     pub(super) petal_stack: Vec<String>,
+    pub(super) source: &'s Source,
+    pub(super) depth: usize,
+    pub(super) ctx: ParserCtx,
 }
 
 pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
@@ -49,11 +42,10 @@ impl<'s> Parser<'s> {
         Self {
             stream,
             dctx: ParserDiagCtx::new(),
-            source,
-
-            ctx: ParserCtx::Normal,
-            level: ParseLevel::Global,
             petal_stack: Vec::new(),
+            source,
+            depth: 0,
+            ctx: ParserCtx::Normal,
         }
     }
 

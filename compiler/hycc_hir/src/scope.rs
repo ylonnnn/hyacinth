@@ -95,6 +95,13 @@ impl ScopeCtx {
         }
     }
 
+    pub fn overwrite(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
+        let scope_id = self.table.insert(scope);
+        self.node_table.insert(hir_id, scope_id);
+
+        scope_id
+    }
+
     pub fn attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) {
         assert!(
             !self.node_table.contains_key(&hir_id),
@@ -121,18 +128,31 @@ impl ScopeCtx {
         self.table.get_mut(id)
     }
 
-    pub fn get_id_by_hir(&self, hir_id: HirId) -> Option<ScopeId> {
+    pub fn get_hir_scope_id(&self, hir_id: HirId) -> Option<ScopeId> {
         Some(*self.node_table.get(&hir_id)?)
     }
 
-    pub fn get_by_hir(&self, hir_id: HirId) -> Option<&Scope> {
-        let scope_id = self.get_id_by_hir(hir_id)?;
+    pub fn expect_hir_scope_id(&self, hir_id: HirId) -> ScopeId {
+        self.get_hir_scope_id(hir_id)
+            .expect(&format!("expected a scope attached to hir id {hir_id:?}"))
+    }
+
+    pub fn get_hir_scope(&self, hir_id: HirId) -> Option<&Scope> {
+        let scope_id = self.get_hir_scope_id(hir_id)?;
         Some(self.table.get(scope_id))
     }
 
-    pub fn get_mut_by_hir(&mut self, hir_id: HirId) -> Option<&mut Scope> {
-        let scope_id = self.get_id_by_hir(hir_id)?;
+    pub fn expect_hir_scope(&self, hir_id: HirId) -> &Scope {
+        self.table.get(self.expect_hir_scope_id(hir_id))
+    }
+
+    pub fn get_hir_mut_scope(&mut self, hir_id: HirId) -> Option<&mut Scope> {
+        let scope_id = self.get_hir_scope_id(hir_id)?;
         Some(self.table.get_mut(scope_id))
+    }
+
+    pub fn expect_hir_mut_scope(&mut self, hir_id: HirId) -> &mut Scope {
+        self.table.get_mut(self.expect_hir_scope_id(hir_id))
     }
 
     pub fn attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
@@ -177,14 +197,27 @@ impl ScopeCtx {
         Some(*self.def_table.get(&def_id)?)
     }
 
-    pub fn get_from_def(&self, def_id: DefId) -> Option<&Scope> {
+    pub fn expect_def_scope_id(&self, def_id: DefId) -> ScopeId {
+        self.get_id_from_def(def_id)
+            .expect(&format!("expected a scope attached to def id {def_id:?}"))
+    }
+
+    pub fn get_def_scope(&self, def_id: DefId) -> Option<&Scope> {
         let scope_id = self.get_id_from_def(def_id)?;
         Some(self.table.get(scope_id))
+    }
+
+    pub fn expect_def_scope(&self, def_id: DefId) -> &Scope {
+        self.table.get(self.expect_def_scope_id(def_id))
     }
 
     pub fn get_mut_from_def(&mut self, def_id: DefId) -> Option<&mut Scope> {
         let scope_id = self.get_id_from_def(def_id)?;
         Some(self.table.get_mut(scope_id))
+    }
+
+    pub fn exepct_def_mut_scope(&mut self, def_id: DefId) -> &mut Scope {
+        self.table.get_mut(self.expect_def_scope_id(def_id))
     }
 
     pub fn push(&mut self, scope: Scope) -> ScopeId {
@@ -290,7 +323,7 @@ impl ScopeCtx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Scope {
     definitions: HashMap<(DefSpace, Symbol), Binding>,
 }
@@ -302,9 +335,15 @@ impl Scope {
         }
     }
 
+    pub fn definitions(&self) -> &HashMap<(DefSpace, Symbol), Binding> {
+        &self.definitions
+    }
+
     pub fn define(&mut self, space: DefSpace, name: Symbol, binding: Binding) -> &mut Binding {
-        self.definitions.insert((space, name), binding);
-        self.definitions.get_mut(&(space, name)).unwrap()
+        let key = (space, name);
+
+        self.definitions.insert(key, binding);
+        self.definitions.get_mut(&key).unwrap()
     }
 
     pub fn get(&self, space: Option<DefSpace>, name: Symbol) -> Option<&Binding> {
@@ -315,5 +354,13 @@ impl Scope {
                 .map(|space| self.definitions.get(&(space, name)))
                 .find(|def| def.is_some())?,
         }
+    }
+
+    pub fn get_all(&self) -> Vec<(&(DefSpace, Symbol), &Binding)> {
+        self.definitions.iter().collect::<Vec<_>>()
+    }
+
+    pub fn all(self) -> Vec<((DefSpace, Symbol), Binding)> {
+        self.definitions.into_iter().collect::<Vec<_>>()
     }
 }

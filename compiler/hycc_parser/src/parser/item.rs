@@ -1,21 +1,22 @@
 use hycc_ast::{
     Expr, Item, ItemKind, Mutability, Ty,
     item::{
-        Fn, FnParam, FnParamList, FnSig, ItemAccessibility, Petal, PetalKind, Proto, ProtoItem,
-        ProtoItemAssocFnKind, PubAccessibilityKind, Refer, ReferTarget, ReferTargetKind, Struct,
-        StructField, StructFieldAccessibility, StructFieldList, VarDecl,
+        Extend, Fn, FnParam, FnParamList, FnSig, ItemAccessibility, ItemLevel, Petal, PetalKind,
+        Proto, ProtoItem, ProtoItemAssocFnKind, PubAccessibilityKind, Refer, ReferTarget,
+        ReferTargetKind, Struct, StructField, StructFieldAccessibility, StructFieldList, VarDecl,
     },
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_session::config;
+use hycc_util::ternary;
 use std::path::{self, PathBuf};
 
 use crate::parser::{
     Parser,
     diag::{ParserDiag, ParserDiagErrorKind},
-    parser::{ParseLevel, ParseResult, ParserTerminatorKind},
+    parser::{ParseResult, ParserTerminatorKind},
     path::PathKind,
 };
 
@@ -69,12 +70,16 @@ impl<'s> Parser<'s> {
                 ItemKind::Refer(Box::new(self.parse_refer_with_recovery()?))
             }
 
+            TokenKind::Ident(TokenIdentKind::Petal) => {
+                ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
+            }
+
             TokenKind::Ident(TokenIdentKind::Proto) => {
                 ItemKind::Proto(Box::new(self.parse_proto_with_recovery()?))
             }
 
-            TokenKind::Ident(TokenIdentKind::Petal) => {
-                ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
+            TokenKind::Ident(TokenIdentKind::Extend) => {
+                ItemKind::Extend(Box::new(self.parse_extend_with_recovery()?))
             }
 
             TokenKind::Ident(TokenIdentKind::Struct) => {
@@ -92,7 +97,14 @@ impl<'s> Parser<'s> {
             _ => Err(None)?,
         };
 
-        let mut item = Item::new(kind);
+        let mut item = Item::new(
+            kind,
+            ternary!(
+                self.depth == 0,
+                ItemLevel::Top,
+                ItemLevel::Local(self.depth.saturating_sub(1))
+            ),
+        );
         item.span = span.merge(&item.span);
 
         Ok(item)
@@ -332,7 +344,7 @@ impl<'s> Parser<'s> {
             }
         }
 
-        if self.level == ParseLevel::Local && matches!(petal.kind, PetalKind::File(..)) {
+        if self.depth > 0 && matches!(petal.kind, PetalKind::File(..)) {
             Err(Some(ParserDiag::error(
                 span,
                 ParserDiagErrorKind::IllegalLocalNonInlinePetalDeclaration,
@@ -404,10 +416,17 @@ impl<'s> Parser<'s> {
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 let sig = self.parse_fn_sig(false)?;
                 let kind = if self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0 {
-                    ProtoItemAssocFnKind::Impl(Box::new(Item::new(ItemKind::Fn(Box::new(Fn {
-                        sig,
-                        body: self.parse_block()?,
-                    })))))
+                    ProtoItemAssocFnKind::Impl(Box::new(Item::new(
+                        ItemKind::Fn(Box::new(Fn {
+                            sig,
+                            body: self.parse_block()?,
+                        })),
+                        ternary!(
+                            self.depth == 0,
+                            ItemLevel::Top,
+                            ItemLevel::Local(self.depth.saturating_sub(1))
+                        ),
+                    )))
                 } else {
                     self.require_terminator(ParserTerminatorKind::Both)?;
                     ProtoItemAssocFnKind::Sig(Box::new(sig))
@@ -418,11 +437,77 @@ impl<'s> Parser<'s> {
 
             TokenKind::Ident(TokenIdentKind::Let) => ProtoItem::AssocConst(Box::new(Item::new(
                 ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?)),
+                ternary!(
+                    self.depth == 0,
+                    ItemLevel::Top,
+                    ItemLevel::Local(self.depth.saturating_sub(1))
+                ),
             ))),
 
             // TODO: associated types
             _ => Err(None)?,
         })
+    }
+
+    pub fn parse_extend_with_recovery(&mut self) -> ParseResult<Extend> {
+        let data = self.parse_extend();
+        self.try_sync(&[TokenKind::LeftBrace]);
+
+        data
+    }
+
+    // extend TY_IDENT { ITEM* }
+    pub fn parse_extend(&mut self) -> ParseResult<Extend> {
+        // TY_IDENT
+        let target = self.parse_path(PathKind::Ty)?;
+
+        let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
+            TokenGraph::Collection { data, .. } => data,
+            _ => Err(None)?,
+        };
+
+        let mut extend = Extend {
+            target,
+            items: Vec::new(),
+        };
+        let n = data.len();
+
+        self.use_stream(
+            TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
+            |s| {
+                if s.stream.is_empty() {
+                    return;
+                }
+
+                while !s.eos() {
+                    match s.parse_extend_item() {
+                        Ok(item) => extend.items.push(item),
+                        Err(diag) => {
+                            if let Some(diag) = diag {
+                                s.dctx.add(diag);
+                            }
+                        }
+                    }
+                }
+            },
+        );
+
+        Ok(extend)
+    }
+
+    pub fn parse_extend_item(&mut self) -> ParseResult<Item> {
+        let item = self.parse_item_with_recovery()?;
+        if matches!(&item.kind, ItemKind::Fn(_)) {
+            return Ok(item);
+        }
+
+        Err(Some(ParserDiag::error(
+            item.span,
+            ParserDiagErrorKind::UnsupportedItem {
+                item_kind: item.kind,
+                context: "type extension",
+            },
+        )))
     }
 
     pub fn parse_struct_with_recovery(&mut self) -> ParseResult<Struct> {
@@ -665,14 +750,12 @@ impl<'s> Parser<'s> {
         self.require_terminator(ParserTerminatorKind::Both)?;
 
         // Validate variable declaration
-        if (ty.is_none() && val.is_none())
-            || (self.level == ParseLevel::Global && (ty.is_none() || val.is_none()))
-        {
+        if (ty.is_none() && val.is_none()) || (self.depth == 0 && (ty.is_none() || val.is_none())) {
             return Err(Some(ParserDiag::error(
                 ident.span,
                 ParserDiagErrorKind::InvalidVarDecl {
                     ident,
-                    level: self.level,
+                    depth: self.depth,
                 },
             )));
         }

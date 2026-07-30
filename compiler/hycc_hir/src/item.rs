@@ -1,4 +1,6 @@
-use hycc_ast::item::{ItemAccessibility, PubAccessibilityKind, StructFieldAccessibility};
+use hycc_ast::item::{
+    ItemAccessibility, ItemLevel, PubAccessibilityKind, StructFieldAccessibility,
+};
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 
@@ -15,6 +17,7 @@ pub enum HirItemKind<'h> {
     Refer(Box<HirRefer<'h>>),
     Petal(Box<HirPetal<'h>>),
     Proto(Box<HirProto<'h>>),
+    Extend(Box<HirExtend<'h>>),
     Struct(Box<HirStruct<'h>>),
     Fn(Box<HirFn<'h>>),
     VarDecl(Box<HirVarDecl<'h>>),
@@ -22,6 +25,7 @@ pub enum HirItemKind<'h> {
 
 pub type HirPubAccessibilityKind = PubAccessibilityKind;
 pub type HirItemAccessibility = ItemAccessibility;
+pub type HirItemLevel = ItemLevel;
 
 #[derive(Debug, Clone)]
 pub struct HirItem<'h> {
@@ -29,16 +33,22 @@ pub struct HirItem<'h> {
     pub kind: HirItemKind<'h>,
     pub span: Span,
     pub accessibility: HirItemAccessibility,
+    pub level: HirItemLevel,
 }
 
 impl<'h> HirItem<'h> {
-    pub fn new(kind: HirItemKind<'h>, span: Span) -> Self {
+    pub fn new(kind: HirItemKind<'h>, level: HirItemLevel, span: Span) -> Self {
         Self {
             id: HirId::Invalid,
             kind,
             span,
             accessibility: HirItemAccessibility::Priv,
+            level,
         }
+    }
+
+    pub fn is_top_level(&self) -> bool {
+        self.level == HirItemLevel::Top
     }
 }
 
@@ -99,6 +109,14 @@ pub struct HirProto<'h> {
     pub ident: &'h HirRawIdent,
     // TODO: generic_params
     pub items: Vec<HirProtoItem<'h>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirExtend<'h> {
+    pub target: &'h HirPath<'h>,
+    // TODO: with: Option<[PROTO]>
+    pub items: Vec<&'h HirItem<'h>>,
     pub span: Span,
 }
 

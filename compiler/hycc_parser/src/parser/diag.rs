@@ -1,6 +1,6 @@
 use std::path::{self, PathBuf};
 
-use hycc_ast::token::{Token, TokenKind};
+use hycc_ast::{ItemKind, token::{Token, TokenKind}};
 use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagnosticKind},
@@ -9,8 +9,6 @@ use hycc_session::config;
 use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_util::ternary;
-
-use crate::parser::parser::ParseLevel;
 
 #[derive(Debug, Clone)]
 pub struct ParserDiagDataCtx<'s> {
@@ -134,7 +132,7 @@ pub enum ParserDiagErrorKind {
 
     InvalidVarDecl {
         ident: Token,
-        level: ParseLevel,
+        depth: usize,
     },
 
     UnrecognizedPetalFile {
@@ -144,6 +142,8 @@ pub enum ParserDiagErrorKind {
     IllegalLocalNonInlinePetalDeclaration,
 
     InvalidStructFieldCount(u8),
+    UnsupportedItem{ item_kind: ItemKind, context: &'static str }, // TODO: update `context` to
+                                                               // something more optimal
 }
 
 #[derive(Debug, Clone)]
@@ -253,10 +253,10 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         )
                     }
 
-                    Err::InvalidVarDecl { ident, level } => {
+                    Err::InvalidVarDecl { ident, depth } => {
                         let message = format!(
                             "invalid {}variable declaration for `{}`.",
-                            ternary!(*level == ParseLevel::Global, "top-level ", ""),
+                            ternary!(*depth == 0, "top-level ", ""),
                             ident.view(&source.data)
                         );
 
@@ -280,6 +280,9 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                     Err::InvalidStructFieldCount(n) => {
                         format!("structs cannot have more than `{}` fields, found `{}`.", config::HYC_STRUCT_FIELD_LIMIT, n)
                     }
+
+                    Err::UnsupportedItem { item_kind, context } => 
+                        format!("`{}`s are unsupported within `{context}`s.", item_kind.kind())
                 },
             ),
         };
@@ -292,9 +295,9 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
             },
 
             Error(kind) => match kind {
-                Err::InvalidVarDecl { level, .. } => {
+                Err::InvalidVarDecl { depth, .. } => {
                     diag.detail(diag.span, DiagnosticKind::Note( 
-                            ternary!(*level == ParseLevel::Global, 
+                            ternary!(*depth == 0, 
                                 format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."), 
                                 format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
                     )));

@@ -1,18 +1,15 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{Binding, DefAccessibility, DefKind, DefSpace, Definition},
-    item::{HirItem, HirItemKind, HirPetalKind, HirReferTarget, HirReferTargetKind},
-    scope::{Scope, ScopeId},
+    HirNode,
+    def::{Binding, DefAccessibility, DefSpace},
+    item::{HirItem, HirItemKind, HirItemLevel, HirReferTarget, HirReferTargetKind},
+    scope::ScopeId,
 };
-use hycc_util::{bug, ternary};
+use hycc_util::bug;
 
-use crate::{
-    ResolveResult,
-    diag::{ResolverDiag, ResolverDiagErrorKind},
-    ident::resolver::Resolver,
-};
+use crate::{ResolveResult, ident::resolver::Resolver};
 
-impl<'c, 'i> Resolver<'c, 'i> {
+impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
     pub fn enter_petal_scope<T>(
         &mut self,
         petal_item: &HirItem,
@@ -34,93 +31,6 @@ impl<'c, 'i> Resolver<'c, 'i> {
         self.collector.pop_petals(pushed);
 
         Some(result)
-
-        //     let HirItemKind::Petal(petal) = &petal_item.kind else {
-        //         unreachable!()
-        //     };
-
-        //     // if let Err(Some(diag)) = self.collector.collect_petal(&petal_item) {
-        //     //     self.collector.dctx.add(diag);
-        //     // }
-
-        //     let path = match &petal.kind {
-        //         HirPetalKind::File(path) | HirPetalKind::Inline(path) => path,
-        //         _ => unreachable!(),
-        //     };
-
-        //     let mut pushed: usize = 0;
-        //     for segment in &path.segments {
-        //         let result = if let Some(def_id) = self.collector.definitions.get_def_id(segment.id) {
-        //             Ok((*def_id, true))
-        //         } else {
-        //             let def = Definition::new(
-        //                 segment.ident.ident,
-        //                 DefKind::Petal,
-        //                 Some(self.collector.petal_ctx.top_id()),
-        //                 segment.id,
-        //                 petal_item.span,
-        //                 petal_item.accessibility,
-        //             );
-
-        //             ternary!(
-        //                 petal.is_inline(),
-        //                 self.collector.try_define(def),
-        //                 self.collector.define(def).map(|def_id| (def_id, false))
-        //             )
-        //         };
-
-        //         let (def_id, defined) = match result {
-        //             Ok(res) => res,
-        //             Err(diag) => {
-        //                 diag.map(|diag| self.collector.dctx.add(diag));
-        //                 break;
-        //             }
-        //         };
-
-        //         self.collector.definitions.define_id_hir(segment.id, def_id);
-
-        //         let petal_id = self.collector.petal_ctx.try_create_child_petal(def_id);
-        //         self.collector.petal_ctx.push(petal_id);
-
-        //         let scope_id = self
-        //             .collector
-        //             .scope_ctx
-        //             .try_attach_to_def(def_id, Scope::new());
-        //         self.collector.scope_ctx.push_id(scope_id);
-
-        //         pushed += 1;
-
-        //         if !defined {
-        //             self.collector.define_spathe_at_current_petal();
-        //             self.collector.define_super_at_current_petal();
-        //         }
-
-        //         // let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Type), segment.ident.ident)
-        //         // else {
-        //         //     bug!("no def_id for ident: {:?}", segment.ident.ident)
-        //         // };
-
-        //         // self.collector
-        //         //     .petal_ctx
-        //         //     .push(match self.collector.petal_ctx.get_id_by_def(def_id) {
-        //         //         Some(petal_id) => petal_id,
-        //         //         _ => bug!("no petal attached to def id {def_id:?}"),
-        //         //     });
-
-        //         // let scope_id = self.collector.scope_ctx.get_id_from_def(def_id).unwrap();
-        //         // self.collector.scope_ctx.push_id(scope_id);
-
-        //         // pushed += 1;
-        //     }
-
-        //     let result = f(self);
-
-        //     for _ in 0..pushed {
-        //         self.collector.scope_ctx.pop();
-        //         self.collector.petal_ctx.pop();
-        //     }
-
-        //     Ok(result)
     }
 
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
@@ -128,6 +38,7 @@ impl<'c, 'i> Resolver<'c, 'i> {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
             HirItemKind::Proto(_) => todo!("(ident) resolve proto"),
+            HirItemKind::Extend(_) => self.resolve_extend(&item),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -139,7 +50,6 @@ impl<'c, 'i> Resolver<'c, 'i> {
             unreachable!();
         };
 
-        dbg!(refer_item.accessibility);
         if let Err(Some(diag)) =
             self.resolve_refer_target(&refer.target, refer_item.accessibility, None)
         {
@@ -163,28 +73,11 @@ impl<'c, 'i> Resolver<'c, 'i> {
                 let sym = target.ident.ident;
                 let actual = self.collector.definitions.get(def_id);
 
-                // self.collector.scope_ctx.top_mut().define(
-                //     actual.kind.space(),
-                //     alias.unwrap_or(sym),
-                //     def_id,
-                // );
-
                 self.collector.scope_ctx.top_mut().define(
                     actual.kind.space(),
                     alias.unwrap_or(sym),
                     Binding::new(def_id, accessibility),
                 );
-
-                // if let Err(Some(diag)) = self.collector.define(Definition::new(
-                //     alias.unwrap_or(sym),
-                //     DefKind::Refer(Box::new(actual.kind.clone()), def_id),
-                //     actual.petal,
-                //     actual.hir_id,
-                //     target.span,
-                //     actual.accessibility, /* TODO: use the accessibility of the refer item */
-                // )) {
-                //     self.collector.dctx.add(diag);
-                // }
             }
 
             HirReferTargetKind::Parent(children) => {
@@ -225,13 +118,65 @@ impl<'c, 'i> Resolver<'c, 'i> {
         Ok(())
     }
 
+    pub(crate) fn resolve_extend(&mut self, extend_item: &HirItem) -> ResolveResult {
+        let HirItemKind::Extend(_) = &extend_item.kind else {
+            unreachable!()
+        };
+
+        let ext = self.collector.ext_table.expect_hir_ext(extend_item.id);
+        let HirNode::Path(target) = self.hir_table.get(ext.target) else {
+            unreachable!()
+        };
+
+        let items = ext
+            .items
+            .iter()
+            .map(|id| match self.hir_table.get(*id) {
+                HirNode::Item(item) => item,
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>();
+
+        // Resolve extension target
+        self.expect_space(DefSpace::Type, |s| s.resolve_path(&target))?;
+
+        let target_def_id = self.collector.definitions.get_def_id(target.id).unwrap();
+        let target_scope_id = self.collector.scope_ctx.expect_def_scope_id(target_def_id);
+
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
+
+        self.enter_scope(scope_id, |s| {
+            s.collector.redirect.replace(target_scope_id);
+
+            // Pre-collection
+            for item in &items {
+                if let Err(Some(diag)) = s.collector.collect_item(&item) {
+                    s.collector.dctx.add(diag);
+                }
+            }
+
+            for item in &items {
+                if let Err(Some(diag)) = s.resolve_item(&item) {
+                    s.dctx.add(diag);
+                }
+            }
+
+            s.collector.redirect = None;
+        });
+
+        // todo!("(ident) resolve extend")
+        Ok(())
+    }
+
     pub(crate) fn resolve_struct(&mut self, struct_item: &HirItem) -> ResolveResult {
         let HirItemKind::Struct(strct) = &struct_item.kind else {
             unreachable!()
         };
 
-        if let Err(Some(diag)) = self.collector.collect_struct(&struct_item) {
-            self.collector.dctx.add(diag);
+        if !struct_item.is_top_level() {
+            if let Err(Some(diag)) = self.collector.collect_struct(&struct_item) {
+                self.collector.dctx.add(diag);
+            }
         }
 
         for field in &strct.fields.list {
@@ -248,12 +193,16 @@ impl<'c, 'i> Resolver<'c, 'i> {
             unreachable!()
         };
 
-        if let Err(Some(diag)) = self.collector.collect_fn(&fn_item) {
-            self.collector.dctx.add(diag);
+        if !fn_item.is_top_level() {
+            if let Err(Some(diag)) = self.collector.collect_fn(&fn_item) {
+                self.collector.dctx.add(diag);
+            }
         }
 
-        let Some((def_id, _)) = self.get_def_id(Some(DefSpace::Value), func.sig.ident.ident) else {
-            bug!("no def_id for ident: {:?}", func.sig.ident.ident)
+        // TODO: TEMP:
+        // let def_id = self.collector.definitions.get_def_id(fn_item.id).unwrap();
+        let Some(def_id) = self.collector.definitions.get_def_id(fn_item.id) else {
+            return Ok(());
         };
 
         let Some(scope_id) = self.collector.scope_ctx.get_id_from_def(def_id) else {
@@ -286,6 +235,12 @@ impl<'c, 'i> Resolver<'c, 'i> {
             unreachable!()
         };
 
+        if !var_decl.is_top_level() {
+            if let Err(Some(diag)) = self.collector.collect_var(var_decl) {
+                self.collector.dctx.add(diag);
+            }
+        }
+
         if let Some(ty) = decl.ty {
             if let Err(Some(diag)) = self.resolve_ty(&ty) {
                 self.dctx.add(diag);
@@ -296,10 +251,6 @@ impl<'c, 'i> Resolver<'c, 'i> {
             if let Err(Some(diag)) = self.resolve_expr(&expr) {
                 self.dctx.add(diag);
             }
-        }
-
-        if let Err(Some(diag)) = self.collector.collect_var(var_decl) {
-            self.collector.dctx.add(diag);
         }
 
         Ok(())

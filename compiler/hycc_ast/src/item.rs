@@ -146,7 +146,8 @@ pub struct Proto {
 #[derive(Debug, Clone)]
 pub struct Extend {
     pub target: Path,
-    // TODO: with: Option<[PROTO]>
+    // TODO: with: Option<[PROTO]> // optional protocol implementation
+    // TODO: if: Option<...> // conditional extension clause
     pub items: Vec<Item>,
 }
 

@@ -76,7 +76,7 @@ impl<'i> Collector<'i> {
                     self.interner.intern(&format!(
                         "{}{}",
                         prefix,
-                        ternary!(size, "size".into(), width.to_string())
+                        ternary!(size, String::from("size"), width.to_string())
                     )),
                     BuiltinKind::Ty(b_ty),
                     Some(self.petal_ctx.top_id()),

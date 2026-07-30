@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hycc_util::bug;
 
 use crate::{
-    def::DefId,
+    def::{DefAccessibility, DefId, DefPubAccessibilityKind, Definition},
     scope::{ScopeCtx, ScopeId},
 };
 
@@ -165,6 +165,32 @@ impl PetalCtx {
             _ if self.is_ancestor(b, a) => PetalRelationship::Descendant,
 
             _ => PetalRelationship::Unknown,
+        }
+    }
+
+    pub fn accessible(&self, definition: &Definition) -> bool {
+        let Some(petal_id) = definition.petal else {
+            return true;
+        };
+
+        let current = self.top_id();
+        let relationship = self.relationship(current, petal_id);
+
+        use PetalRelationship::*;
+        let private_match = matches!(relationship, This | Child | Descendant);
+
+        match definition.accessibility {
+            DefAccessibility::Priv => private_match,
+            DefAccessibility::Pub(kind) => match kind {
+                DefPubAccessibilityKind::This => private_match,
+                DefPubAccessibilityKind::Super => {
+                    private_match || matches!(relationship, Peer | Super)
+                }
+                DefPubAccessibilityKind::Spathe => {
+                    private_match || matches!(relationship, Peer | Super | Spathe | Ancestor)
+                }
+                DefPubAccessibilityKind::All => true,
+            },
         }
     }
 }

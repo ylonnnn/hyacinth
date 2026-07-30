@@ -2,7 +2,7 @@ use hycc_hir::stmt::{HirStmt, HirStmtKind};
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
-impl<'d> TyResolver<'d> {
+impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
     pub(crate) fn resolve_stmt(&mut self, stmt: &HirStmt) -> ResolveResult {
         match &stmt.kind {
             HirStmtKind::Ret(ret) => {

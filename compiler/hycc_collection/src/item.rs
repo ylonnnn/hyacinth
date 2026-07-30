@@ -1,6 +1,8 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef},
+    def::{
+        AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef,
+    },
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
@@ -162,7 +164,7 @@ impl<'i> Collector<'i> {
     }
 
     pub fn collect_extend(&mut self, extend_item: &HirItem) -> CollectResult {
-        if self.ext_table.get_id_by_hir(extend_item.id).is_some() {
+        if self.ext_table.get_hir_ext_id(extend_item.id).is_some() {
             return Ok(());
         }
 
@@ -199,7 +201,7 @@ impl<'i> Collector<'i> {
         let def_id = self
             .define(Definition::new(
                 strct.ident.ident,
-                DefKind::Struct(Box::new(StructDef::new())),
+                DefKind::Adt(AdtKind::Struct(Box::new(StructDef::new()))),
                 Some(self.petal_ctx.top_id()),
                 struct_item.id,
                 struct_item.span,
@@ -210,9 +212,10 @@ impl<'i> Collector<'i> {
         self.scope_ctx.try_attach_to_def(def_id, Scope::new());
 
         let ty = Ty::new(self.tctx.make_adt_ty(def_id), struct_item.span);
-        self.tctx.attach_to_hir(struct_item.id, ty);
+        self.tctx.attach_to_hir(struct_item.id, ty.clone());
+        // self.tctx.attach_to_def(def_id, ty);
 
-        let DefKind::Struct(def) = &mut self.definitions.get_mut(def_id).kind else {
+        let DefKind::Adt(AdtKind::Struct(def)) = &mut self.definitions.get_mut(def_id).kind else {
             unreachable!()
         };
 
@@ -258,10 +261,6 @@ impl<'i> Collector<'i> {
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, |s| {
-            if collected {
-                return;
-            }
-
             // Define the function parameters
             for param in &func.sig.params.list {
                 let res = s.define(Definition::new(
@@ -274,9 +273,11 @@ impl<'i> Collector<'i> {
                 ));
 
                 match res {
-                    Ok(&Binding { def_id, .. }) => {
+                    Ok(&Binding {
+                        def_id: p_def_id, ..
+                    }) => {
                         if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
-                            def.params.push(def_id)
+                            def.params.push(p_def_id);
                         }
                     }
                     Err(diag) => {

@@ -2,7 +2,12 @@ use std::collections::HashSet;
 
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::{HirTable, def::DefinitionTable, item::{HirItem, HirItemKind, HirPetal}};
+use hycc_hir::{
+    HirTable,
+    def::DefinitionTable,
+    item::{HirItem, HirItemKind, HirPetal},
+    petal::PetalCtx,
+};
 use hycc_ty::{
     context::{TyCtx, TyId},
     ty::Ty,
@@ -15,25 +20,27 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyInferer<'t, 'd, 'c, 'h> {
+pub struct TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub dctx: InferDiagCtx,
     pub tctx: &'t mut TyCtx,
 
     pub(crate) definitions: &'d DefinitionTable,
     pub(crate) const_table: &'c ConstTable,
     pub(crate) hir_table: &'h HirTable<'h>,
+    pub(crate) petal_ctx: &'p PetalCtx,
 
     pub(crate) fn_ctx: Option<FnCtx>,
 }
 
 pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
 
-impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
+impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub fn new(
         tctx: &'t mut TyCtx,
         definitions: &'d DefinitionTable,
         const_table: &'c ConstTable,
         hir_table: &'h HirTable<'h>,
+        petal_ctx: &'p PetalCtx,
     ) -> Self {
         Self {
             dctx: InferDiagCtx::new(),
@@ -42,6 +49,7 @@ impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
             definitions,
             const_table,
             hir_table,
+            petal_ctx,
 
             fn_ctx: None,
         }

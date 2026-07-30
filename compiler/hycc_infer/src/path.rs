@@ -4,7 +4,7 @@ use hycc_util::bug;
 
 use crate::inferer::{InferResult, TyInferer};
 
-impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
+impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub(crate) fn infer_path(&mut self, path: &HirPath) -> InferResult<TyId> {
         let Some(def_id) = self.definitions.get_def_id(path.id) else {
             bug!("def id of resolved path does not exist: {:?}", path.id);

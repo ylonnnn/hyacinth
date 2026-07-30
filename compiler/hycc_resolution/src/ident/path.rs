@@ -10,7 +10,7 @@ use hycc_util::{bug, ternary};
 use crate::{
     ResolveResult,
     diag::{ResolverDiag, ResolverDiagErrorKind},
-    ident::resolver::{ResolutionCtx, Resolver},
+    ident::resolver::Resolver,
 };
 
 impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
@@ -79,39 +79,15 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             )))
         };
 
-        let Some((binding, scope_id)) = binding else {
-            err()?
-        };
+        let Some((binding, _)) = binding else { err()? };
 
         let definition = self.collector.definitions.get(binding.def_id);
-        if let Some(petal_id) = definition.petal {
-            let current = self.collector.petal_ctx.top_id();
-            let relationship = self.collector.petal_ctx.relationship(current, petal_id);
-
-            use PetalRelationship::*;
-            let private_match = matches!(relationship, This | Child | Descendant);
-
-            let accessible = match definition.accessibility {
-                DefAccessibility::Priv => private_match,
-                DefAccessibility::Pub(kind) => match kind {
-                    DefPubAccessibilityKind::This => private_match,
-                    DefPubAccessibilityKind::Super => {
-                        private_match || matches!(relationship, Peer | Super)
-                    }
-                    DefPubAccessibilityKind::Spathe => {
-                        private_match || matches!(relationship, Peer | Super | Spathe | Ancestor)
-                    }
-                    DefPubAccessibilityKind::All => true,
-                },
-            };
-
-            if !accessible {
-                Err(Some(ResolverDiag::error(
-                    ident.span,
-                    ResolverDiagErrorKind::InaccessibleSymbol(name),
-                )))?
-            }
-        };
+        if !self.collector.petal_ctx.accessible(&definition) {
+            Err(Some(ResolverDiag::error(
+                ident.span,
+                ResolverDiagErrorKind::InaccessibleSymbol(name),
+            )))?
+        }
 
         let def_id = binding.def_id;
 

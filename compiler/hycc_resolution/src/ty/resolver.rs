@@ -1,10 +1,11 @@
-use hycc_collection::extension::ExtensionTable;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    def::{BuiltinKind, BuiltinTyKind, DefId, DefKind, DefinitionTable},
+    def::{Binding, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, DefinitionTable},
     item::{HirItem, HirItemKind},
+    scope::ScopeCtx,
 };
 use hycc_span::Span;
+use hycc_symbol::Symbol;
 use hycc_ty::{
     context::{TyCtx, TyId},
     ty::InferKind,
@@ -17,20 +18,24 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyResolver<'d> {
+pub struct TyResolver<'t, 'd, 's> {
+    pub tctx: &'t mut TyCtx,
     pub dctx: ResolverDiagCtx,
-    pub tctx: TyCtx,
-
-    pub(crate) definitions: &'d DefinitionTable,
+    pub definitions: &'d mut DefinitionTable,
+    pub scope_ctx: &'s mut ScopeCtx,
 }
 
-impl<'d> TyResolver<'d> {
-    pub fn new(tctx: TyCtx, definitions: &'d DefinitionTable) -> Self {
+impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
+    pub fn new(
+        tctx: &'t mut TyCtx,
+        definitions: &'d mut DefinitionTable,
+        scope_ctx: &'s mut ScopeCtx,
+    ) -> Self {
         Self {
-            dctx: ResolverDiagCtx::new(),
             tctx,
-
+            dctx: ResolverDiagCtx::new(),
             definitions,
+            scope_ctx,
         }
     }
 
@@ -42,7 +47,7 @@ impl<'d> TyResolver<'d> {
                 _ => self.tctx.get_ty_of_def(def_id).unwrap().id,
             },
 
-            DefKind::Struct(_) => self.tctx.expect_hir_ty_id(def.hir_id),
+            DefKind::Adt(_) => self.tctx.expect_hir_ty_id(def.hir_id),
 
             DefKind::Petal => Err(Some(ResolverDiag::error(
                 span,
@@ -54,7 +59,6 @@ impl<'d> TyResolver<'d> {
 
         Ok(ty_id)
     }
-
     pub fn resolve(&mut self, tree: &HirItem) {
         let HirItemKind::Petal(tree) = &tree.kind else {
             bug!("invalid type resolution! type resolution must start at the tree (a petal)")

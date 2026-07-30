@@ -148,15 +148,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         return;
     }
 
-    let definitions = &collector.definitions;
-    let tctx = collector.tctx;
+    let definitions = &mut collector.definitions;
+    let tctx = &mut collector.tctx;
+    let scope_ctx = &mut collector.scope_ctx;
+    let petal_ctx = &mut collector.petal_ctx;
 
-    let mut ty_resolver = TyResolver::new(tctx, &definitions);
+    let mut ty_resolver = TyResolver::new(tctx, definitions, scope_ctx);
 
     ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&session.interner, &definitions),
+        ResolverDiagDataCtx::new(&session.interner, &ty_resolver.definitions),
     );
 
     if session.dctx.error_occurred() {
@@ -164,10 +166,11 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     }
 
     let mut ty_inferer = TyInferer::new(
-        &mut ty_resolver.tctx,
+        ty_resolver.tctx,
         &definitions,
         &const_table,
         &hir_table,
+        &petal_ctx,
     );
 
     ty_inferer.infer(&hir);

@@ -3,7 +3,7 @@ use hycc_diagnostic::{
     diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
 };
 use hycc_hir::{
-    def::{DefId, DefKind, DefinitionTable},
+    def::{AdtKind, DefId, DefKind, DefinitionTable},
     expr::HirFieldAccessFieldKind,
 };
 use hycc_span::Span;
@@ -109,6 +109,11 @@ pub enum InferDiagErrorKind {
         ty_id: TyId,
     },
 
+    UnrecognizedMethod {
+        method: Symbol,
+        ty_id: TyId,
+    },
+
     UnrecognizedFieldInitialization {
         field: Symbol,
         struct_def: DefId,
@@ -133,6 +138,22 @@ pub enum InferDiagErrorKind {
     },
 
     MissingElseBranch,
+
+    InaccessibleMember {
+        name: Symbol,
+        kind: MemberKind,
+    },
+
+    InvalidAssocFnInvocation {
+        name: Symbol,
+        ty_id: TyId,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MemberKind {
+    AssocFn,
+    Field,
 }
 
 #[derive(Debug, Clone)]
@@ -200,15 +221,6 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
-                            Err::UnrecognizedFieldInitialization { field, struct_def } => {
-                                let def = fmt.definitions.get(*struct_def);
-                                format!(
-                                    "cannot recognize field `{}` from struct `{}`.",
-                                    fmt.interner.get(*field),
-                                    fmt.interner.get(def.name),
-                                )
-                            }
-
                             Err::UnrecognizedField { field, ty_id } => {
                                 format!(
                                     "cannot recognize field `{}` from type `{}`.",
@@ -221,9 +233,26 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
+                            Err::UnrecognizedMethod { method, ty_id } => {
+                                format!(
+                                    "cannot recognize method `{}` from type `{}`.",
+                                    fmt.interner.get(*method),
+                                    fmt.fmt_id(*ty_id),
+                                )
+                            }
+
+                            Err::UnrecognizedFieldInitialization { field, struct_def } => {
+                                let def = fmt.definitions.get(*struct_def);
+                                format!(
+                                    "cannot recognize field `{}` from struct `{}`.",
+                                    fmt.interner.get(*field),
+                                    fmt.interner.get(def.name),
+                                )
+                            }
+
                             Err::MissingFields { field_mask, def_id } => {
                                 let def = fmt.definitions.get(*def_id);
-                                let DefKind::Struct(strct) = &def.kind else {
+                                let DefKind::Adt(AdtKind::Struct(strct)) = &def.kind else {
                                     unreachable!()
                                 };
 
@@ -274,13 +303,32 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     expected,
                                     ternary!(*expected == 1, "", "s"),
                                     received,
-                                    ternary!(*expected == 1, "", "s"),
+                                    ternary!(*received == 1, "", "s"),
                                 )
                             }
 
                             Err::MissingElseBranch => {
                                 format!(
                                     "`if` expression with a non-unit consequent requires an `else` branch."
+                                )
+                            }
+
+                            Err::InaccessibleMember { name, kind } => {
+                                format!(
+                                    "{} `{}` is inaccessible in this context.",
+                                    match &kind {
+                                        MemberKind::Field => "field",
+                                        MemberKind::AssocFn => "associated function",
+                                    },
+                                    fmt.interner.get(*name)
+                                )
+                            }
+
+                            Err::InvalidAssocFnInvocation { name, ty_id } => {
+                                format!(
+                                    "cannot invoke associated function `{}::{}` through method calls.",
+                                    fmt.fmt_id(*ty_id),
+                                    fmt.interner.get(*name)
                                 )
                             }
                         },
@@ -328,7 +376,7 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
 
                 Err::UnrecognizedFieldInitialization { struct_def, .. } => {
                     let def = fmt.definitions.get(*struct_def);
-                    let DefKind::Struct(struct_def) = &def.kind else {
+                    let DefKind::Adt(AdtKind::Struct(struct_def)) = &def.kind else {
                         bug!("struct_def is expected to be a valid def_id of a struct definition")
                     };
 

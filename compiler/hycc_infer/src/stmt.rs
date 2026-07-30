@@ -9,7 +9,7 @@ use hycc_util::bug;
 
 use crate::inferer::{InferResult, TyInferer};
 
-impl<'t, 'd, 'c, 'h> TyInferer<'t, 'd, 'c, 'h> {
+impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         match &stmt.kind {
             HirStmtKind::Ret(ret) => {

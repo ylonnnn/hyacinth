@@ -58,6 +58,21 @@ impl DefinitionTable {
     pub fn get_def(&self, hir_id: HirId) -> Option<&Definition> {
         self.get_def_id(hir_id).map(|def_id| self.get(def_id))
     }
+
+    pub fn expect_def_id(&self, hir_id: HirId) -> DefId {
+        self.get_def_id(hir_id).expect(&format!(
+            "expected a def id attached to hir id {:?}",
+            hir_id
+        ))
+    }
+
+    pub fn expect_def(&self, hir_id: HirId) -> &Definition {
+        self.get(self.expect_def_id(hir_id))
+    }
+
+    pub fn expect_mut_def(&mut self, hir_id: HirId) -> &mut Definition {
+        self.get_mut(self.expect_def_id(hir_id))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -80,10 +95,10 @@ pub enum DefKind {
     Petal,
     Proto,
 
+    Adt(AdtKind),
+
     Fn(Box<FnDef>),
     FnParam,
-
-    Struct(Box<StructDef>),
 
     Var,
 }
@@ -96,8 +111,9 @@ impl DefKind {
             | Self::Proto
             | Self::Fn(_)
             | Self::FnParam
-            | Self::Struct(_)
             | Self::Var => "a",
+
+            Self::Adt(kind) => kind.article(),
         }
     }
 
@@ -111,7 +127,7 @@ impl DefKind {
             Self::Fn(_) => "function",
             Self::FnParam => "function parameter",
 
-            Self::Struct(_) => "struct",
+            Self::Adt(kind) => kind.kind(),
 
             Self::Var => "variable",
         }
@@ -127,7 +143,7 @@ impl DefKind {
         match self {
             Self::Builtin(_) => unreachable!(),
 
-            Self::Petal | Self::Struct(_) | Self::Proto => DefSpace::Type,
+            Self::Petal | Self::Adt(_) | Self::Proto => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var => DefSpace::Value,
         }
@@ -165,6 +181,26 @@ pub struct ProtoDef {}
 
 #[derive(Debug, Clone)]
 pub enum ProtoDefItem {}
+
+#[derive(Debug, Clone)]
+pub enum AdtKind {
+    Struct(Box<StructDef>),
+    // TODO: Enum
+}
+
+impl AdtKind {
+    pub fn article(&self) -> &'static str {
+        match &self {
+            Self::Struct(_) => "a",
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match &self {
+            Self::Struct(_) => "struct",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct StructDef {

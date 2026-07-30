@@ -4,7 +4,7 @@ use hycc_util::bug;
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
-impl<'d> TyResolver<'d> {
+impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
     pub(crate) fn resolve_path(&mut self, path: &HirPath) -> ResolveResult<TyId> {
         let Some(def_id) = self.definitions.get_def_id(path.id) else {
             bug!("def id of resolved path does not exist: {:?}", path.id);

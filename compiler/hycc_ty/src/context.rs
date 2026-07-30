@@ -6,7 +6,10 @@ use hycc_hir::{
 };
 use hycc_util::{bug, ternary};
 
-use crate::ty::{FnTy, InferKind, IntTy, RefMutability, Ty, TyKind, TyVar};
+use crate::{
+    extension::ExtensionTable,
+    ty::{FnTy, InferKind, IntTy, RefMutability, Ty, TyKind, TyVar},
+};
 
 #[derive(Debug)]
 pub struct TyCtx {
@@ -17,6 +20,9 @@ pub struct TyCtx {
 
     node_ty_map: HashMap<HirId, Ty>,
     def_ty_map: HashMap<DefId, Ty>,
+    ty_def_map: HashMap<TyId, DefId>,
+
+    pub ext_table: ExtensionTable,
 }
 
 impl TyCtx {
@@ -29,6 +35,9 @@ impl TyCtx {
 
             node_ty_map: HashMap::new(),
             def_ty_map: HashMap::new(),
+            ty_def_map: HashMap::new(),
+
+            ext_table: ExtensionTable::new(),
         }
     }
 
@@ -283,6 +292,7 @@ impl TyCtx {
     }
 
     pub fn attach_to_def(&mut self, def_id: DefId, ty: Ty) {
+        self.ty_def_map.insert(ty.id, def_id);
         self.def_ty_map.insert(def_id, ty);
     }
 
@@ -296,6 +306,25 @@ impl TyCtx {
 
     pub fn get_mut_ty_of_def(&mut self, def_id: DefId) -> Option<&mut Ty> {
         self.def_ty_map.get_mut(&def_id)
+    }
+
+    pub fn get_ty_def_id(&self, ty_id: TyId) -> Option<DefId> {
+        match &self.get(ty_id) {
+            TyKind::Adt(def_id) => Some(*def_id),
+            TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Bool
+            | TyKind::Char
+            | TyKind::String
+            | TyKind::Unit
+            | TyKind::Never => self.ty_def_map.get(&ty_id).cloned(),
+            _ => None,
+        }
+    }
+
+    pub fn expect_ty_def_id(&self, ty_id: TyId) -> DefId {
+        self.get_ty_def_id(ty_id)
+            .expect(&format!("expected a def id attached to ty id {ty_id:?}"))
     }
 
     pub fn make_builtin_ty(&mut self, kind: &BuiltinTyKind) -> TyId {
@@ -393,6 +422,18 @@ impl TyCtx {
             }
 
             _ => false,
+        }
+    }
+
+    // TODO: TEMP
+    pub fn deref(&self, ty_id: TyId) -> TyId {
+        match &self.get(ty_id) {
+            TyKind::Ref(ty_id, _) => *ty_id,
+
+            // TODO: check protocols of the type if it has a deref proto
+            TyKind::Adt(_) => ty_id,
+
+            _ => ty_id,
         }
     }
 }

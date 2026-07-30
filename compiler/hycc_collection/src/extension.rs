@@ -40,18 +40,18 @@ impl ExtensionTable {
         self.hir_map.insert(hir_id, ext_id);
     }
 
-    pub fn get_id_by_hir(&self, hir_id: HirId) -> Option<ExtensionId> {
+    pub fn get_hir_ext_id(&self, hir_id: HirId) -> Option<ExtensionId> {
         self.hir_map.get(&hir_id).cloned()
     }
 
     pub fn expect_hir_ext_id(&self, hir_id: HirId) -> ExtensionId {
-        self.get_id_by_hir(hir_id).expect(&format!(
+        self.get_hir_ext_id(hir_id).expect(&format!(
             "expected an extension id attached to hir id {hir_id:?}"
         ))
     }
 
-    pub fn get_by_hir(&self, hir_id: HirId) -> Option<&Extension> {
-        self.get_id_by_hir(hir_id).map(|id| self.get(id))
+    pub fn get_hir_ext(&self, hir_id: HirId) -> Option<&Extension> {
+        self.get_hir_ext_id(hir_id).map(|id| self.get(id))
     }
 
     pub fn expect_hir_ext(&self, hir_id: HirId) -> &Extension {

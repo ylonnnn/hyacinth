@@ -1,16 +1,18 @@
+use std::collections::HashMap;
+
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
-use hycc_ty::ty::Ty;
+use hycc_ty::{extension::Extension, ty::Ty};
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
-impl<'d> TyResolver<'d> {
+impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Proto(_) => todo!("(ty) resolve proto"),
-            HirItemKind::Extend(extend) => self.resolve_extend(&extend),
+            HirItemKind::Extend(_) => self.resolve_extend(&item),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -27,11 +29,35 @@ impl<'d> TyResolver<'d> {
         Ok(())
     }
 
-    pub(crate) fn resolve_extend(&mut self, extend: &HirExtend) -> ResolveResult {
-        // let ext = self.ex
+    pub(crate) fn resolve_extend(&mut self, extend_item: &HirItem) -> ResolveResult {
+        let HirItemKind::Extend(extend) = &extend_item.kind else {
+            unreachable!()
+        };
 
         // Resolve the target type
-        self.resolve_path(&extend.target)?;
+        let target_ty_id = self.resolve_path(&extend.target)?;
+        let target_def_id = self.definitions.expect_def_id(extend.target.id);
+        let ty_scope = self.scope_ctx.expect_def_scope(target_def_id);
+
+        self.tctx.ext_table.attach(
+            target_def_id,
+            Extension::new(
+                target_ty_id,
+                extend
+                    .items
+                    .iter()
+                    .filter_map(|item| {
+                        let def = self.definitions.get_def(item.id).unwrap();
+                        let (space, name) = (def.kind.space(), def.name);
+
+                        ty_scope
+                            .get(Some(space), name)
+                            .cloned()
+                            .map(|binding| ((space, name), binding))
+                    })
+                    .collect::<HashMap<_, _>>(),
+            ),
+        );
 
         // Resolve the items of the extension
         for item in &extend.items {
@@ -83,9 +109,12 @@ impl<'d> TyResolver<'d> {
             }
         }
 
-        let fn_ty = self.tctx.make_fn_ty(params.into(), ret_ty);
+        let fn_ty_id = self.tctx.make_fn_ty(params.into(), ret_ty);
+        let fn_ty = Ty::new(fn_ty_id, fn_item.span);
+
+        self.tctx.attach_to_hir(fn_item.id, fn_ty.clone());
         self.tctx
-            .attach_to_hir(fn_item.id, Ty::new(fn_ty, fn_item.span));
+            .attach_to_def(self.definitions.get_def_id(fn_item.id).unwrap(), fn_ty);
 
         if let Err(Some(diag)) = self.resolve_block(&func.body) {
             self.dctx.add(diag);

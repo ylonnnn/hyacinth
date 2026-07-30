@@ -6,7 +6,7 @@ use hycc_hir::{
 };
 use hycc_ty::ty::{InferKind, Ty};
 
-impl<'d> TyResolver<'d> {
+impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         match &expr.kind {
             HirExprKind::Block(block) => self.resolve_block(&block),

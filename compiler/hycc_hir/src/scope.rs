@@ -321,17 +321,28 @@ impl ScopeCtx {
     ) -> Option<(&Binding, ScopeId)> {
         self.get_def(space, name, |_, _, _| false)
     }
+
+    pub fn resolve_redirection(&self, scope_id: ScopeId) -> ScopeId {
+        let mut curr_scope_id = scope_id;
+        while let Some(scope_id) = self.get(curr_scope_id).redirect {
+            curr_scope_id = scope_id
+        }
+
+        curr_scope_id
+    }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct Scope {
     definitions: HashMap<(DefSpace, Symbol), Binding>,
+    pub redirect: Option<ScopeId>,
 }
 
 impl Scope {
     pub fn new() -> Self {
         Self {
             definitions: HashMap::new(),
+            redirect: None,
         }
     }
 

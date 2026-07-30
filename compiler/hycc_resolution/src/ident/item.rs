@@ -147,6 +147,7 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
 
         self.enter_scope(scope_id, |s| {
+            // Define `Self`
             let target_def = s.collector.definitions.get(target_def_id);
             s.collector.scope_ctx.get_mut(scope_id).define(
                 target_def.kind.space(),
@@ -154,7 +155,11 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
                 Binding::new(target_def_id, DefAccessibility::Priv),
             );
 
-            s.collector.redirect.replace(target_scope_id);
+            s.collector
+                .scope_ctx
+                .get_mut(scope_id)
+                .redirect
+                .replace(target_scope_id);
 
             // Pre-collection
             for item in &items {
@@ -163,13 +168,13 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
                 }
             }
 
+            s.collector.scope_ctx.get_mut(scope_id).redirect.take();
+
             for item in &items {
                 if let Err(Some(diag)) = s.resolve_item(&item) {
                     s.dctx.add(diag);
                 }
             }
-
-            s.collector.redirect = None;
         });
 
         // todo!("(ident) resolve extend")

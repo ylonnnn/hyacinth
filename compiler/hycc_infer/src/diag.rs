@@ -231,8 +231,13 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     .fields
                                     .iter()
                                     .enumerate()
-                                    .filter(|(i, _)| ((field_mask >> i) & 1) == 1)
-                                    .map(|(_, field)| format!("`{}`", fmt.interner.get(field.name)))
+                                    .filter_map(|(i, field)| {
+                                        ternary!(
+                                            (field_mask >> i) & 1 != 1,
+                                            None,
+                                            Some(format!("`{}`", fmt.interner.get(field.name)))
+                                        )
+                                    })
                                     .collect::<Vec<_>>();
 
                                 format!(

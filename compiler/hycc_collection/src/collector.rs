@@ -28,13 +28,6 @@ pub struct Collector<'i> {
     pub dctx: CollectorDiagCtx,
     pub ext_table: ExtensionTable,
     pub interner: &'i mut SymbolInterner,
-
-    // // Default to top-level collection
-    // pub level: CollectionLevel,
-    // // The current collection level of the current node
-    // pub node_level: CollectionLevel,
-    // Definition scope re-direction
-    pub redirect: Option<ScopeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,10 +48,6 @@ impl<'i> Collector<'i> {
             dctx: CollectorDiagCtx::new(),
             ext_table: ExtensionTable::new(),
             interner,
-
-            // level: CollectionLevel::Top,
-            // node_level: CollectionLevel::Top,
-            redirect: None,
         };
 
         let root_petal_id = inst
@@ -199,7 +188,7 @@ impl<'i> Collector<'i> {
 
     // }
     pub fn define(&mut self, definition: Definition) -> CollectResult<&Binding> {
-        let scope_id = self.redirect.unwrap_or(self.scope_ctx.top_id());
+        let scope_id = self.scope_ctx.resolve_redirection(self.scope_ctx.top_id());
         let scope = self.scope_ctx.get_mut(scope_id);
 
         let (name, space) = (definition.name, definition.kind.space());

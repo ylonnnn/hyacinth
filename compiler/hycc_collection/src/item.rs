@@ -257,7 +257,7 @@ impl<'i> Collector<'i> {
         };
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-        self.enter_scope(scope_id, /* CollectionLevel::Local, */ |s| {
+        self.enter_scope(scope_id, |s| {
             if collected {
                 return;
             }
@@ -279,10 +279,9 @@ impl<'i> Collector<'i> {
                             def.params.push(def_id)
                         }
                     }
-                    Err(Some(diag)) => {
-                        s.dctx.add(diag);
+                    Err(diag) => {
+                        diag.map(|diag| s.dctx.add(diag));
                     }
-                    _ => {}
                 };
             }
         });

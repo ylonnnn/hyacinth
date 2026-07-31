@@ -84,7 +84,10 @@ impl<'i> Collector<'i> {
                 );
 
                 match self.define(def) {
-                    Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
+                    Ok(&Binding { def_id, .. }) => {
+                        self.scope_ctx.attach_to_def(def_id, Scope::new());
+                        self.tctx.attach_to_def(def_id, ty)
+                    }
                     Err(Some(diag)) => {
                         self.dctx.add(diag);
                     }
@@ -106,7 +109,10 @@ impl<'i> Collector<'i> {
             );
 
             match self.define(def) {
-                Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
+                Ok(&Binding { def_id, .. }) => {
+                    self.scope_ctx.attach_to_def(def_id, Scope::new());
+                    self.tctx.attach_to_def(def_id, ty)
+                }
                 Err(diag) => {
                     diag.map(|diag| self.dctx.add(diag));
                 }
@@ -127,7 +133,10 @@ impl<'i> Collector<'i> {
             );
 
             match self.define(def) {
-                Ok(&Binding { def_id, .. }) => self.tctx.attach_to_def(def_id, ty),
+                Ok(&Binding { def_id, .. }) => {
+                    self.scope_ctx.attach_to_def(def_id, Scope::new());
+                    self.tctx.attach_to_def(def_id, ty)
+                }
                 Err(diag) => {
                     diag.map(|diag| self.dctx.add(diag));
                 }

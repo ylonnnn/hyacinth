@@ -36,6 +36,7 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
 
         // Resolve the target type
         let target_ty_id = self.resolve_path(&extend.target)?;
+
         let target_def_id = self.definitions.expect_def_id(extend.target.id);
         let ty_scope = self.scope_ctx.expect_def_scope(target_def_id);
 

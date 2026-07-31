@@ -124,6 +124,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         };
 
         let def = self.definitions.get(def_id);
+
         let DefKind::Adt(AdtKind::Struct(strct_def)) = &def.kind else {
             return Err(Some(InferDiag::error(
                 strct.path.span,
@@ -134,11 +135,17 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )));
         };
 
+        let hir_id = def.hir_id;
+        let n = strct_def.fields.len();
+
         let mut field_mask = 0_u64;
         let mut initialized: Vec<Option<&HirStructExprField>> = vec![None; strct_def.fields.len()];
 
+        let field_map = strct_def.field_map.clone();
+        let field_tys = strct_def.fields.iter().map(|f| f.ty).collect::<Vec<_>>();
+
         for field in &strct.fields {
-            let Some(idx) = strct_def.field_map.get(&field.ident.ident) else {
+            let Some(idx) = field_map.get(&field.ident.ident) else {
                 self.dctx.add(InferDiag::error(
                     field.ident.span,
                     InferDiagErrorKind::UnrecognizedFieldInitialization {
@@ -166,6 +173,8 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             field_mask |= 1 << idx;
             initialized[*idx] = Some(&field);
 
+            let t_field_ty = self.tctx.expect_hir_ty(field_tys[*idx]).clone();
+
             let field_ty_id = match self.infer_expr(&field.val) {
                 Ok(ty_id) => ty_id,
                 Err(diag) => {
@@ -174,15 +183,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 }
             };
 
-            let Some(t_field_ty) = self.tctx.get_hir_ty(strct_def.fields[*idx].ty).cloned() else {
-                unreachable!()
-            };
-
             self.check(&t_field_ty, &Ty::new(field_ty_id, field.val.span))
                 .map(|diag| self.dctx.add(diag));
         }
 
-        let missing_mask = !field_mask & ((1 << strct_def.fields.len()) - 1);
+        let missing_mask = !field_mask & ((1 << n) - 1);
         if missing_mask != 0 {
             self.dctx.add(InferDiag::error(
                 strct.span,
@@ -193,7 +198,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             ));
         }
 
-        Ok(self.tctx.get_hir_ty(def.hir_id).unwrap().id)
+        Ok(self.tctx.get_hir_ty(hir_id).unwrap().id)
     }
 
     pub(crate) fn infer_anon_fn(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
@@ -400,6 +405,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?
         };
 
+        self.definitions
+            .define_id_hir(call.callee.id, binding.def_id);
+
         let def = self.definitions.get(binding.def_id);
         let fn_ty = self.tctx.get_ty_of_def(binding.def_id).unwrap();
 
@@ -411,7 +419,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?
         };
 
-        let TyKind::Fn(fn_ty) = self.tctx.get(fn_ty.id) else {
+        let fn_def_params = fn_def.params.clone();
+        let fn_ty_id = fn_ty.id;
+
+        self.tctx
+            .attach_to_hir(call.callee.id, Ty::new(fn_ty_id, call.callee.span));
+
+        let TyKind::Fn(fn_ty) = self.tctx.get(fn_ty_id) else {
             unreachable!()
         };
 
@@ -507,7 +521,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     received: a_len as u8,
                 },
             )))?;
-        }
+        };
 
         for (i, (arg, param_ty_id)) in std::iter::once(&call.receiver)
             .chain(call.arguments.data.iter())
@@ -527,7 +541,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             );
 
             self.check(
-                &Ty::new(*param_ty_id, self.definitions.get(fn_def.params[i]).span),
+                &Ty::new(*param_ty_id, self.definitions.get(fn_def_params[i]).span),
                 &Ty::new(arg_ty_id, arg.span),
             )
             .map(|diag| self.dctx.add(diag));

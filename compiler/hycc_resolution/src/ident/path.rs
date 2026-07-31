@@ -33,6 +33,7 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
                 ternary!(is_last, space, DefSpace::Type),
                 |s| -> ResolveResult<Option<ScopeId>> {
                     let def_id = s.resolve_ident(&segment, segment_scope)?;
+
                     Ok(ternary!(
                         is_last,
                         None,

@@ -1,9 +1,9 @@
 use hycc_hir::{
     block::HirBlock,
     def::DefinitionTable,
-    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind},
-    item::{HirItem, HirItemKind, HirPetal},
-    path::HirPath,
+    expr::{BinaryOp, HirAnonFn, HirExpr, HirExprKind, HirMethodCall},
+    item::{HirExtend, HirItem, HirItemKind, HirPetal},
+    path::{HirIdent, HirPath},
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
 };
 use hycc_span::Span;
@@ -53,7 +53,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirItemKind::Refer(_) => {}
             HirItemKind::Petal(petal) => self.lower_petal(&petal),
             HirItemKind::Proto(proto) => todo!("(mir) lower proto"),
-            HirItemKind::Extend(extend) => todo!("(mir) lower extend"),
+            HirItemKind::Extend(extend) => self.lower_extend(&extend),
             HirItemKind::Struct(_) => {}
             HirItemKind::Fn(_) => self.lower_fn(&item),
             HirItemKind::VarDecl(_) => self.lower_var_decl(&item),
@@ -63,6 +63,12 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
     fn lower_petal(&mut self, petal: &HirPetal) {
         for item in &petal.items {
             self.lower_item(&item)
+        }
+    }
+
+    fn lower_extend(&mut self, extend: &HirExtend) {
+        for item in &extend.items {
+            self.lower_item(&item);
         }
     }
 
@@ -278,10 +284,34 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::FnCall(_) => self.lower_fn_call_expr_rvalue(&expr, &dest)?,
 
             HirExprKind::FieldAccess(access) => todo!("lower field access expr"),
-            HirExprKind::MethodCall(call) => todo!("lower method call expr"),
+            HirExprKind::MethodCall(_) => self.lower_method_call_rvalue(&expr, &dest)?,
 
             HirExprKind::If(_) => self.lower_if_expr_rvalue(&expr, &dest)?,
         })
+    }
+
+    fn lower_ident(&mut self, ident: &HirIdent) -> MirDef {
+        self.ctx
+            .get_def(self.definitions.get_def_id(ident.id).unwrap())
+    }
+
+    fn lower_ident_expr_rvalue(&mut self, ident: &HirIdent, dest: &Place) -> Option<RValue> {
+        let rvalue = match self.lower_ident(&ident) {
+            MirDef::Local(local_id) => RValue::Use(Operand::Move(Place::local(local_id))),
+            MirDef::Global(global_id) => RValue::Use(Operand::Move(Place::global(global_id))),
+            MirDef::Body(def_id) => RValue::FnRef(def_id),
+        };
+
+        self.ctx
+            .table
+            .top_mut()
+            .unwrap()
+            .insert_stmt(MirStatement::new(
+                MirStatementKind::Assign(Box::new((dest.clone(), rvalue))),
+                ident.span,
+            ));
+
+        None
     }
 
     fn lower_path(&mut self, path: &HirPath) -> MirDef {
@@ -452,6 +482,63 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 Operand::Move(arg_dest)
             })
             .collect::<Vec<_>>();
+
+        let body = self.ctx.table.get_mut(body_id);
+        let pos = body.basic_blocks.len() - 1;
+        let next_block_id = body.insert_new();
+
+        body.basic_blocks
+            .get_mut(pos)
+            .unwrap()
+            .terminator
+            .replace(MirTerminator::new(
+                MirTerminatorKind::Call {
+                    func: Operand::Move(callee_place),
+                    args,
+                    dest: dest.clone(),
+                    target: Some(next_block_id),
+                    unwind: None, // TODO
+                },
+                call_expr.span,
+            ));
+
+        None
+    }
+
+    fn lower_method_call_rvalue(&mut self, call_expr: &HirExpr, dest: &Place) -> Option<RValue> {
+        let HirExprKind::MethodCall(call) = &call_expr.kind else {
+            unreachable!()
+        };
+
+        let body_id = self.ctx.table.top_id().unwrap();
+
+        // Arguments
+        let args = std::iter::once(&call.receiver)
+            .chain(call.arguments.data.iter())
+            .map(|arg| {
+                let ty_id = self.tctx.expect_hir_ty_id(arg.id);
+                let arg_dest = Place::local(
+                    self.ctx
+                        .table
+                        .get_mut(body_id)
+                        .declare_local_temp(ty_id, arg.span),
+                );
+
+                self.lower_expr(&arg, &arg_dest);
+                Operand::Move(arg_dest)
+            })
+            .collect::<Vec<_>>();
+
+        // Callee
+        let callee_ty_id = self.tctx.expect_hir_ty_id(call.callee.id);
+        let callee_place = Place::local(
+            self.ctx
+                .table
+                .get_mut(body_id)
+                .declare_local_temp(callee_ty_id, call.callee.span),
+        );
+
+        self.lower_ident_expr_rvalue(&call.callee, &callee_place);
 
         let body = self.ctx.table.get_mut(body_id);
         let pos = body.basic_blocks.len() - 1;

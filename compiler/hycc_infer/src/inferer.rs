@@ -5,7 +5,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirTable,
     def::DefinitionTable,
-    item::{HirItem, HirItemKind, HirPetal},
+    item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
 use hycc_ty::{
@@ -24,7 +24,7 @@ pub struct TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub dctx: InferDiagCtx,
     pub tctx: &'t mut TyCtx,
 
-    pub(crate) definitions: &'d DefinitionTable,
+    pub definitions: &'d mut DefinitionTable,
     pub(crate) const_table: &'c ConstTable,
     pub(crate) hir_table: &'h HirTable<'h>,
     pub(crate) petal_ctx: &'p PetalCtx,
@@ -37,7 +37,7 @@ pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
 impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub fn new(
         tctx: &'t mut TyCtx,
-        definitions: &'d DefinitionTable,
+        definitions: &'d mut DefinitionTable,
         const_table: &'c ConstTable,
         hir_table: &'h HirTable<'h>,
         petal_ctx: &'p PetalCtx,

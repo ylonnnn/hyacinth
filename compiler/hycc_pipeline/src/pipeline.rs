@@ -167,16 +167,17 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     let mut ty_inferer = TyInferer::new(
         ty_resolver.tctx,
-        &definitions,
+        definitions,
         &const_table,
         &hir_table,
         &petal_ctx,
     );
 
     ty_inferer.infer(&hir);
+
     ty_inferer.dctx.emit(
         &mut session.dctx,
-        InferDiagDataCtx::new(&ty_inferer.tctx, &definitions, &session.interner),
+        InferDiagDataCtx::new(&ty_inferer.tctx, &ty_inferer.definitions, &session.interner),
     );
 
     if session.dctx.error_occurred() {

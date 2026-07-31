@@ -3,6 +3,8 @@ use std::fmt::Display;
 use hycc_const::table::ConstId;
 use hycc_hir::{def::DefId, expr};
 use hycc_span::Span;
+use hycc_ty::context::TyId;
+use hycc_util::ternary;
 
 use crate::{
     body::MirBodyId,
@@ -80,11 +82,16 @@ impl Display for Place {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}",
+            "{}{}",
             match &self.kind {
-                PlaceKind::Local(local_id) => format!("{}", local_id),
-                PlaceKind::Global(global_id) => format!("{}", global_id),
-            }
+                PlaceKind::Local(local_id) => local_id.to_string(),
+                PlaceKind::Global(global_id) => global_id.to_string(),
+            },
+            ternary!(
+                self.projection.is_empty(),
+                String::new(),
+                format!(".{:?}", self.projection)
+            )
         )
     }
 }
@@ -92,7 +99,7 @@ impl Display for Place {
 #[derive(Debug, Clone)]
 pub enum Projection {
     Deref,
-    // Field(FieldIdx, Ty),
+    Field(usize, TyId),
     // Index(LocalId),
     // ConstantIndex {
     //     offset: u64,
@@ -121,13 +128,24 @@ pub enum RValue {
     // UnaryOp(UnOp, Operand),
     // NullaryOp(NullOp, Ty),
     Discriminant(Place),
-    // Aggregate(Box<AggregateKind>, Vec<Operand>),
+    Aggregate(DefId, Vec<Operand>),
 }
 
 impl Display for RValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             Self::Use(op) => write!(f, "{}", &op),
+
+            Self::Aggregate(def_id, operands) => write!(
+                f,
+                "Aggregate({:?}, [{}])",
+                def_id,
+                operands
+                    .iter()
+                    .map(|op| op.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
 
             _ => write!(f, "{:?}", &self),
         }

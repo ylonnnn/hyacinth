@@ -304,7 +304,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let mut lead_ty_id = init_lead_ty_id;
 
         loop {
-            let lead_ty_kind = self.tctx.get(lead_ty_id);
             let err = || {
                 Err(Some(InferDiag::error(
                     access.field.span,
@@ -315,7 +314,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 )))
             };
 
-            match lead_ty_kind {
+            match self.tctx.get(lead_ty_id) {
                 TyKind::Tuple(tup) => {
                     return if let HirFieldAccessFieldKind::Index(idx) = &access.field.kind
                         && *idx < tup.len()

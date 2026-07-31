@@ -56,7 +56,7 @@ impl MirBody {
     }
 
     pub fn current_bb(&self) -> MirBasicBlockId {
-        MirBasicBlockId(self.basic_blocks.len() - 1)
+        MirBasicBlockId(self.basic_blocks.len().saturating_sub(1))
     }
 
     pub fn insert_stmt(&mut self, stmt: MirStatement) {

@@ -147,8 +147,14 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
             panic!("failed to retrieve the current directory")
         };
 
+        let details = details
+            .iter()
+            .map(|diag| self.format_diagnostic(diag, indentation as u8 + 1))
+            .collect::<Vec<String>>()
+            .join("");
+
         format!(
-            "{indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{indent}{reset}{details}",
+            "{indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{}{reset}{details}",
             s_kind.to_string().style(&sev_color).bold(),
             code.map_or_else(
                 || ":".into(),
@@ -158,15 +164,11 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
             "----->".bright_black(),
             &source.identifier.1.replace(cwd.to_str().unwrap(), "")[1..],
             start.clone(),
+            ternary!(details.is_empty(), "", &indent),
             emphasis = self
                 .emphasize(source, sev_color, (start, end))
                 .join(&format!("\n{indent}")),
-            reset = style::RESET,
-            details = details
-                .iter()
-                .map(|diag| self.format_diagnostic(diag, indentation as u8 + 1))
-                .collect::<Vec<String>>()
-                .join("\n\n")
+            reset = style::RESET
         )
     }
 

@@ -10,7 +10,7 @@ use hycc_hir::{
     scope::{Scope, ScopeCtx, ScopeId},
 };
 use hycc_span::Span;
-use hycc_symbol::SymbolInterner;
+use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{context::TyCtx, ty::Ty};
 use hycc_util::{bug, ternary};
 
@@ -59,25 +59,52 @@ impl<'i> Collector<'i> {
     }
 
     pub fn init_builtin(&mut self) {
-        // Integers
-        for signed in [true, false] {
-            let prefix = ternary!(signed, "i", "u");
-            for width in [8, 16, 32, 64, u8::MAX] {
-                let size = width == u8::MAX;
+        if self.definitions.builtins.is_empty() {
+            // Integers
+            for signed in [true, false] {
+                let prefix = ternary!(signed, "i", "u");
+                for width in [8, 16, 32, 64, u8::MAX] {
+                    let size = width == u8::MAX;
 
-                let b_ty = BuiltinTyKind::Int(ternary!(
-                    size,
-                    BuiltinIntTy::Size(signed),
-                    BuiltinIntTy::Fixed(width, signed)
-                ));
+                    let b_ty = BuiltinTyKind::Int(ternary!(
+                        size,
+                        BuiltinIntTy::Size(signed),
+                        BuiltinIntTy::Fixed(width, signed)
+                    ));
+                    let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
+
+                    let def = Definition::builtin(
+                        self.interner.intern(&format!(
+                            "{}{}",
+                            prefix,
+                            ternary!(size, String::from("size"), width.to_string())
+                        )),
+                        BuiltinKind::Ty(b_ty),
+                        Some(self.petal_ctx.top_id()),
+                        DefAccessibility::Pub(DefPubAccessibilityKind::All),
+                    );
+
+                    match self.define(def) {
+                        Ok(&Binding { def_id, .. }) => {
+                            self.scope_ctx.attach_to_def(def_id, Scope::new());
+                            self.tctx.attach_to_def(def_id, ty);
+                            self.definitions.builtins.push(def_id);
+                        }
+                        Err(Some(diag)) => {
+                            self.dctx.add(diag);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Float
+            for width in [8, 16, 32, 64] {
+                let b_ty = BuiltinTyKind::Float(width);
                 let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
 
                 let def = Definition::builtin(
-                    self.interner.intern(&format!(
-                        "{}{}",
-                        prefix,
-                        ternary!(size, String::from("size"), width.to_string())
-                    )),
+                    self.interner.intern(&format!("f{}", width.to_string())),
                     BuiltinKind::Ty(b_ty),
                     Some(self.petal_ctx.top_id()),
                     DefAccessibility::Pub(DefPubAccessibilityKind::All),
@@ -86,71 +113,71 @@ impl<'i> Collector<'i> {
                 match self.define(def) {
                     Ok(&Binding { def_id, .. }) => {
                         self.scope_ctx.attach_to_def(def_id, Scope::new());
-                        self.tctx.attach_to_def(def_id, ty)
+                        self.tctx.attach_to_def(def_id, ty);
+                        self.definitions.builtins.push(def_id);
                     }
-                    Err(Some(diag)) => {
-                        self.dctx.add(diag);
+                    Err(diag) => {
+                        diag.map(|diag| self.dctx.add(diag));
                     }
-                    _ => {}
                 }
             }
-        }
 
-        // Float
-        for width in [8, 16, 32, 64] {
-            let b_ty = BuiltinTyKind::Float(width);
-            let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
+            for (name, b_ty) in [
+                ("bool", BuiltinTyKind::Bool),
+                ("char", BuiltinTyKind::Char),
+                ("str", BuiltinTyKind::String),
+            ] {
+                let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
+                let def = Definition::builtin(
+                    self.interner.intern(name),
+                    BuiltinKind::Ty(b_ty),
+                    Some(self.petal_ctx.top_id()),
+                    DefAccessibility::Pub(DefPubAccessibilityKind::All),
+                );
 
-            let def = Definition::builtin(
-                self.interner.intern(&format!("f{}", width.to_string())),
-                BuiltinKind::Ty(b_ty),
-                Some(self.petal_ctx.top_id()),
-                DefAccessibility::Pub(DefPubAccessibilityKind::All),
-            );
-
-            match self.define(def) {
-                Ok(&Binding { def_id, .. }) => {
-                    self.scope_ctx.attach_to_def(def_id, Scope::new());
-                    self.tctx.attach_to_def(def_id, ty)
-                }
-                Err(diag) => {
-                    diag.map(|diag| self.dctx.add(diag));
-                }
-            }
-        }
-
-        for (name, b_ty) in [
-            ("bool", BuiltinTyKind::Bool),
-            ("char", BuiltinTyKind::Char),
-            ("str", BuiltinTyKind::String),
-        ] {
-            let ty = Ty::new(self.tctx.make_builtin_ty(&b_ty), Span::default());
-            let def = Definition::builtin(
-                self.interner.intern(name),
-                BuiltinKind::Ty(b_ty),
-                Some(self.petal_ctx.top_id()),
-                DefAccessibility::Pub(DefPubAccessibilityKind::All),
-            );
-
-            match self.define(def) {
-                Ok(&Binding { def_id, .. }) => {
-                    self.scope_ctx.attach_to_def(def_id, Scope::new());
-                    self.tctx.attach_to_def(def_id, ty)
-                }
-                Err(diag) => {
-                    diag.map(|diag| self.dctx.add(diag));
+                match self.define(def) {
+                    Ok(&Binding { def_id, .. }) => {
+                        self.scope_ctx.attach_to_def(def_id, Scope::new());
+                        self.tctx.attach_to_def(def_id, ty);
+                        self.definitions.builtins.push(def_id);
+                    }
+                    Err(diag) => {
+                        diag.map(|diag| self.dctx.add(diag));
+                    }
                 }
             }
-        }
 
-        let infer_sym = self.interner.intern("_");
-        if let Err(Some(diag)) = self.define(Definition::builtin(
-            infer_sym,
-            BuiltinKind::Ty(BuiltinTyKind::Infer),
-            Some(self.petal_ctx.top_id()),
-            DefAccessibility::Pub(DefPubAccessibilityKind::All),
-        )) {
-            self.dctx.add(diag);
+            {
+                // Infer
+                let infer_sym = self.interner.intern("_");
+                let def = Definition::builtin(
+                    infer_sym,
+                    BuiltinKind::Ty(BuiltinTyKind::Infer),
+                    Some(self.petal_ctx.top_id()),
+                    DefAccessibility::Pub(DefPubAccessibilityKind::All),
+                );
+
+                match self.define(def) {
+                    Ok(&Binding { def_id, .. }) => self.definitions.builtins.push(def_id),
+                    Err(diag) => {
+                        diag.map(|diag| self.dctx.add(diag));
+                    }
+                }
+            }
+        } else {
+            let builtin_defs = self
+                .definitions
+                .builtins
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>();
+
+            for def_id in builtin_defs {
+                let def = self.definitions.get(def_id);
+                let (space, name) = (def.kind.space(), def.name);
+
+                self.bind(space, name, Binding::new(def_id, DefAccessibility::Priv));
+            }
         }
 
         // Petal-based Definitions
@@ -195,7 +222,20 @@ impl<'i> Collector<'i> {
         }
     }
 
-    // }
+    pub fn bind(&mut self, space: DefSpace, name: Symbol, binding: Binding) -> bool {
+        let scope_id = self.scope_ctx.resolve_redirection(self.scope_ctx.top_id());
+        let scope = self.scope_ctx.get_mut(scope_id);
+
+        if scope.get(Some(space), name).is_some() {
+            let earlier_def = scope.get(Some(space), name).unwrap();
+            self.definitions.get(earlier_def.def_id).hir_id
+                == self.definitions.get(binding.def_id).hir_id
+        } else {
+            scope.define(space, name, binding);
+            true
+        }
+    }
+
     pub fn define(&mut self, definition: Definition) -> CollectResult<&Binding> {
         let scope_id = self.scope_ctx.resolve_redirection(self.scope_ctx.top_id());
         let scope = self.scope_ctx.get_mut(scope_id);

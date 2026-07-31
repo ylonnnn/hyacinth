@@ -13,6 +13,7 @@ use crate::{
 pub struct DefinitionTable {
     data: Vec<Definition>,
     map: HashMap<HirId, DefId>,
+    pub builtins: Vec<DefId>,
 }
 
 impl DefinitionTable {
@@ -20,6 +21,7 @@ impl DefinitionTable {
         Self {
             data: Vec::new(),
             map: HashMap::new(),
+            builtins: Vec::new(),
         }
     }
 

@@ -464,6 +464,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 continue;
             }
 
+            // TODO: check if the receiver type has proto Copy
             if !access.allows(req_access) {
                 Err(Some(InferDiag::error(
                     call.receiver.span,

@@ -13,7 +13,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
-    ty::{InferKind, RefMutability, Ty, TyKind},
+    ty::{AccessKind, InferKind, RefMutability, Ty, TyKind},
 };
 use hycc_util::{bug, ternary};
 
@@ -358,8 +358,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let mut deref_rec_ty_id = self.tctx.deref(rec_ty_id);
 
         let mut candidate = None;
-        let mut mutability = RefMutability::Mutable;
+        let mut access = AccessKind::Owned;
 
+        // Find the candidate binding
         loop {
             if let Some(exts) = self
                 .tctx
@@ -372,7 +373,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                         .get(*ext_id)
                         .get(DefSpace::Value, call.callee.ident.ident)
                 }) {
-                    candidate = Some(binding.clone());
+                    candidate.replace(binding.clone());
                     break;
                 }
             }
@@ -381,10 +382,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 break;
             }
 
-            mutability = match self.tctx.get(rec_ty_id) {
-                TyKind::Ref(_, mutability) => *mutability,
-                _ => RefMutability::Mutable,
-            };
+            if let TyKind::Ref(_, mutability) = self.tctx.get(rec_ty_id) {
+                access = AccessKind::Ref(*mutability)
+            }
 
             rec_ty_id = deref_rec_ty_id;
             deref_rec_ty_id = self.tctx.deref(rec_ty_id);
@@ -403,6 +403,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let def = self.definitions.get(binding.def_id);
         let fn_ty = self.tctx.get_ty_of_def(binding.def_id).unwrap();
 
+        // Illegal invocation error for non-function bindings
         let DefKind::Fn(fn_def) = &def.kind else {
             Err(Some(InferDiag::error(
                 call.callee.span,
@@ -417,6 +418,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let ret_ty = fn_ty.ret_ty;
         let params = fn_ty.params.clone();
 
+        // Accessibility guard
         if !self.petal_ctx.accessible(&def) {
             Err(Some(InferDiag::error(
                 call.callee.span,
@@ -428,46 +430,111 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         }
 
         // Associated function attempted to be called through method calling
-        let p_len = fn_ty.params.len();
+        let p_len = params.len();
         if p_len < 1 {
             Err(Some(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::InvalidAssocFnInvocation {
                     name: call.callee.ident.ident,
+                    def_id: binding.def_id,
                     ty_id: rec_ty_id,
                 },
             )))?;
         }
 
         // Check the valid type candidate for the method
-        if let Some(receiver_ty_id) = (0..3).find_map(|i| {
-            let receiver_ty_id = ternary!(
+        let mut receiver_ty_id = None;
+        for i in 0..3 {
+            let req_access = match i {
+                0 => AccessKind::Owned,
+                1 => AccessKind::Ref(RefMutability::Immutable),
+                _ => AccessKind::Ref(RefMutability::Mutable),
+            };
+
+            let recv_ty_id = ternary!(
                 i > 0,
                 self.tctx.make_ref_ty(
                     rec_ty_id,
-                    ternary!(i == 1, RefMutability::Immutable, mutability)
+                    ternary!(i == 1, RefMutability::Immutable, RefMutability::Mutable)
                 ),
                 rec_ty_id
             );
 
-            let param_def = self.definitions.get(fn_def.params[0]);
-            let None = self.check(
-                &Ty::new(params[0], param_def.span),
-                &Ty::new(receiver_ty_id, call.receiver.span),
-            ) else {
-                return None;
-            };
+            if !self.compatible(params[0], recv_ty_id) {
+                continue;
+            }
 
-            Some(receiver_ty_id)
-        }) {
-            rec_ty_id = receiver_ty_id
-        } else {
-            let param_def = self.definitions.get(fn_def.params[0]);
-            Err(self.check(
-                &Ty::new(params[0], param_def.span),
-                &Ty::new(initial_ty_id, call.receiver.span),
-            ))?
+            // println!("access: {:?}, req_access: {:?}", access, req_access);
+            if !access.allows(req_access) {
+                Err(Some(InferDiag::error(
+                    call.receiver.span,
+                    InferDiagErrorKind::ReceiverAccessMismatch {
+                        access,
+                        requested: req_access,
+                        call: (
+                            call.callee.ident.ident,
+                            call.callee.span.merge(&call.arguments.span),
+                        ),
+                        def_id: binding.def_id,
+                    },
+                )))?
+            }
+
+            receiver_ty_id = Some(recv_ty_id);
         }
+
+        let Some(rec_ty_id) = receiver_ty_id else {
+            return Err(Some(InferDiag::error(
+                call.callee.span,
+                InferDiagErrorKind::InvalidAssocFnInvocation {
+                    name: call.callee.ident.ident,
+                    def_id: binding.def_id,
+                    ty_id: rec_ty_id,
+                },
+            )))?;
+        };
+
+        // if let Some(receiver_ty_id) = (0..3).find_map(|i| {
+        //     let req_access = match i {
+        //         0 => AccessKind::Owned,
+        //         1 => AccessKind::Ref(RefMutability::Immutable),
+        //         _ => AccessKind::Ref(RefMutability::Mutable),
+        //     };
+
+        //     let receiver_ty_id = ternary!(
+        //         i > 0,
+        //         self.tctx.make_ref_ty(
+        //             rec_ty_id,
+        //             ternary!(i == 1, RefMutability::Immutable, RefMutability::Mutable)
+        //         ),
+        //         rec_ty_id
+        //     );
+
+        //     if !self.compatible(params[0], receiver_ty_id) {
+        //         return None;
+        //     }
+
+        //     println!("access: {:?}, req_access: {:?}", access, req_access);
+        //     if !access.allows(req_access) {
+        //         self.dctx.add(InferDiag::error(
+        //             call.receiver.span,
+        //             InferDiagErrorKind::InvalidAccess {
+        //                 access,
+        //                 requested: req_access,
+        //                 ty_id: rec_ty_id,
+        //             },
+        //         ));
+
+        //         return Some(rec_ty_id);
+        //     }
+
+        //     Some(receiver_ty_id)
+        // }) {
+        //     rec_ty_id = receiver_ty_id
+        // } else {
+        //     if !self.compatible(params[0], rec_ty_id) {
+        //     }
+        // }
 
         let a_len = call.arguments.data.len();
         if (a_len + 1) != p_len {
@@ -497,9 +564,8 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 }
             );
 
-            let param_def = self.definitions.get(fn_def.params[i]);
             self.check(
-                &Ty::new(*param_ty_id, param_def.span),
+                &Ty::new(*param_ty_id, self.definitions.get(fn_def.params[i]).span),
                 &Ty::new(arg_ty_id, arg.span),
             )
             .map(|diag| self.dctx.add(diag));

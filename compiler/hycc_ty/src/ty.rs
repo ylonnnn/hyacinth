@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use hycc_hir::def::DefId;
 use hycc_span::Span;
@@ -9,6 +9,41 @@ use crate::context::{TyId, TyVarId};
 pub enum RefMutability {
     Mutable,
     Immutable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AccessKind {
+    Ref(RefMutability),
+    Owned,
+}
+
+impl AccessKind {
+    pub fn allows(self, req_access: Self) -> bool {
+        match (self, req_access) {
+            (_, Self::Owned) => self == Self::Owned,
+            (Self::Ref(RefMutability::Immutable), Self::Ref(RefMutability::Mutable)) => false,
+            _ => true,
+        }
+    }
+}
+
+impl Display for AccessKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Self::Owned => String::from("owned"),
+                Self::Ref(mutability) => format!(
+                    "{} reference",
+                    match &mutability {
+                        RefMutability::Immutable => "shared",
+                        RefMutability::Mutable => "mutable",
+                    }
+                ),
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -55,8 +55,12 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         }
     }
 
+    pub fn compatible(&mut self, expected: TyId, received: TyId) -> bool {
+        self.tctx.unify_ty(expected, received)
+    }
+
     pub fn check(&mut self, expected: &Ty, received: &Ty) -> Option<InferDiag> {
-        if self.tctx.unify_ty(expected.id, received.id) {
+        if self.compatible(expected.id, received.id) {
             None
         } else {
             Some(InferDiag::error(

@@ -11,7 +11,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     context::{TyCtx, TyId},
     fmt::TyFormatter,
-    ty::Ty,
+    ty::{AccessKind, RefMutability, Ty},
 };
 use hycc_util::{bug, ternary};
 
@@ -146,7 +146,15 @@ pub enum InferDiagErrorKind {
 
     InvalidAssocFnInvocation {
         name: Symbol,
+        def_id: DefId,
         ty_id: TyId,
+    },
+
+    ReceiverAccessMismatch {
+        access: AccessKind,
+        requested: AccessKind,
+        call: (Symbol, Span),
+        def_id: DefId,
     },
 }
 
@@ -324,11 +332,27 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
-                            Err::InvalidAssocFnInvocation { name, ty_id } => {
+                            Err::InvalidAssocFnInvocation { name, ty_id, .. } => {
                                 format!(
                                     "cannot invoke associated function `{}::{}` through method calls.",
                                     fmt.fmt_id(*ty_id),
                                     fmt.interner.get(*name)
+                                )
+                            }
+
+                            Err::ReceiverAccessMismatch {
+                                access, requested, ..
+                            } => {
+                                format!(
+                                    "cannot {} a `{}`.",
+                                    match &requested {
+                                        AccessKind::Owned => "move out of",
+                                        AccessKind::Ref(mutability) => match &mutability {
+                                            RefMutability::Immutable => "borrow",
+                                            RefMutability::Mutable => "mutably borrow",
+                                        },
+                                    },
+                                    access
                                 )
                             }
                         },
@@ -422,6 +446,79 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                         diag.span,
                         DiagnosticKind::Note(String::from(
                             "`if` may be missing its `else` branch.",
+                        )),
+                    );
+                }
+
+                Err::InvalidAssocFnInvocation { name, def_id, .. } => {
+                    let def = fmt.definitions.get(*def_id);
+                    let DefKind::Fn(fn_def) = &def.kind else {
+                        bug!(
+                            "definition of the def id {def_id:?} provided must be a function definition"
+                        )
+                    };
+
+                    if fn_def.params.len() < 1 {
+                        diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "associated function `{}` does not have a receiving parameter compatible to type `Self`.",
+                            fmt.interner.get(*name)
+                        )),
+                    );
+                    } else {
+                        let rec_param_def = fmt.definitions.get(fn_def.params[0]);
+                        diag.detail(
+                            rec_param_def.span,
+                            DiagnosticKind::Note(format!(
+                                    "receiving parameter `{}` of `{}` does not have a compatible type to `Self`.",
+                                    fmt.interner.get(rec_param_def.name),
+                                    fmt.interner.get(*name)
+                            )),
+                        );
+                    }
+                }
+
+                Err::ReceiverAccessMismatch {
+                    requested,
+                    def_id,
+                    call: method,
+                    ..
+                } => {
+                    let def = fmt.definitions.get(*def_id);
+                    let DefKind::Fn(fn_def) = &def.kind else {
+                        bug!(
+                            "definition of the def id {def_id:?} provided must be a function definition"
+                        );
+                    };
+
+                    diag.detail(
+                        method.1,
+                        DiagnosticKind::Note(format!(
+                            "{} occurs due to call to `{}`.",
+                            match &requested {
+                                AccessKind::Owned => "move",
+                                AccessKind::Ref(mutability) => match &mutability {
+                                    RefMutability::Immutable => "borrow",
+                                    RefMutability::Mutable => "mutable borrow",
+                                },
+                            },
+                            fmt.interner.get(method.0)
+                        )),
+                    );
+
+                    let param_def = fmt.definitions.get(fn_def.params[0]);
+                    diag.detail(
+                        def.span,
+                        DiagnosticKind::Note(format!(
+                            "`{}` is defined where the receiver `{}` must be {}.",
+                            fmt.interner.get(method.0),
+                            fmt.interner.get(param_def.name),
+                            format!(
+                                "{}`{}`",
+                                ternary!(matches!(requested, AccessKind::Owned), "", "a "),
+                                requested.to_string()
+                            )
                         )),
                     );
                 }

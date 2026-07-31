@@ -452,19 +452,18 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             };
 
             let recv_ty_id = ternary!(
-                i > 0,
+                i == 0,
+                rec_ty_id,
                 self.tctx.make_ref_ty(
                     rec_ty_id,
                     ternary!(i == 1, RefMutability::Immutable, RefMutability::Mutable)
-                ),
-                rec_ty_id
+                )
             );
 
             if !self.compatible(params[0], recv_ty_id) {
                 continue;
             }
 
-            // println!("access: {:?}, req_access: {:?}", access, req_access);
             if !access.allows(req_access) {
                 Err(Some(InferDiag::error(
                     call.receiver.span,
@@ -477,12 +476,15 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                         ),
                         def_id: binding.def_id,
                     },
-                )))?
+                )))?;
             }
 
             receiver_ty_id = Some(recv_ty_id);
+            break;
         }
 
+        // No method found for the three (3) candidate receiver types.
+        // Therefore, the associated function found is not a method.
         let Some(rec_ty_id) = receiver_ty_id else {
             return Err(Some(InferDiag::error(
                 call.callee.span,
@@ -494,48 +496,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?;
         };
 
-        // if let Some(receiver_ty_id) = (0..3).find_map(|i| {
-        //     let req_access = match i {
-        //         0 => AccessKind::Owned,
-        //         1 => AccessKind::Ref(RefMutability::Immutable),
-        //         _ => AccessKind::Ref(RefMutability::Mutable),
-        //     };
-
-        //     let receiver_ty_id = ternary!(
-        //         i > 0,
-        //         self.tctx.make_ref_ty(
-        //             rec_ty_id,
-        //             ternary!(i == 1, RefMutability::Immutable, RefMutability::Mutable)
-        //         ),
-        //         rec_ty_id
-        //     );
-
-        //     if !self.compatible(params[0], receiver_ty_id) {
-        //         return None;
-        //     }
-
-        //     println!("access: {:?}, req_access: {:?}", access, req_access);
-        //     if !access.allows(req_access) {
-        //         self.dctx.add(InferDiag::error(
-        //             call.receiver.span,
-        //             InferDiagErrorKind::InvalidAccess {
-        //                 access,
-        //                 requested: req_access,
-        //                 ty_id: rec_ty_id,
-        //             },
-        //         ));
-
-        //         return Some(rec_ty_id);
-        //     }
-
-        //     Some(receiver_ty_id)
-        // }) {
-        //     rec_ty_id = receiver_ty_id
-        // } else {
-        //     if !self.compatible(params[0], rec_ty_id) {
-        //     }
-        // }
-
+        // Argument arity guard
         let a_len = call.arguments.data.len();
         if (a_len + 1) != p_len {
             Err(Some(InferDiag::error(

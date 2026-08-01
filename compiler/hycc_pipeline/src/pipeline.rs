@@ -187,17 +187,14 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let mut mir_builder = MirBuilder::new(&mut ty_inferer.tctx, &definitions);
     mir_builder.lower(&hir);
 
-    // for (def_id, body_id) in mir_builder.table.defs() {
-    //     let name = session.interner.get(definitions.get(*def_id).name);
-    //     println!(
-    //         "{} ({:?}):\n{}",
-    //         name,
-    //         *def_id,
-    //         mir_builder.table.get_body(*body_id)
-    //     );
-    // }
+    // TEMP: for display only
+    let mut bodies = mir_builder.ctx.table.defs().iter().collect::<Vec<_>>();
+    bodies.sort_by(|(_, a_body_id), (_, b_body_id)| a_body_id.unwrap().cmp(&b_body_id.unwrap()));
 
-    for (i, body) in mir_builder.ctx.table.bodies().iter().enumerate() {
-        println!("MirBody({i}):\n{}", body);
+    for (def_id, body_id) in bodies {
+        println!(
+            "MirBody[{def_id:?}]:\n{}",
+            mir_builder.ctx.table.get(*body_id)
+        );
     }
 }

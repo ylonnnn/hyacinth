@@ -6,7 +6,6 @@ use hycc_ty::context::TyId;
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},
     decl::{Decl, DeclKind, LocalDeclId, LocalDeclKind, Mutability},
-    scope::MirScopeCtx,
     stmt::MirStatement,
     term::MirTerminator,
 };

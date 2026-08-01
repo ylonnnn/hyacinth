@@ -4,8 +4,8 @@ use hycc_span::Span;
 use hycc_symbol::Symbol;
 
 use crate::{
-    HirId,
-    item::{HirItemAccessibility, HirPubAccessibilityKind},
+    HirId, HirMutability,
+    item::{HirItemAccessibility, HirItemLevel, HirPubAccessibilityKind},
     petal::PetalId,
 };
 
@@ -81,6 +81,10 @@ impl DefinitionTable {
 pub struct DefId(usize);
 
 impl DefId {
+    pub fn new(data: usize) -> Self {
+        Self(data)
+    }
+
     #[allow(non_upper_case_globals)]
     pub const Invalid: Self = Self(usize::MAX);
 
@@ -102,7 +106,7 @@ pub enum DefKind {
     Fn(Box<FnDef>),
     FnParam,
 
-    Var,
+    Var(Box<VarDef>),
 }
 
 impl DefKind {
@@ -113,25 +117,31 @@ impl DefKind {
             | Self::Proto
             | Self::Fn(_)
             | Self::FnParam
-            | Self::Var => "a",
+            | Self::Var(_) => "a",
 
             Self::Adt(kind) => kind.article(),
         }
     }
 
-    pub fn kind(&self) -> &'static str {
+    pub fn kind(&self) -> String {
         match self {
-            Self::Builtin(_) => "built-in",
+            Self::Builtin(_) => String::from("built-in"),
 
-            Self::Petal => "petal",
-            Self::Proto => "protocol",
+            Self::Petal => String::from("petal"),
+            Self::Proto => String::from("protocol"),
 
-            Self::Fn(_) => "function",
-            Self::FnParam => "function parameter",
+            Self::Fn(_) => String::from("function"),
+            Self::FnParam => String::from("function parameter"),
 
-            Self::Adt(kind) => kind.kind(),
+            Self::Adt(kind) => kind.kind().into(),
 
-            Self::Var => "variable",
+            Self::Var(var_def) => format!(
+                "{}variable",
+                match &var_def.level {
+                    HirItemLevel::Top => "top-level ",
+                    _ => "",
+                }
+            ),
         }
     }
 
@@ -147,7 +157,7 @@ impl DefKind {
 
             Self::Petal | Self::Adt(_) | Self::Proto => DefSpace::Type,
 
-            Self::Fn(_) | Self::FnParam | Self::Var => DefSpace::Value,
+            Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
         }
     }
 }
@@ -239,6 +249,20 @@ impl FnDef {
             params: Vec::new(),
             ret_ty,
         }
+    }
+}
+
+pub type DefMutability = HirMutability;
+
+#[derive(Debug, Clone)]
+pub struct VarDef {
+    pub level: HirItemLevel,
+    pub mutability: DefMutability,
+}
+
+impl VarDef {
+    pub fn new(level: HirItemLevel, mutability: DefMutability) -> Self {
+        Self { level, mutability }
     }
 }
 

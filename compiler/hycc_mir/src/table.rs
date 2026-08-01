@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use hycc_hir::def::DefId;
 use hycc_util::bug;
 
-use crate::{
-    body::{MirBody, MirBodyId},
-    scope::MirScopeCtx,
-};
+use crate::body::{MirBody, MirBodyId};
 
 #[derive(Debug)]
 pub struct MirTable {

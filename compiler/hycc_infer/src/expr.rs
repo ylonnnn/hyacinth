@@ -364,9 +364,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let mut candidate = None;
         let mut access = AccessKind::Owned;
 
-        dbg!(self.tctx.get(rec_ty_id));
-        dbg!(self.tctx.get_ty_def_id(rec_ty_id));
-
         // Find the candidate binding
         loop {
             if let Some(exts) = self
@@ -397,7 +394,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             deref_rec_ty_id = self.tctx.deref(rec_ty_id);
         }
 
-        dbg!(&candidate);
         let Some(binding) = candidate else {
             Err(Some(InferDiag::error(
                 call.callee.span,
@@ -408,6 +404,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?
         };
 
+        dbg!(&binding);
         self.definitions
             .define_id_hir(call.callee.id, binding.def_id);
 

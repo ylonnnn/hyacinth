@@ -2,6 +2,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{
         AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef,
+        VarDef,
     },
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
@@ -295,10 +296,11 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
+        // var.mutability,
         if self.definitions.get_def_id(var_item.id).is_none() {
             self.define(Definition::new(
                 var.ident.ident,
-                DefKind::Var,
+                DefKind::Var(Box::new(VarDef::new(var_item.level, var.mutability))),
                 Some(self.petal_ctx.top_id()),
                 var_item.id,
                 var_item.span,

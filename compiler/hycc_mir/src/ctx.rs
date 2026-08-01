@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use hycc_hir::def::DefId;
+use hycc_hir::{
+    def::{DefId, DefKind, DefinitionTable},
+    item::HirItemLevel,
+};
 use hycc_span::Span;
 use hycc_ty::context::TyId;
 
@@ -41,7 +44,12 @@ impl MirLoweringCtx {
         self.def_map.insert(def_id, def);
     }
 
-    pub fn get_def(&mut self, def_id: DefId) -> MirDef {
-        *self.def_map.get(&def_id).unwrap()
+    pub fn get_def(&self, def_id: DefId) -> Option<MirDef> {
+        self.def_map.get(&def_id).cloned()
+    }
+
+    pub fn expect_def(&self, def_id: DefId) -> MirDef {
+        self.get_def(def_id)
+            .expect(&format!("expected an mir definition for def id {def_id:?}"))
     }
 }

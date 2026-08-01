@@ -1,8 +1,8 @@
 use hycc_hir::{
     block::HirBlock,
-    def::{AdtKind, DefKind, DefinitionTable},
+    def::{AdtKind, DefId, DefKind, DefinitionTable},
     expr::{HirExpr, HirExprKind, HirFieldAccessFieldKind},
-    item::{HirExtend, HirItem, HirItemKind, HirPetal},
+    item::{HirExtend, HirItem, HirItemKind, HirItemLevel, HirPetal},
     path::HirIdent,
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
 };
@@ -21,22 +21,45 @@ use crate::{
 #[derive(Debug)]
 pub struct MirBuilder<'t, 'd> {
     pub ctx: MirLoweringCtx,
+    pub scope_ctx: MirScopeCtx,
 
     tctx: &'t mut TyCtx,
     definitions: &'d DefinitionTable,
-
-    pub scope_ctx: MirScopeCtx,
 }
 
 impl<'t, 'd> MirBuilder<'t, 'd> {
     pub fn new(tctx: &'t mut TyCtx, definitions: &'d DefinitionTable) -> Self {
-        Self {
+        let mut inst = Self {
             ctx: MirLoweringCtx::new(),
-
+            scope_ctx: MirScopeCtx::new(),
             tctx,
             definitions,
+        };
 
-            scope_ctx: MirScopeCtx::new(),
+        inst.build_ctx_mir_def_map();
+        inst
+    }
+
+    fn build_ctx_mir_def_map(&mut self) {
+        for (def_id, def) in self
+            .definitions
+            .defs()
+            .iter()
+            .enumerate()
+            .map(|(i, def)| (DefId::new(i), def))
+        {
+            let mir_def = match &def.kind {
+                DefKind::Var(var_def) if var_def.level == HirItemLevel::Top => {
+                    let ty_id = self.tctx.expect_hir_ty_id(def.hir_id);
+                    MirDef::Global(self.ctx.declare_global(ty_id, var_def.mutability, def.span))
+                }
+
+                DefKind::Fn(_) => MirDef::Body(def_id),
+
+                _ => continue,
+            };
+
+            self.ctx.define(def_id, mir_def);
         }
     }
 
@@ -88,8 +111,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
         let body_id = self.ctx.table.push_new_for(def_id);
-
-        self.ctx.define(def_id, MirDef::Body(def_id));
 
         let unit_ty = self.tctx.make_unit_ty();
         let ret_ty = func.sig.ret_ty.map_or(unit_ty, |ret_ty| {
@@ -155,8 +176,10 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             ));
         } else {
             let body_id = self.ctx.table.push_new();
-            let var_global_id = self.ctx.declare_global(ty_id, decl.mutability, decl.span);
-            self.ctx.define(var_def_id, MirDef::Global(var_global_id));
+            let MirDef::Global(var_global_id) = self.ctx.expect_def(var_def_id) else {
+                unreachable!()
+            };
+
             let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
 
             self.lower_expr(&expr);
@@ -363,10 +386,12 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         }
     }
 
+    // TODO: attempt to define all def ids before usage
     fn lower_ident(&mut self, ident: &HirIdent) -> Place {
+        // TODO: check ctx definitions
         match self
             .ctx
-            .get_def(self.definitions.get_def_id(ident.id).unwrap())
+            .expect_def(self.definitions.get_def_id(ident.id).unwrap())
         {
             MirDef::Local(local_id) => Place::local(local_id),
             MirDef::Global(global_id) => Place::global(global_id),
@@ -396,7 +421,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
         match self
             .ctx
-            .get_def(self.definitions.get_def_id(path.id).unwrap())
+            .expect_def(self.definitions.get_def_id(path.id).unwrap())
         {
             MirDef::Local(local_id) => Place::local(local_id),
             MirDef::Global(global_id) => Place::global(global_id),

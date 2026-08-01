@@ -128,7 +128,7 @@ pub enum RValue {
     // UnaryOp(UnOp, Operand),
     // NullaryOp(NullOp, Ty),
     Discriminant(Place),
-    Aggregate(DefId, Vec<Operand>),
+    Aggregate(TyId, Vec<Operand>),
 }
 
 impl Display for RValue {

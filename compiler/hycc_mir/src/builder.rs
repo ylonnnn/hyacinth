@@ -338,6 +338,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             HirExprKind::MethodCall(_) => self.lower_method_call_expr(&expr),
 
             HirExprKind::If(_) => self.lower_if_expr(&expr),
+
+            #[allow(unreachable_patterns)]
             _ => todo!(),
         }
     }
@@ -587,7 +589,6 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         };
 
         let body_id = self.ctx.table.top_id().unwrap();
-        let def_id = self.definitions.expect_def_id(strct.path.id);
         let operands = strct
             .fields
             .iter()
@@ -608,7 +609,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             .insert_stmt(MirStatement::new(
                 MirStatementKind::Assign(Box::new((
                     temp.clone(),
-                    RValue::Aggregate(def_id, operands),
+                    RValue::Aggregate(ty_id, operands),
                 ))),
                 struct_expr.span,
             ));

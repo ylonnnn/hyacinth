@@ -149,6 +149,8 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         self.enter_scope(scope_id, |s| {
             // Define `Self`
             let target_def = s.collector.definitions.get(target_def_id);
+            let target_def_petal = target_def.petal;
+
             s.collector.scope_ctx.get_mut(scope_id).define(
                 target_def.kind.space(),
                 s.collector.interner.intern("Self"),
@@ -166,6 +168,8 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
                 if let Err(Some(diag)) = s.collector.collect_item(&item) {
                     s.collector.dctx.add(diag);
                 }
+
+                s.collector.definitions.expect_mut_def(item.id).petal = target_def_petal;
             }
 
             s.collector.scope_ctx.get_mut(scope_id).redirect.take();
@@ -177,7 +181,6 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             }
         });
 
-        // todo!("(ident) resolve extend")
         Ok(())
     }
 

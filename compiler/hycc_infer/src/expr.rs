@@ -404,7 +404,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?
         };
 
-        dbg!(&binding);
         self.definitions
             .define_id_hir(call.callee.id, binding.def_id);
 

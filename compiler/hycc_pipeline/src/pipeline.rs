@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hycc_ast::{
     ItemKind,
     item::{Petal, PetalKind},
@@ -10,7 +12,7 @@ use hycc_diagnostic::{
 };
 use hycc_hir::{HirTable, builder::HirBuilder};
 use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
-use hycc_mir::builder::MirBuilder;
+use hycc_mir::{body::MirBodyId, builder::MirBuilder};
 use hycc_parser::{
     lexer::{Lexer, diag::LexerDiagDataCtx},
     parser::{Parser, diag::ParserDiagDataCtx},
@@ -196,5 +198,20 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
             "MirBody[{def_id:?}]:\n{}",
             mir_builder.ctx.table.get(*body_id)
         );
+    }
+
+    let body_def_map = mir_builder
+        .ctx
+        .table
+        .defs()
+        .iter()
+        .map(|(key, value)| (value.unwrap(), key))
+        .collect::<HashMap<_, _>>();
+    for (i, body) in mir_builder.ctx.table.bodies().iter().enumerate() {
+        if body_def_map.contains_key(&i) {
+            continue;
+        }
+
+        println!("MirBody:\n{}", body);
     }
 }

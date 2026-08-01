@@ -181,14 +181,11 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             };
 
             let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
-
-            self.lower_expr(&expr);
-
             let operand = self.lower_expr(&expr);
+
             self.ctx
                 .table
-                .top_mut()
-                .unwrap()
+                .get_mut(body_id)
                 .insert_stmt(MirStatement::new(
                     MirStatementKind::Assign(Box::new((
                         Place::global(var_global_id),

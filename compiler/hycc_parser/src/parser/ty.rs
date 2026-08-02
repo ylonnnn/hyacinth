@@ -309,7 +309,7 @@ impl<'s> Parser<'s> {
         };
 
         let mut expect = true;
-        while !dbg!(self.expect_exact_nonlf(TokenKind::Greater)).0 {
+        while !self.expect_exact_nonlf(TokenKind::Greater).0 {
             if !expect {
                 self.require_exact_nonlf(TokenKind::SemiColon)?;
             }
@@ -319,7 +319,7 @@ impl<'s> Parser<'s> {
                 expect = false;
             }
 
-            if !expect && dbg!(self.expect_exact_nonlf(TokenKind::SemiColon)).0 {
+            if !expect && self.expect_exact_nonlf(TokenKind::SemiColon).0 {
                 expect = true;
                 continue;
             }

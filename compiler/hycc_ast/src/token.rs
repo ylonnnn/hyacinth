@@ -67,7 +67,7 @@ impl TokenGraph {
                 .first()
                 .unwrap()
                 .span()
-                .merge(&data.last().unwrap().span()),
+                .merge(data.last().unwrap().span()),
         }
     }
 

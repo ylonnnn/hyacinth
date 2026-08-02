@@ -15,7 +15,7 @@ impl Identifier {
         Self {
             span: ternary!(
                 arguments.is_some(),
-                ident.span.merge(&arguments.as_ref().unwrap().span),
+                ident.span.merge(arguments.as_ref().unwrap().span),
                 ident.span
             ),
             ident,
@@ -47,7 +47,7 @@ impl Path {
         let span = if let Some(front) = segments.first()
             && let Some(back) = segments.last()
         {
-            front.span.merge(&back.span)
+            front.span.merge(back.span)
         } else {
             Span::default()
         };
@@ -56,7 +56,7 @@ impl Path {
     }
 
     pub fn add(&mut self, segment: Identifier) {
-        self.span = self.span.merge(&segment.span);
+        self.span = self.span.merge(segment.span);
         self.segments.push(segment);
     }
 }

@@ -277,7 +277,7 @@ impl<'s> Parser<'s> {
                 };
 
                 let trailing = trailing.clone();
-                let span = lead.span.merge(&trailing.span);
+                let span = lead.span.merge(trailing.span);
 
                 let token = match &trailing.kind {
                     TokenKind::Eq | TokenKind::Greater => {
@@ -470,7 +470,7 @@ impl<'s> Parser<'s> {
         let expr = self.parse_expr(0)?;
 
         Ok(RefExpr {
-            span: span.merge(&expr.span),
+            span: span.merge(expr.span),
             expr: Box::new(expr),
             mutability,
         })
@@ -552,8 +552,8 @@ impl<'s> Parser<'s> {
             span: tg.span.merge(
                 alternate
                     .as_ref()
-                    .map(|alt| &alt.span)
-                    .unwrap_or(&consequent.span),
+                    .map(|alt| alt.span)
+                    .unwrap_or(consequent.span),
             ),
             cond,
             consequent,
@@ -568,7 +568,7 @@ impl<'s> Parser<'s> {
             unreachable!()
         };
 
-        let span = path.span.merge(&tg.span());
+        let span = path.span.merge(tg.span());
         let TokenGraph::Collection { data, .. } = tg else {
             unreachable!()
         };
@@ -649,7 +649,7 @@ impl<'s> Parser<'s> {
         let body = self.parse_block()?;
 
         Ok(AnonFn {
-            span: span.merge(&body.span),
+            span: span.merge(body.span),
             params,
             ret_ty,
             body,

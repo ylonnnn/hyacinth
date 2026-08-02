@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{Block, Expr, Identifier, Mutability, Path, Ty, token::Token};
+use crate::{Block, Expr, Identifier, Mutability, Path, Ty, token::Token, ty::TyParamList};
 
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -181,6 +181,7 @@ pub struct StructField {
 #[derive(Debug, Clone)]
 pub struct FnSig {
     pub ident: Token,
+    pub ty_params: Option<TyParamList>,
     pub params: FnParamList,
     pub ret_ty: Option<Box<Ty>>,
 }
@@ -193,7 +194,7 @@ impl FnSig {
             self.params.span
         );
 
-        self.ident.span.merge(&end)
+        self.ident.span.merge(end)
     }
 }
 
@@ -210,6 +211,12 @@ impl Fn {
 }
 
 #[derive(Debug, Clone)]
+pub struct FnParamList {
+    pub list: Vec<FnParam>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct FnParam {
     pub ident: Token,
     pub ty: Box<Ty>,
@@ -217,14 +224,8 @@ pub struct FnParam {
 
 impl FnParam {
     pub fn span(&self) -> Span {
-        self.ident.span.merge(&self.ty.span)
+        self.ident.span.merge(self.ty.span)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct FnParamList {
-    pub list: Vec<FnParam>,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -237,7 +238,7 @@ pub struct VarDecl {
 
 impl VarDecl {
     pub fn span(&self) -> Span {
-        self.ident.span.merge(&self.val.as_ref().map_or_else(
+        self.ident.span.merge(self.val.as_ref().map_or_else(
             || self.ty.as_ref().map_or_else(|| self.ident.span, |t| t.span),
             |v| v.span,
         ))

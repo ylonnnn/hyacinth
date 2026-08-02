@@ -222,7 +222,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
                         self.lower_raw_ident(&field.ident),
                         self.lower_ty(&field.ty),
                         field.accessibility,
-                        field.ident.span.merge(&field.ty.span),
+                        field.ident.span.merge(field.ty.span),
                     )))
             {
                 data.push(field);

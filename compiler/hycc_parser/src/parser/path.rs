@@ -110,8 +110,8 @@ impl<'s> Parser<'s> {
             data: Vec::new(),
             span: op_delim.span,
         };
-        let mut expect = true;
 
+        let mut expect = true;
         while !self.expect_exact_nonlf(TokenKind::Greater).0 {
             if !expect {
                 self.require_exact_nonlf(TokenKind::Comma)?;
@@ -126,8 +126,6 @@ impl<'s> Parser<'s> {
                 expect = true;
                 continue;
             }
-
-            break;
         }
 
         Ok(arguments)

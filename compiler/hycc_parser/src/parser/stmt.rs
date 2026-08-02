@@ -61,7 +61,7 @@ impl<'s> Parser<'s> {
                 Ok(Stmt::new(StmtKind::Ret(Box::new(RetStmt {
                     span: value
                         .as_ref()
-                        .map_or(tok.span, |val| val.span.merge(&tok.span)),
+                        .map_or(tok.span, |val| val.span.merge(tok.span)),
                     value,
                 }))))
             }
@@ -82,7 +82,7 @@ impl<'s> Parser<'s> {
                 Ok(Stmt::new(StmtKind::Pass(Box::new(PassStmt {
                     span: value
                         .as_ref()
-                        .map_or(tok.span, |val| val.span.merge(&tok.span)),
+                        .map_or(tok.span, |val| val.span.merge(tok.span)),
                     label: None, // TODO: block label used in pass
                     value,
                 }))))

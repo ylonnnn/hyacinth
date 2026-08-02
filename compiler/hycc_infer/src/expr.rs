@@ -486,7 +486,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                         requested: req_access,
                         call: (
                             call.callee.ident.ident,
-                            call.callee.span.merge(&call.arguments.span),
+                            call.callee.span.merge(call.arguments.span),
                         ),
                         def_id: binding.def_id,
                     },

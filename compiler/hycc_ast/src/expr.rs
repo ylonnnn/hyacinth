@@ -39,10 +39,10 @@ impl ExprKind {
 
             Self::Literal(expr) => expr.span,
 
-            Self::Binary(_, left, right) => left.span.merge(&right.span),
+            Self::Binary(_, left, right) => left.span.merge(right.span),
             Self::Unary(expr) => expr.span(),
 
-            Self::Assign(left, right) => left.span.merge(&right.span),
+            Self::Assign(left, right) => left.span.merge(right.span),
 
             Self::Block(block) => block.span,
 
@@ -52,10 +52,10 @@ impl ExprKind {
 
             Self::AnonFn(anfn) => anfn.span,
 
-            Self::FnCall(call) => call.callee.span.merge(&call.arguments.span),
+            Self::FnCall(call) => call.callee.span.merge(call.arguments.span),
 
-            Self::FieldAccess(access) => access.leading.span.merge(&access.field.span),
-            Self::MethodCall(call) => call.receiver.span.merge(&call.arguments.span),
+            Self::FieldAccess(access) => access.leading.span.merge(access.field.span),
+            Self::MethodCall(call) => call.receiver.span.merge(call.arguments.span),
 
             Self::If(ite) => ite.span,
         }
@@ -162,8 +162,7 @@ pub enum Unary {
 impl Unary {
     pub fn span(&self) -> Span {
         match self {
-            Self::Pre(tok, expr) => tok.span.merge(&expr.span),
-            Self::Post(tok, expr) => expr.span.merge(&tok.span),
+            Self::Pre(tok, expr) | Self::Post(tok, expr) => tok.span.merge(expr.span),
         }
     }
 

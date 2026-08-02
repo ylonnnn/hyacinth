@@ -168,7 +168,7 @@ impl<'h> HirStructExprField<'h> {
     }
 
     pub fn span(&self) -> Span {
-        self.ident.span.merge(&self.val.span)
+        self.ident.span.merge(self.val.span)
     }
 }
 
@@ -186,9 +186,7 @@ impl<'h> HirAnonFnParam<'h> {
             id: HirId::Invalid,
             ident,
             ty,
-            span: ident
-                .span
-                .merge(&ty.map(|ty| ty.span).unwrap_or(ident.span)),
+            span: ident.span.merge(ty.map(|ty| ty.span).unwrap_or(ident.span)),
         }
     }
 }

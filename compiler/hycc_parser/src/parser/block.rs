@@ -21,7 +21,7 @@ impl<'s> Parser<'s> {
             .underlying()
             .unwrap()
             .span
-            .merge(&data.last().unwrap().underlying().unwrap().span);
+            .merge(data.last().unwrap().underlying().unwrap().span);
 
         self.depth += 1;
 

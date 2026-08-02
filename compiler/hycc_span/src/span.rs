@@ -22,7 +22,7 @@ impl Span {
         Self::new(0, 1, src_id)
     }
 
-    pub fn merge(&self, other: &Span) -> Span {
+    pub fn merge(self, other: Span) -> Span {
         assert!(
             self.src_id == other.src_id,
             "both spans must have the same sources for them to be merged!"

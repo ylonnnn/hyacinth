@@ -112,7 +112,7 @@ impl<'s> Parser<'s> {
         };
 
         let mut expect = true;
-        while !self.expect_exact_nonlf(TokenKind::Greater).0 {
+        while !self.expect_preserved_exact_nonlf(TokenKind::Greater).0 {
             if !expect {
                 self.require_exact_nonlf(TokenKind::Comma)?;
             }

@@ -2,7 +2,7 @@ use hycc_ast::{
     Mutability, Ty, TyKind,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
-    ty::{Array, FnTy, Ref, Slice, Tuple, TyParam, TyParamList},
+    ty::{Array, FnTy, Ref, Slice, Tuple},
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;
@@ -295,73 +295,5 @@ impl<'s> Parser<'s> {
         Ok(Ty::new(TyKind::Path(Box::new(
             self.parse_path(PathKind::Ty)?,
         ))))
-    }
-
-    // TYPE_PARAM (, TYPE_PARAM) >
-    pub fn parse_ty_params(&mut self) -> ParseResult<TyParamList> {
-        let Some(op_delim) = self.next_nonlf_token() else {
-            return Err(None);
-        };
-
-        let mut param_decls = TyParamList {
-            list: Vec::new(),
-            span: op_delim.span,
-        };
-
-        let mut expect = true;
-        while !self.expect_exact_nonlf(TokenKind::Greater).0 {
-            if !expect {
-                self.require_exact_nonlf(TokenKind::SemiColon)?;
-            }
-
-            if expect {
-                param_decls.list.push(self.parse_ty_param()?);
-                expect = false;
-            }
-
-            if !expect && self.expect_exact_nonlf(TokenKind::SemiColon).0 {
-                expect = true;
-                continue;
-            }
-        }
-
-        Ok(param_decls)
-    }
-
-    // RAW_IDENT (: PROTO_REQS)?
-    // RAW_IDENT (: PROTO (, PROTO)* )
-    pub fn parse_ty_param(&mut self) -> ParseResult<TyParam> {
-        // RAW_IDENT
-        let param = self.parse_raw_ident()?;
-
-        // :
-        let mut proto_reqs = Vec::new();
-        if self.expect_exact_nonlf(TokenKind::Colon).0 {
-            let mut expect = true;
-            while !self.expect_preserved_exact_nonlf(TokenKind::SemiColon).0
-                && !self.expect_preserved_exact_nonlf(TokenKind::Greater).0
-            {
-                if !expect {
-                    self.require_exact_nonlf(TokenKind::Comma)?;
-                }
-
-                if expect {
-                    // TODO: use (and make) parse_proto_ident or allow associated
-                    // types to be parsed in the identifier arguments
-                    proto_reqs.push(self.parse_ident(PathKind::Ty)?);
-                    expect = false;
-                }
-
-                if !expect && self.expect_exact_nonlf(TokenKind::Comma).0 {
-                    expect = true;
-                    continue;
-                }
-            }
-        }
-
-        Ok(TyParam {
-            ident: param,
-            proto_reqs,
-        })
     }
 }

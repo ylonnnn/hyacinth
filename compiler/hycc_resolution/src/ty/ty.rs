@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability,
@@ -89,7 +91,9 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
                     }
                 }
 
-                Ok(self.tctx.make_fn_ty(params.into(), ret_ty))
+                Ok(self
+                    .tctx
+                    .make_fn_ty(Arc::new([]), None, params.into(), ret_ty))
             }
         }?;
 

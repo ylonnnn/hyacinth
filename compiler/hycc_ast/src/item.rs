@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use crate::{Block, Expr, Identifier, Mutability, Path, Ty, token::Token, ty::TyParamList};
+use crate::{
+    Block, Expr, Identifier, Mutability, Path, Ty, generic::GenericParamList, token::Token,
+};
 
 use hycc_span::Span;
 use hycc_util::ternary;
@@ -181,7 +183,7 @@ pub struct StructField {
 #[derive(Debug, Clone)]
 pub struct FnSig {
     pub ident: Token,
-    pub ty_params: Option<TyParamList>,
+    pub generic_params: Option<GenericParamList>,
     pub params: FnParamList,
     pub ret_ty: Option<Box<Ty>>,
 }

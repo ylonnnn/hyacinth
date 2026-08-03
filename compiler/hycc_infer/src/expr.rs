@@ -9,6 +9,7 @@ use hycc_hir::{
         HirTupleExpr,
     },
     item::HirItemKind,
+    path::HirIdentArgument,
 };
 use hycc_span::Span;
 use hycc_ty::{
@@ -206,6 +207,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
+        dbg!(self.definitions.get_def_id(anfn_expr.id));
         let Some(fn_ty) = self.tctx.get_hir_ty(anfn_expr.id).cloned() else {
             bug!(
                 "anon fn hir {:?} does not have an attached ty",
@@ -216,7 +218,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let fn_ty_id = fn_ty.id;
 
         self.use_fn_ctx(FnCtx::new(fn_ty, anfn.body.id), |s| -> InferResult {
-            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+            let TyKind::Fn(fn_ty, _) = s.tctx.get(fn_ty_id) else {
                 return Ok(());
             };
 
@@ -232,10 +234,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 .map(|diag| s.dctx.add(diag));
 
             let resolved_ret_ty = s.tctx.resolve_ty(ret_ty.id);
-            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+            let TyKind::Fn(fn_ty, args) = s.tctx.get(fn_ty_id) else {
                 unreachable!()
             };
 
+            let resolved_args = args.clone(); // TODO
             let resolved_param_tys = fn_ty
                 .params
                 .clone()
@@ -243,7 +246,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 .map(|param| s.tctx.resolve_ty(*param))
                 .collect::<Vec<_>>()
                 .into();
-            let fn_ty = s.tctx.make_fn_ty(resolved_param_tys, resolved_ret_ty);
+            let fn_ty = s
+                .tctx
+                .make_fn_ty(resolved_args, None, resolved_param_tys, resolved_ret_ty);
 
             s.tctx
                 .attach_to_hir(anfn_expr.id, Ty::new(fn_ty, anfn_expr.span));
@@ -256,12 +261,14 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
     pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {
         let callee_ty_id = self.infer_expr(&call.callee)?;
-        let TyKind::Fn(fn_ty) = self.tctx.get(callee_ty_id) else {
+        let TyKind::Fn(fn_ty, args) = self.tctx.get(callee_ty_id) else {
             return Err(Some(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::IllegalInvocation(callee_ty_id),
             )));
         };
+
+        // dbg!(fn_ty);
 
         let (a_len, p_len) = (call.arguments.data.len(), fn_ty.params.len());
         if a_len != p_len {
@@ -325,7 +332,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     };
                 }
 
-                TyKind::Adt(def_id) => {
+                TyKind::Adt(def_id, args) => {
                     let def = self.definitions.get(*def_id);
                     let DefKind::Adt(AdtKind::Struct(struct_def)) = &def.kind else {
                         unreachable!()
@@ -424,7 +431,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         self.tctx
             .attach_to_hir(call.callee.id, Ty::new(fn_ty_id, call.callee.span));
 
-        let TyKind::Fn(fn_ty) = self.tctx.get(fn_ty_id) else {
+        let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ty_id) else {
             unreachable!()
         };
 

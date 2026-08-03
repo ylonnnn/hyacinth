@@ -47,6 +47,11 @@ impl Display for AccessKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum GenericArg {
+    Ty(TyId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Unit,
     Never,
@@ -66,12 +71,12 @@ pub enum TyKind {
 
     Ref(TyId, RefMutability),
 
-    Fn(Box<FnTy>),
+    Fn(Box<FnTy>, Arc<[GenericArg]>),
 
-    Adt(DefId),
+    Adt(DefId, Arc<[GenericArg]>),
 
     Infer(TyVarId, InferKind),
-    Param(DefId),
+    Param(ParamTy),
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +93,7 @@ impl Ty {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FnTy {
+    pub def_id: Option<DefId>,
     pub params: Arc<[TyId]>,
     pub ret_ty: TyId,
 }
@@ -121,4 +127,10 @@ pub enum TyVar {
     Unbound,
     Bound(TyId),
     Linked(TyVarId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParamTy {
+    pub def_id: DefId,
+    pub idx: usize,
 }

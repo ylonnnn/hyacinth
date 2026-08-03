@@ -17,7 +17,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     bug!("fn ctx must exist when entering a function")
                 };
 
-                let TyKind::Fn(fn_ty) = self.tctx.get(fn_ctx.ty.id) else {
+                let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ctx.ty.id) else {
                     bug!("fn ty must be the ty of the function")
                 };
 

@@ -8,7 +8,7 @@ use hycc_util::{bug, ternary};
 
 use crate::{
     extension::ExtensionTable,
-    ty::{FnTy, InferKind, IntTy, RefMutability, Ty, TyKind, TyVar},
+    ty::{FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar},
 };
 
 #[derive(Debug)]
@@ -154,22 +154,50 @@ impl TyCtx {
                 )
             }
 
-            TyKind::Fn(func) => {
-                let f_ret_ty = func.ret_ty;
+            TyKind::Fn(func, arguments) => {
+                let f_def_id = func.def_id;
                 let f_params = func.params.clone();
+                let f_ret_ty = func.ret_ty;
 
                 let mut updated = false;
-                let mut params = Vec::new();
 
-                for param in f_params.iter() {
-                    let res = self.resolve_ty(*param);
-                    params.push((res, updated = updated || *param != res).0)
-                }
+                let generic_args = arguments.clone();
+                let arguments = generic_args
+                    .iter()
+                    .map(|arg| match &arg {
+                        GenericArg::Ty(ty_id) => {
+                            let r_ty_id = self.resolve_ty(*ty_id);
+                            (
+                                GenericArg::Ty(r_ty_id),
+                                updated = updated || r_ty_id != *ty_id,
+                            )
+                                .0
+                        }
+                    })
+                    .collect::<Vec<_>>();
 
-                let ret_ty = self.resolve_ty(f_ret_ty);
-                updated = updated || f_ret_ty != ret_ty;
+                let params = f_params
+                    .iter()
+                    .map(|param| {
+                        let ty_id = self.resolve_ty(*param);
+                        (ty_id, updated = updated || ty_id != *param).0
+                    })
+                    .collect::<Vec<_>>();
 
-                ternary!(updated, self.make_fn_ty(params.into(), ret_ty), ty_id)
+                let ret_ty = {
+                    let ty_id = self.resolve_ty(f_ret_ty);
+                    (ty_id, updated = updated || ty_id != f_ret_ty).0
+                };
+
+                ternary!(
+                    updated,
+                    self.make_fn_ty(arguments.into(), f_def_id, params.into(), ret_ty),
+                    ty_id
+                )
+            }
+
+            TyKind::Adt(def_id, args) => {
+                todo!("resolve adt types")
             }
 
             TyKind::Infer(var_id, _) => {
@@ -180,6 +208,31 @@ impl TyCtx {
                     _ => ty_id,
                 }
             }
+
+            _ => ty_id,
+        }
+    }
+
+    pub fn instantiate(&mut self, ty_id: TyId, args: Arc<[GenericArg]>) -> TyId {
+        match self.get(ty_id) {
+            TyKind::Fn(fn_ty, _) => {
+                let (def_id, ret_ty) = (fn_ty.def_id, fn_ty.ret_ty);
+                let params = fn_ty.params.clone();
+
+                let params = params
+                    .clone()
+                    .iter()
+                    .map(|param| self.instantiate(*param, args.clone()))
+                    .collect::<Arc<_>>();
+                let ret_ty = self.instantiate(ret_ty, args.clone());
+
+                self.make_fn_ty(args, def_id, params, ret_ty)
+            }
+
+            TyKind::Param(ParamTy { idx, .. }) => match args.get(*idx) {
+                Some(GenericArg::Ty(ty_id)) => *ty_id,
+                _ => ty_id,
+            },
 
             _ => ty_id,
         }
@@ -197,7 +250,7 @@ impl TyCtx {
             (TyVar::Bound(v), _) => self.bind_var(b, *v),
             (TyVar::Unbound, TyVar::Unbound) => self.vars[a.unwrap()] = TyVar::Linked(b),
             (_, TyVar::Linked(..)) | (TyVar::Linked(..), _) => {
-                panic!("resolve_var should eliminate links");
+                bug!("resolve_var must eliminate links");
             }
         }
     }
@@ -235,10 +288,12 @@ impl TyCtx {
                 mut_valid && self.unify_ty(*a_inner, *b_inner)
             }
 
-            (TyKind::Fn(a_func), TyKind::Fn(b_func)) => {
+            (TyKind::Fn(a_func, a_args), TyKind::Fn(b_func, b_args)) => {
                 if a_func.params.len() != b_func.params.len() {
                     return false;
                 }
+
+                // TODO: generic arguments
 
                 let (a_ret, b_ret) = (a_func.ret_ty, b_func.ret_ty);
                 a_func
@@ -279,12 +334,12 @@ impl TyCtx {
 
     pub fn expect_hir_ty(&self, hir_id: HirId) -> &Ty {
         self.get_hir_ty(hir_id)
-            .expect(&format!("no type attached for hir {:?}", hir_id))
+            .expect(&format!("expected a type attached to hir id {hir_id:?}"))
     }
 
     pub fn expect_hir_mut_ty(&mut self, hir_id: HirId) -> &mut Ty {
         self.get_hir_mut_ty(hir_id)
-            .expect(&format!("no type attached for hir {:?}", hir_id))
+            .expect(&format!("expected a type attached to hir id {hir_id:?}"))
     }
 
     pub fn expect_hir_ty_id(&self, hir_id: HirId) -> TyId {
@@ -310,7 +365,7 @@ impl TyCtx {
 
     pub fn get_ty_def_id(&self, ty_id: TyId) -> Option<DefId> {
         match &self.get(ty_id) {
-            TyKind::Adt(def_id) => Some(*def_id),
+            TyKind::Adt(def_id, _) => Some(*def_id),
             TyKind::Int(_)
             | TyKind::Float(_)
             | TyKind::Bool
@@ -391,18 +446,35 @@ impl TyCtx {
         self.intern(TyKind::Ref(inner_ty, mutability))
     }
 
-    pub fn make_fn_ty(&mut self, params: Arc<[TyId]>, ret_ty: TyId) -> TyId {
-        self.intern(TyKind::Fn(Box::new(FnTy { params, ret_ty })))
+    pub fn make_fn_ty(
+        &mut self,
+        arguments: Arc<[GenericArg]>,
+        def_id: Option<DefId>,
+        params: Arc<[TyId]>,
+        ret_ty: TyId,
+    ) -> TyId {
+        self.intern(TyKind::Fn(
+            Box::new(FnTy {
+                def_id,
+                params,
+                ret_ty,
+            }),
+            arguments,
+        ))
     }
 
-    pub fn make_adt_ty(&mut self, def_id: DefId) -> TyId {
-        self.intern(TyKind::Adt(def_id))
+    pub fn make_adt_ty(&mut self, def_id: DefId, arguments: Arc<[GenericArg]>) -> TyId {
+        self.intern(TyKind::Adt(def_id, arguments))
     }
 
     pub fn make_inferred_ty(&mut self, kind: InferKind) -> TyId {
         let var_id = self.fresh_var();
         self.storage.push(TyKind::Infer(var_id, kind));
         TyId(self.storage.len() - 1)
+    }
+
+    pub fn make_param_ty(&mut self, def_id: DefId, idx: usize) -> TyId {
+        self.intern(TyKind::Param(ParamTy { def_id, idx }))
     }
 
     pub fn is_inferred(&self, ty_id: TyId) -> bool {
@@ -416,7 +488,7 @@ impl TyCtx {
 
             TyKind::Ref(inner, _) => self.is_inferred(*inner),
 
-            TyKind::Fn(fn_ty) => {
+            TyKind::Fn(fn_ty, _) => {
                 fn_ty.params.iter().any(|param| self.is_inferred(*param))
                     || self.is_inferred(fn_ty.ret_ty)
             }
@@ -431,7 +503,7 @@ impl TyCtx {
             TyKind::Ref(ty_id, _) => *ty_id,
 
             // TODO: check protocols of the type if it has a deref proto
-            TyKind::Adt(_) => ty_id,
+            TyKind::Adt(_, _) => ty_id,
 
             _ => ty_id,
         }

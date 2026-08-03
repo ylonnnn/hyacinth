@@ -79,22 +79,3 @@ pub struct FnTy {
     pub span: Span,
 }
 
-#[derive(Debug, Clone)]
-pub struct TyParamList {
-    pub list: Vec<TyParam>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct TyParam {
-    pub ident: Token,
-    pub proto_reqs: Vec<Identifier>,
-}
-
-impl TyParam {
-    pub fn span(&self) -> Span {
-        self.proto_reqs
-            .last()
-            .map_or(self.ident.span, |ident| self.ident.span.merge(ident.span))
-    }
-}

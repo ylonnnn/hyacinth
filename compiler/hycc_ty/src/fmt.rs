@@ -73,7 +73,7 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 )
             }
 
-            TyKind::Fn(ty) => {
+            TyKind::Fn(ty, _) => {
                 let is_unit = matches!(self.tctx.get(ty.ret_ty), TyKind::Unit);
 
                 format!(
@@ -91,7 +91,7 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 )
             }
 
-            TyKind::Adt(def_id) => {
+            TyKind::Adt(def_id, _) => {
                 // TODO: add generic arguments
                 let def = self.definitions.get(*def_id);
                 format!("{}", self.interner.get(def.name))
@@ -103,8 +103,8 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 InferKind::Float => String::from("{float}"),
             },
 
-            TyKind::Param(def_id) => {
-                let def = self.definitions.get(*def_id);
+            TyKind::Param(param) => {
+                let def = self.definitions.get(param.def_id);
                 format!("{}", self.interner.get(def.name))
             }
         }

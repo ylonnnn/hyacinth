@@ -1,17 +1,17 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{
-        AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, StructDef, StructFieldDef,
-        VarDef,
+        AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, GenericParamDef, StructDef,
+        StructFieldDef, VarDef,
     },
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
 use hycc_ty::ty::Ty;
-use hycc_util::{bug, ternary};
+use hycc_util::ternary;
 
 use crate::{
-    collector::{CollectResult, CollectionLevel, Collector},
+    collector::{CollectResult, Collector},
     extension::Extension,
 };
 
@@ -212,7 +212,10 @@ impl<'i> Collector<'i> {
 
         self.scope_ctx.try_attach_to_def(def_id, Scope::new());
 
-        let ty = Ty::new(self.tctx.make_adt_ty(def_id), struct_item.span);
+        let ty = Ty::new(
+            self.tctx.make_adt_ty(def_id, Vec::new().into()),
+            struct_item.span,
+        );
         self.tctx.attach_to_hir(struct_item.id, ty.clone());
         // self.tctx.attach_to_def(def_id, ty);
 
@@ -243,25 +246,58 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        let (def_id, collected) = if let Some(def_id) = self.definitions.get_def_id(fn_item.id) {
-            (def_id, true)
+        let def_id = if let Some(def_id) = self.definitions.get_def_id(fn_item.id) {
+            def_id
         } else {
-            (
-                self.define(Definition::new(
-                    func.sig.ident.ident,
-                    DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
-                    Some(self.petal_ctx.top_id()),
-                    fn_item.id,
-                    fn_item.span,
-                    fn_item.accessibility,
-                ))?
-                .def_id,
-                false,
-            )
+            self.define(Definition::new(
+                func.sig.ident.ident,
+                DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
+                Some(self.petal_ctx.top_id()),
+                fn_item.id,
+                fn_item.span,
+                fn_item.accessibility,
+            ))?
+            .def_id
         };
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, |s| {
+            // Define function type parameters
+            if let Some(generic_params) = &func.sig.generic_params {
+                for (i, generic_param) in generic_params.list.iter().enumerate() {
+                    let res = s.define(Definition::new(
+                        generic_param.ident.ident,
+                        DefKind::GenericParam(Box::new(GenericParamDef {
+                            idx: i,
+                            kind: generic_param.kind,
+                        })),
+                        Some(s.petal_ctx.top_id()),
+                        generic_param.id,
+                        generic_param.span,
+                        DefAccessibility::Priv,
+                    ));
+
+                    match res {
+                        Ok(&Binding {
+                            def_id: tp_def_id, ..
+                        }) => {
+                            if let DefKind::Fn(fn_def) = &mut s.definitions.get_mut(def_id).kind {
+                                let ty =
+                                    Ty::new(s.tctx.make_param_ty(tp_def_id, i), generic_param.span);
+
+                                s.tctx.attach_to_hir(generic_param.id, ty);
+                                fn_def.generic_params.push(tp_def_id);
+                            }
+                        }
+                        Err(diag) => {
+                            diag.map(|diag| s.dctx.add(diag));
+                        }
+                    };
+
+                    // todo!("collect ty param")
+                }
+            }
+
             // Define the function parameters
             for param in &func.sig.params.list {
                 let res = s.define(Definition::new(

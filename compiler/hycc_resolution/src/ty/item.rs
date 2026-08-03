@@ -1,8 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
-use hycc_ty::{extension::Extension, ty::Ty};
+use hycc_ty::{
+    extension::Extension,
+    ty::{InferKind, Ty},
+};
 
 use crate::{ResolveResult, ty::resolver::TyResolver};
 
@@ -85,7 +88,11 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
             unreachable!()
         };
 
+        let def_id = self.definitions.expect_def_id(fn_item.id);
         let mut params = Vec::new();
+
+        // func.sig.generic_params;
+
         for param in &func.sig.params.list {
             let ty_id = match self.resolve_as_non_inferable_ty(&param.ty) {
                 Ok(ty_id) => ty_id,
@@ -110,7 +117,12 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
             }
         }
 
-        let fn_ty_id = self.tctx.make_fn_ty(params.into(), ret_ty);
+        let fn_ty_id = self.tctx.make_fn_ty(
+            /* TODO */ Arc::new([]),
+            Some(def_id),
+            params.into(),
+            ret_ty,
+        );
         let fn_ty = Ty::new(fn_ty_id, fn_item.span);
 
         self.tctx.attach_to_hir(fn_item.id, fn_ty.clone());
@@ -129,19 +141,13 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
             unreachable!()
         };
 
-        if let Some(ty) = decl.ty {
-            match self.resolve_ty(&ty) {
-                Ok(ty_id) => self
-                    .tctx
-                    .attach_to_hir(var_decl.id, Ty::new(ty_id, ty.span)),
-                Err(Some(diag)) => {
-                    self.dctx.add(diag);
-                }
-                _ => {}
-            }
-        }
+        let (ty_id, span) = match &decl.ty {
+            Some(ty) => (self.resolve_ty(ty)?, ty.span),
+            None => (self.tctx.make_inferred_ty(InferKind::Any), decl.span),
+        };
 
-        // Attempt to resolve block expressions
+        self.tctx.attach_to_hir(var_decl.id, Ty::new(ty_id, span));
+
         if let Some(expr) = decl.val {
             if let Err(Some(diag)) = self.resolve_expr(&expr) {
                 self.dctx.add(diag);

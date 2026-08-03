@@ -5,6 +5,7 @@ use hycc_symbol::Symbol;
 
 use crate::{
     HirId, HirMutability,
+    generic::HirGenericParamKind,
     item::{HirItemAccessibility, HirItemLevel, HirPubAccessibilityKind},
     petal::PetalId,
 };
@@ -103,6 +104,8 @@ pub enum DefKind {
 
     Adt(AdtKind),
 
+    GenericParam(Box<GenericParamDef>),
+
     Fn(Box<FnDef>),
     FnParam,
 
@@ -115,6 +118,7 @@ impl DefKind {
             Self::Builtin(_)
             | Self::Petal
             | Self::Proto
+            | Self::GenericParam(_)
             | Self::Fn(_)
             | Self::FnParam
             | Self::Var(_) => "a",
@@ -130,10 +134,12 @@ impl DefKind {
             Self::Petal => String::from("petal"),
             Self::Proto => String::from("protocol"),
 
+            Self::Adt(kind) => kind.kind().into(),
+
+            Self::GenericParam(_) => String::from("type parameter"),
+
             Self::Fn(_) => String::from("function"),
             Self::FnParam => String::from("function parameter"),
-
-            Self::Adt(kind) => kind.kind().into(),
 
             Self::Var(var_def) => format!(
                 "{}variable",
@@ -155,7 +161,7 @@ impl DefKind {
         match self {
             Self::Builtin(_) => unreachable!(),
 
-            Self::Petal | Self::Adt(_) | Self::Proto => DefSpace::Type,
+            Self::Petal | Self::Proto | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
         }
@@ -238,7 +244,14 @@ pub struct StructFieldDef {
 }
 
 #[derive(Debug, Clone)]
+pub struct GenericParamDef {
+    pub idx: usize,
+    pub kind: HirGenericParamKind,
+}
+
+#[derive(Debug, Clone)]
 pub struct FnDef {
+    pub generic_params: Vec<DefId>,
     pub params: Vec<DefId>,
     pub ret_ty: Option<HirId>,
 }
@@ -246,6 +259,7 @@ pub struct FnDef {
 impl FnDef {
     pub fn new(ret_ty: Option<HirId>) -> Self {
         Self {
+            generic_params: Vec::new(),
             params: Vec::new(),
             ret_ty,
         }
@@ -344,6 +358,14 @@ impl Definition {
         span: Span,
     ) -> Self {
         Self::new(name, kind, petal, hir_id, span, DefAccessibility::Priv)
+    }
+
+    pub fn generic_params(&self) -> Option<&[DefId]> {
+        match &self.kind {
+            DefKind::Fn(fn_def) => Some(&fn_def.generic_params),
+
+            _ => None,
+        }
     }
 }
 

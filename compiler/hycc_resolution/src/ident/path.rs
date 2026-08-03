@@ -5,6 +5,7 @@ use hycc_hir::{
     petal::PetalRelationship,
     scope::ScopeId,
 };
+use hycc_ty::ty::{GenericArg, Ty};
 use hycc_util::{bug, ternary};
 
 use crate::{
@@ -91,26 +92,47 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         }
 
         let def_id = binding.def_id;
+        // let mut generic_args = Vec::new();
 
         if let Some(arguments) = &ident.arguments {
             for argument in &arguments.data {
                 let res = match &argument {
                     HirIdentArgument::Expr(expr) => {
+                        // todo!("return GenericArg::Const or something")
                         self.expect_space(DefSpace::Value, |s| s.resolve_expr(&expr))
                     }
 
                     HirIdentArgument::Ty(ty) => {
                         self.expect_space(DefSpace::Type, |s| s.resolve_ty(&ty))
-                    }
+                    } // .and_then(|_| {
+                      //     self.def_to_ty(def_id, ty.span)
+                      //         .map(|ty_id| GenericArg::Ty(ty_id))
+                      // }),
                 };
 
-                if let Err(Some(diag)) = res {
-                    self.dctx.add(diag);
+                match res {
+                    Ok(argument) => {
+                        // generic_args.push(argument)
+                    }
+                    Err(diag) => {
+                        diag.map(|diag| self.dctx.add(diag));
+                    }
                 }
             }
         }
 
+        // let ty = self.def_to_ty(def_id, ident.span);
+        // dbg!(&ty);
+        // dbg!(self.collector.tctx.get(ty.unwrap()));
+        // let ty_id = self.def_to_ty(def_id, ident.span)?;
+        // let ty_id = self.collector.tctx.get_hir_ty_id(ident.id).unwrap();
+        // let inst_ty_id = self.collector.tctx.instantiate(ty_id, generic_args.into());
+
+        // self.collector
+        //     .tctx
+        //     .attach_to_hir(ident.id, Ty::new(inst_ty_id, ident.span));
         self.collector.definitions.define_id_hir(ident.id, def_id);
+
         Ok(def_id)
     }
 }

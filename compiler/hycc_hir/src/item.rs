@@ -8,6 +8,7 @@ use crate::{
     HirId, HirMutability,
     block::HirBlock,
     expr::HirExpr,
+    generic::HirGenericParamList,
     path::{HirIdent, HirPath, HirRawIdent},
     ty::HirTy,
 };
@@ -163,6 +164,7 @@ impl<'h> HirStructField<'h> {
 #[derive(Debug, Clone)]
 pub struct HirFnSig<'h> {
     pub ident: &'h HirRawIdent,
+    pub generic_params: Option<HirGenericParamList<'h>>,
     pub params: HirFnParamList<'h>,
     pub ret_ty: Option<&'h HirTy<'h>>,
 }

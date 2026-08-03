@@ -4,6 +4,7 @@ use hycc_ast::Mutability;
 use crate::{
     block::HirBlock,
     expr::{HirAnonFnParam, HirExpr, HirStructExprField},
+    generic::HirGenericParam,
     item::{HirFnParam, HirItem, HirStructField},
     path::{HirIdent, HirPath, HirRawIdent},
     stmt::HirStmt,
@@ -12,11 +13,12 @@ use crate::{
 
 pub mod builder;
 pub mod def;
-pub mod scope;
 pub mod petal;
+pub mod scope;
 
 pub mod block;
 pub mod expr;
+pub mod generic;
 pub mod item;
 pub mod path;
 pub mod stmt;
@@ -41,6 +43,7 @@ pub enum HirNode<'h> {
     RawIdent(HirRawIdent),
 
     StructField(HirStructField<'h>),
+    GenericParam(HirGenericParam<'h>),
     FnParam(HirFnParam<'h>),
     AnonFnParam(HirAnonFnParam<'h>),
 
@@ -70,6 +73,7 @@ impl<'h> HirTable<'h> {
             HirNode::Ident(node) => &mut node.id,
             HirNode::RawIdent(node) => &mut node.id,
             HirNode::StructField(node) => &mut node.id,
+            HirNode::GenericParam(node) => &mut node.id,
             HirNode::FnParam(node) => &mut node.id,
             HirNode::AnonFnParam(node) => &mut node.id,
             HirNode::StructExprField(node) => &mut node.id,

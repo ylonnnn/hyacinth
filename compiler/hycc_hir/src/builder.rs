@@ -6,6 +6,7 @@ use hycc_ast::{
         AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, IfExpr, MethodCall,
         RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
+    generic::{GenericParam, GenericParamList},
     item::{
         Extend, Fn, FnParamList, FnSig, Petal, PetalKind, Proto, ProtoItem, ProtoItemAssocFnKind,
         Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
@@ -29,6 +30,7 @@ use crate::{
         HirFnCall, HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr,
         HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
+    generic::{HirGenericParam, HirGenericParamList},
     item::{
         HirExtend, HirFn, HirFnParam, HirFnParamList, HirFnSig, HirItem, HirItemKind, HirItemLevel,
         HirPetal, HirPetalKind, HirProto, HirProtoItem, HirProtoItemAssocFnKind, HirRefer,
@@ -240,6 +242,10 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     fn lower_fn_sig(&mut self, sig: &FnSig) -> HirFnSig<'h> {
         HirFnSig {
             ident: self.lower_raw_ident(&sig.ident),
+            generic_params: sig
+                .generic_params
+                .as_ref()
+                .map(|generic_params| self.lower_generic_params(&generic_params)),
             params: self.lower_fn_params(&sig.params),
             ret_ty: sig.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
         }
@@ -715,6 +721,38 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             path
         } else {
             unreachable!()
+        }
+    }
+
+    fn lower_generic_params(
+        &mut self,
+        generic_params: &GenericParamList,
+    ) -> HirGenericParamList<'h> {
+        let mut data = Vec::new();
+
+        for generic_param in &generic_params.list {
+            if let HirNode::GenericParam(generic_param) =
+                self.hir_table
+                    .add(HirNode::GenericParam(HirGenericParam::<'h>::new(
+                        self.lower_raw_ident(&generic_param.ident),
+                        generic_param
+                            .proto_reqs
+                            .iter()
+                            .map(|proto_req| self.lower_path(&proto_req))
+                            .collect::<Vec<_>>(),
+                        generic_param.kind,
+                        generic_param.span(),
+                    )))
+            {
+                data.push(generic_param);
+            } else {
+                unreachable!();
+            }
+        }
+
+        HirGenericParamList {
+            list: data,
+            span: generic_params.span,
         }
     }
 

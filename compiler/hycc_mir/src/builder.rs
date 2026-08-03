@@ -734,7 +734,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                     break Projection::Field(idx, tup[idx]);
                 }
 
-                TyKind::Adt(def_id) => {
+                TyKind::Adt(def_id, _) => {
                     let HirFieldAccessFieldKind::Ident(field_sym) = &access.field.kind else {
                         unreachable!()
                     };

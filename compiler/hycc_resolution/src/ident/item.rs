@@ -1,11 +1,10 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirId, HirNode,
-    def::{Binding, BuiltinKind, BuiltinTyKind, DefAccessibility, DefKind, DefSpace, Definition},
-    item::{HirItem, HirItemKind, HirItemLevel, HirReferTarget, HirReferTargetKind},
+    HirNode,
+    def::{Binding, DefAccessibility, DefSpace},
+    item::{HirItem, HirItemKind, HirReferTarget, HirReferTargetKind},
     scope::ScopeId,
 };
-use hycc_span::Span;
 use hycc_util::bug;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
@@ -226,6 +225,18 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         };
 
         self.enter_scope(scope_id, |s| {
+            if let Some(generic_params) = &func.sig.generic_params {
+                for generic_param in &generic_params.list {
+                    for proto_req in &generic_param.proto_reqs {
+                        if let Err(Some(diag)) =
+                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                        {
+                            s.dctx.add(diag);
+                        }
+                    }
+                }
+            }
+
             for param in &func.sig.params.list {
                 if let Err(Some(diag)) = s.resolve_ty(&param.ty) {
                     s.dctx.add(diag);

@@ -63,7 +63,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let fn_ty_id = fn_ty.id;
 
         self.use_fn_ctx(FnCtx::new(fn_ty, func.body.id), |s| -> InferResult {
-            let TyKind::Fn(fn_ty) = s.tctx.get(fn_ty_id) else {
+            let TyKind::Fn(fn_ty, _) = s.tctx.get(fn_ty_id) else {
                 return Ok(());
             };
 
@@ -86,25 +86,21 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
-        let ty = decl.ty.map(|ty| {
-            let Some(ty) = self.tctx.get_hir_ty(ty.id).cloned() else {
-                bug!("var decl ty hir is not attached to a Ty: {:?}", ty.id)
-            };
+        let def_id = self.definitions.expect_def_id(var_decl.id);
 
-            ty
-        });
+        let ty = decl.ty.map_or_else(
+            || Ty::new(self.tctx.expect_hir_ty_id(var_decl.id), decl.span),
+            |ty| self.tctx.expect_hir_ty(ty.id).clone(),
+        );
 
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;
-            let ty = ty.unwrap_or(Ty::new(
-                self.tctx.make_inferred_ty(InferKind::Any),
-                Span::default(),
-            ));
 
             self.check(&ty, &Ty::new(expr_ty, expr.span))
                 .map(|diag| self.dctx.add(diag));
 
-            self.tctx.attach_to_hir(var_decl.id, ty);
+            let def = self.definitions.get(def_id);
+            self.tctx.attach_to_hir(def.hir_id, ty);
         }
 
         Ok(())

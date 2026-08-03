@@ -47,14 +47,15 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
                 _ => self.tctx.get_ty_of_def(def_id).unwrap().id,
             },
 
-            DefKind::Adt(_) => self.tctx.expect_hir_ty_id(def.hir_id),
-
             DefKind::Petal => Err(Some(ResolverDiag::error(
                 span,
                 ResolverDiagErrorKind::InvalidPetalResolution(def.name, def_id),
             )))?,
 
-            _ => unreachable!(),
+            // DefKind::Adt(_) => self.tctx.expect_hir_ty_id(def.hir_id),
+
+            // DefKind::TyParam(_) => self.tctx.expect_hir_ty_id(def.hir_id),
+            _ => self.tctx.expect_hir_ty_id(def.hir_id),
         };
 
         Ok(ty_id)

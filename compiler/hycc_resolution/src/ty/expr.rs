@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{ResolveResult, ty::resolver::TyResolver};
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
@@ -11,26 +13,7 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
         match &expr.kind {
             HirExprKind::Block(block) => self.resolve_block(&block),
 
-            HirExprKind::Path(path) => {
-                for segment in &path.segments {
-                    let Some(arguments) = &segment.arguments else {
-                        break;
-                    };
-
-                    for argument in &arguments.data {
-                        let result = match &argument {
-                            HirIdentArgument::Ty(ty) => self.resolve_ty(&ty).map(|_| ()),
-                            HirIdentArgument::Expr(expr) => self.resolve_expr(&expr),
-                        };
-
-                        if let Err(Some(diag)) = result {
-                            self.dctx.add(diag);
-                        }
-                    }
-                }
-
-                Ok(())
-            }
+            HirExprKind::Path(path) => self.resolve_path(&path).map(|_| ()),
 
             HirExprKind::RefExpr(reference) => self.resolve_expr(&reference.expr),
 
@@ -119,7 +102,9 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
                     }
                 }
 
-                let fn_ty = self.tctx.make_fn_ty(params.into(), ret_ty);
+                let fn_ty = self
+                    .tctx
+                    .make_fn_ty(Arc::new([]), None, params.into(), ret_ty);
                 self.tctx.attach_to_hir(expr.id, Ty::new(fn_ty, expr.span));
 
                 self.resolve_block(&anfn.body)

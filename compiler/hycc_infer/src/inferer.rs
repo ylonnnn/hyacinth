@@ -67,8 +67,8 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 received.span,
                 InferDiagErrorKind::TypeMismatch {
                     expectation_span: expected.span,
-                    expected: expected.id,
-                    received: received.id,
+                    expected: self.tctx.resolve_ty(expected.id),
+                    received: self.tctx.resolve_ty(received.id),
                 },
             ))
         }
@@ -135,10 +135,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 continue;
             };
 
-            self.dctx.add(InferDiag::error(
-                span,
-                InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
-            ));
+            // dbg!(span);
+            // self.dctx.add(InferDiag::error(
+            //     span,
+            //     InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
+            // ));
         }
     }
 }

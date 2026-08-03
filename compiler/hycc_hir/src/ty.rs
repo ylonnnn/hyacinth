@@ -1,6 +1,10 @@
 use hycc_span::Span;
 
-use crate::{HirId, HirMutability, expr::HirExpr, path::HirPath};
+use crate::{
+    HirId, HirMutability,
+    expr::HirExpr,
+    path::{HirIdent, HirPath, HirRawIdent},
+};
 
 #[derive(Debug, Clone)]
 pub enum HirTyKind<'h> {

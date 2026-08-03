@@ -606,20 +606,20 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // fn IDENT(TY_PARAMS)?((PARAM_LIST)?) RET_TY?
-    // fn IDENT < TY_PARAM (, TY_PARAM)* > ( PARAM (, PARAM)? ) RET_TY?
+    // fn IDENT(generic_paramS)?((PARAM_LIST)?) RET_TY?
+    // fn IDENT < generic_param (, generic_param)* > ( PARAM (, PARAM)? ) RET_TY?
     pub fn parse_fn_sig(&mut self, require_term: bool) -> ParseResult<FnSig> {
         // IDENT
         let ident = self.parse_raw_ident();
 
-        // TY_PARAMS
-        let ty_params = ternary!(
+        // generic_paramS
+        let generic_params = ternary!(
             self.expect_preserved_exact_nonlf(TokenKind::Less).0,
-            Some(self.parse_ty_params()?),
+            Some(self.parse_generic_params()?),
             None
         );
         if self.expect_preserved_exact_nonlf(TokenKind::Less).0 {
-            self.parse_ty_params()?;
+            self.parse_generic_params()?;
         }
 
         // (PARAM (, PARAM)*)
@@ -638,7 +638,7 @@ impl<'s> Parser<'s> {
 
         Ok(FnSig {
             ident: ident?,
-            ty_params,
+            generic_params,
             params,
             ret_ty: ret_ty.map(Box::new),
         })

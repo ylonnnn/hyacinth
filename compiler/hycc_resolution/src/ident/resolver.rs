@@ -2,14 +2,19 @@ use hycc_collection::{collector::Collector, diag::CollectorDiagDataCtx};
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
     HirTable,
-    def::{Binding, DefId, DefSpace, Definition},
+    def::{Binding, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, Definition},
     item::{HirItem, HirItemKind},
     scope::ScopeId,
 };
+use hycc_span::Span;
 use hycc_symbol::Symbol;
+use hycc_ty::{context::TyId, ty::InferKind};
 use hycc_util::bug;
 
-use crate::diag::{ResolverDiagCtx, ResolverDiagDataCtx};
+use crate::{
+    ResolveResult,
+    diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagDataCtx, ResolverDiagErrorKind},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum ResolutionCtx {
@@ -71,6 +76,29 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         let (def_id, _) = self.get_def_id(space, name)?;
         Some(self.collector.definitions.get(def_id))
     }
+
+    // pub(crate) fn def_to_ty(&mut self, def_id: DefId, span: Span) -> ResolveResult<TyId> {
+    //     let def = self.collector.definitions.get(def_id);
+    //     let ty_id = match dbg!(&def.kind) {
+    //         DefKind::Builtin(BuiltinKind::Ty(kind)) => match kind {
+    //             BuiltinTyKind::Infer => self.collector.tctx.make_inferred_ty(InferKind::Any),
+    //             _ => self.collector.tctx.get_ty_of_def(def_id).unwrap().id,
+    //         },
+
+    //         DefKind::Petal => Err(Some(ResolverDiag::error(
+    //             span,
+    //             ResolverDiagErrorKind::InvalidPetalResolution(def.name, def_id),
+    //         )))?,
+
+    //         DefKind::Adt(_) => self.collector.tctx.expect_hir_ty_id(def.hir_id),
+
+    //         DefKind::TyParam(_) => self.collector.tctx.expect_hir_ty_id(def.hir_id),
+
+    //         _ => unreachable!(),
+    //     };
+
+    //     Ok(ty_id)
+    // }
 
     pub fn enter_scope<F, U>(&mut self, scope_id: ScopeId, mut handler: F) -> U
     where

@@ -1,8 +1,8 @@
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{
-        AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, GenericParamDef, StructDef,
-        StructFieldDef, VarDef,
+        AdtDef, AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, GenericParamDef,
+        StructDef, StructFieldDef, VarDef,
     },
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
@@ -202,7 +202,7 @@ impl<'i> Collector<'i> {
         let def_id = self
             .define(Definition::new(
                 strct.ident.ident,
-                DefKind::Adt(AdtKind::Struct(Box::new(StructDef::new()))),
+                DefKind::Adt(Box::new(AdtDef::new(AdtKind::Struct(StructDef::new())))),
                 Some(self.petal_ctx.top_id()),
                 struct_item.id,
                 struct_item.span,
@@ -210,7 +210,41 @@ impl<'i> Collector<'i> {
             ))?
             .def_id;
 
-        self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+        let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+        self.enter_scope(scope_id, |s| {
+            if let Some(generic_params) = &strct.generic_params {
+                for (i, generic_param) in generic_params.list.iter().enumerate() {
+                    let res = s.define(Definition::new(
+                        generic_param.ident.ident,
+                        DefKind::GenericParam(Box::new(GenericParamDef {
+                            idx: i,
+                            kind: generic_param.kind,
+                        })),
+                        Some(s.petal_ctx.top_id()),
+                        generic_param.id,
+                        generic_param.span,
+                        DefAccessibility::Priv,
+                    ));
+
+                    match res {
+                        Ok(&Binding {
+                            def_id: tp_def_id, ..
+                        }) => {
+                            let adt_def = &mut s.definitions.get_mut(def_id).kind.expect_mut_adt();
+                            let ty =
+                                Ty::new(s.tctx.make_param_ty(tp_def_id, i), generic_param.span);
+
+                            s.tctx.attach_to_hir(generic_param.id, ty);
+                            adt_def.generic_params.push(tp_def_id);
+                        }
+
+                        Err(diag) => {
+                            diag.map(|diag| s.dctx.add(diag));
+                        }
+                    };
+                }
+            }
+        });
 
         let ty = Ty::new(
             self.tctx.make_adt_ty(def_id, Vec::new().into()),
@@ -219,9 +253,12 @@ impl<'i> Collector<'i> {
         self.tctx.attach_to_hir(struct_item.id, ty.clone());
         // self.tctx.attach_to_def(def_id, ty);
 
-        let DefKind::Adt(AdtKind::Struct(def)) = &mut self.definitions.get_mut(def_id).kind else {
-            unreachable!()
-        };
+        let def = &mut self
+            .definitions
+            .get_mut(def_id)
+            .kind
+            .expect_mut_adt()
+            .expect_mut_struct();
 
         for field in &strct.fields.list {
             let name = field.ident.ident;
@@ -281,7 +318,9 @@ impl<'i> Collector<'i> {
                         Ok(&Binding {
                             def_id: tp_def_id, ..
                         }) => {
-                            if let DefKind::Fn(fn_def) = &mut s.definitions.get_mut(def_id).kind {
+                            if let Some(fn_def) =
+                                &mut s.definitions.get_mut(def_id).kind.get_mut_fn()
+                            {
                                 let ty =
                                     Ty::new(s.tctx.make_param_ty(tp_def_id, i), generic_param.span);
 
@@ -289,12 +328,11 @@ impl<'i> Collector<'i> {
                                 fn_def.generic_params.push(tp_def_id);
                             }
                         }
+
                         Err(diag) => {
                             diag.map(|diag| s.dctx.add(diag));
                         }
                     };
-
-                    // todo!("collect ty param")
                 }
             }
 
@@ -313,10 +351,11 @@ impl<'i> Collector<'i> {
                     Ok(&Binding {
                         def_id: p_def_id, ..
                     }) => {
-                        if let DefKind::Fn(def) = &mut s.definitions.get_mut(def_id).kind {
-                            def.params.push(p_def_id);
+                        if let Some(fn_def) = &mut s.definitions.get_mut(def_id).kind.get_mut_fn() {
+                            fn_def.params.push(p_def_id);
                         }
                     }
+
                     Err(diag) => {
                         diag.map(|diag| s.dctx.add(diag));
                     }

@@ -60,6 +60,10 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
             }
 
             HirExprKind::Struct(strct) => {
+                if let Err(Some(diag)) = self.resolve_path(&strct.path) {
+                    self.dctx.add(diag);
+                }
+
                 for field in &strct.fields {
                     if let Err(Some(diag)) = self.resolve_expr(&field.val) {
                         self.dctx.add(diag);

@@ -260,10 +260,9 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
 
                             Err::MissingFields { field_mask, def_id } => {
                                 let def = fmt.definitions.get(*def_id);
-                                let DefKind::Adt(AdtKind::Struct(strct)) = &def.kind else {
-                                    unreachable!()
-                                };
+                                let adt_def = def.kind.expect_adt();
 
+                                let strct = adt_def.expect_struct();
                                 let missing_fields = strct
                                     .fields
                                     .iter()
@@ -400,10 +399,9 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
 
                 Err::UnrecognizedFieldInitialization { struct_def, .. } => {
                     let def = fmt.definitions.get(*struct_def);
-                    let DefKind::Adt(AdtKind::Struct(struct_def)) = &def.kind else {
-                        bug!("struct_def is expected to be a valid def_id of a struct definition")
-                    };
+                    let adt_def = def.kind.expect_adt();
 
+                    let struct_def = adt_def.expect_struct();
                     diag.detail(
                         def.span,
                         DiagnosticKind::Note(format!(
@@ -452,11 +450,7 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
 
                 Err::InvalidAssocFnInvocation { name, def_id, .. } => {
                     let def = fmt.definitions.get(*def_id);
-                    let DefKind::Fn(fn_def) = &def.kind else {
-                        bug!(
-                            "definition of the def id {def_id:?} provided must be a function definition"
-                        )
-                    };
+                    let fn_def = def.kind.expect_fn();
 
                     if fn_def.params.len() < 1 {
                         diag.detail(
@@ -486,11 +480,7 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                     ..
                 } => {
                     let def = fmt.definitions.get(*def_id);
-                    let DefKind::Fn(fn_def) = &def.kind else {
-                        bug!(
-                            "definition of the def id {def_id:?} provided must be a function definition"
-                        );
-                    };
+                    let fn_def = def.kind.expect_fn();
 
                     diag.detail(
                         method.1,

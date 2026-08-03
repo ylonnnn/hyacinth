@@ -194,11 +194,30 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             }
         }
 
-        for field in &strct.fields.list {
-            if let Err(Some(diag)) = self.resolve_ty(&field.ty) {
-                self.dctx.add(diag);
+        let def_id = self.collector.definitions.expect_def_id(struct_item.id);
+        let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
+
+        self.enter_scope(scope_id, |s| {
+            let Some(generic_params) = &strct.generic_params else {
+                return;
+            };
+
+            for generic_param in &generic_params.list {
+                for proto_req in &generic_param.proto_reqs {
+                    if let Err(Some(diag)) =
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                    {
+                        s.dctx.add(diag);
+                    }
+                }
             }
-        }
+
+            for field in &strct.fields.list {
+                if let Err(Some(diag)) = s.resolve_ty(&field.ty) {
+                    s.dctx.add(diag);
+                }
+            }
+        });
 
         Ok(())
     }

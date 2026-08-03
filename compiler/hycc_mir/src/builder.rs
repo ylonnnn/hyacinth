@@ -739,12 +739,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                         unreachable!()
                     };
 
-                    let def = self.definitions.get(*def_id);
-                    let DefKind::Adt(adt_kind) = &def.kind else {
-                        unreachable!()
-                    };
-
-                    break match adt_kind {
+                    let adt_def = self.definitions.get(*def_id).kind.expect_adt();
+                    break match &adt_def.kind {
                         AdtKind::Struct(struct_def) => {
                             let idx = *struct_def.field_map.get(field_sym).unwrap();
                             let field_ty = self.tctx.expect_hir_ty_id(struct_def.fields[idx].ty);

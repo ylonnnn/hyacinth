@@ -162,6 +162,7 @@ impl Extend {
 #[derive(Debug, Clone)]
 pub struct Struct {
     pub ident: Token,
+    pub generic_params: Option<GenericParamList>,
     pub fields: StructFieldList,
 }
 

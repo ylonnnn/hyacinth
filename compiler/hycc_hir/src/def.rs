@@ -102,7 +102,7 @@ pub enum DefKind {
     Petal,
     Proto,
 
-    Adt(AdtKind),
+    Adt(Box<AdtDef>),
 
     GenericParam(Box<GenericParamDef>),
 
@@ -166,6 +166,84 @@ impl DefKind {
             Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
         }
     }
+
+    pub fn get_builtin(&self) -> Option<&BuiltinKind> {
+        match &self {
+            Self::Builtin(kind) => Some(kind),
+            _ => None,
+        }
+    }
+
+    pub fn expect_builtin(&self) -> &BuiltinKind {
+        self.get_builtin()
+            .expect("expect definition kind to be Builtin")
+    }
+
+    pub fn get_adt(&self) -> Option<&AdtDef> {
+        match &self {
+            Self::Adt(adt_def) => Some(adt_def),
+            _ => None,
+        }
+    }
+
+    pub fn get_mut_adt(&mut self) -> Option<&mut AdtDef> {
+        match self {
+            Self::Adt(adt_def) => Some(adt_def),
+            _ => None,
+        }
+    }
+
+    pub fn expect_adt(&self) -> &AdtDef {
+        self.get_adt()
+            .expect("expected definition kind to be an Adt")
+    }
+
+    pub fn expect_mut_adt(&mut self) -> &mut AdtDef {
+        self.get_mut_adt()
+            .expect("expected definition kind to be an Adt")
+    }
+
+    pub fn get_generic_param(&self) -> Option<&GenericParamDef> {
+        match &self {
+            Self::GenericParam(def) => Some(&def),
+            _ => None,
+        }
+    }
+
+    pub fn expect_generic_param(&self) -> &GenericParamDef {
+        self.get_generic_param()
+            .expect("expected definition kind to be a GenericParam")
+    }
+
+    pub fn get_fn(&self) -> Option<&FnDef> {
+        match &self {
+            Self::Fn(def) => Some(&def),
+            _ => None,
+        }
+    }
+
+    pub fn get_mut_fn(&mut self) -> Option<&mut FnDef> {
+        match self {
+            Self::Fn(def) => Some(def),
+            _ => None,
+        }
+    }
+
+    pub fn expect_fn(&self) -> &FnDef {
+        self.get_fn().expect("expected definition kind to be an Fn")
+    }
+
+    pub fn get_var(&self) -> Option<&VarDef> {
+        match &self {
+            Self::Var(def) => Some(&def),
+            _ => None,
+        }
+    }
+
+    pub fn expect_var(&self) -> &VarDef {
+        self.get_var()
+            .expect("expected definition kin dto be a Var")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -202,7 +280,7 @@ pub enum ProtoDefItem {}
 
 #[derive(Debug, Clone)]
 pub enum AdtKind {
-    Struct(Box<StructDef>),
+    Struct(StructDef),
     // TODO: Enum
 }
 
@@ -217,6 +295,57 @@ impl AdtKind {
         match &self {
             Self::Struct(_) => "struct",
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AdtDef {
+    pub kind: AdtKind,
+    pub generic_params: Vec<DefId>,
+}
+
+impl AdtDef {
+    pub fn new(kind: AdtKind) -> Self {
+        Self {
+            kind,
+            generic_params: Vec::new(),
+        }
+    }
+
+    pub fn article(&self) -> &'static str {
+        self.kind.article()
+    }
+
+    pub fn kind(&self) -> &'static str {
+        self.kind.kind()
+    }
+
+    pub fn get_struct(&self) -> Option<&StructDef> {
+        #[allow(irrefutable_let_patterns)]
+        if let AdtKind::Struct(struct_def) = &self.kind {
+            Some(&struct_def)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut_struct(&mut self) -> Option<&mut StructDef> {
+        #[allow(irrefutable_let_patterns)]
+        if let AdtKind::Struct(struct_def) = &mut self.kind {
+            Some(struct_def)
+        } else {
+            None
+        }
+    }
+
+    pub fn expect_struct(&self) -> &StructDef {
+        self.get_struct()
+            .expect(&format!("expected internal definition to be a struct!"))
+    }
+
+    pub fn expect_mut_struct(&mut self) -> &mut StructDef {
+        self.get_mut_struct()
+            .expect(&format!("expected internal definition to be a struct!"))
     }
 }
 
@@ -363,6 +492,7 @@ impl Definition {
     pub fn generic_params(&self) -> Option<&[DefId]> {
         match &self.kind {
             DefKind::Fn(fn_def) => Some(&fn_def.generic_params),
+            DefKind::Adt(adt_kind) => Some(&adt_kind.generic_params),
 
             _ => None,
         }

@@ -517,11 +517,18 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // struct IDENT { (FIELD (, FIELD)?)* }
-    // struct IDENT { (IDENT : TY (, IDENT : TY)?)* }
+    // struct IDENT < GENERIC_PARAMS > { (FIELD (, FIELD)?)* }
+    // struct IDENT < GENERIC_PARAM (, GENERIC_PARAM)* > { (IDENT : TY (, IDENT : TY)?)* }
     pub fn parse_struct(&mut self) -> ParseResult<Struct> {
         // IDENT
         let ident = self.parse_raw_ident()?;
+
+        // GENERIC_PARAMS
+        let generic_params = ternary!(
+            self.expect_preserved_exact_nonlf(TokenKind::Less).0,
+            Some(self.parse_generic_params()?),
+            None
+        );
 
         // FIELDS
         let fields = self.parse_struct_fields()?;
@@ -531,7 +538,11 @@ impl<'s> Parser<'s> {
                 ParserDiagErrorKind::InvalidStructFieldCount(fields.list.len() as u8),
             )))
         } else {
-            Ok(Struct { ident, fields })
+            Ok(Struct {
+                ident,
+                generic_params,
+                fields,
+            })
         }
     }
 
@@ -606,13 +617,13 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // fn IDENT(generic_paramS)?((PARAM_LIST)?) RET_TY?
-    // fn IDENT < generic_param (, generic_param)* > ( PARAM (, PARAM)? ) RET_TY?
+    // fn IDENT (GENERIC_PARAMS)? ((PARAM_LIST)?) RET_TY?
+    // fn IDENT < GENERIC_PARAM (, GENERIC_PARAM)* > ( PARAM (, PARAM)? ) RET_TY?
     pub fn parse_fn_sig(&mut self, require_term: bool) -> ParseResult<FnSig> {
         // IDENT
         let ident = self.parse_raw_ident();
 
-        // generic_paramS
+        // GENERIC_PARAMS
         let generic_params = ternary!(
             self.expect_preserved_exact_nonlf(TokenKind::Less).0,
             Some(self.parse_generic_params()?),

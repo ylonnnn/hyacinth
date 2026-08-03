@@ -135,8 +135,7 @@ impl TyCtx {
                     .iter()
                     .map(|ty| {
                         let res = self.resolve_ty(*ty);
-                        updated = updated || *ty != res;
-                        res
+                        (res, updated = updated || res != *ty).0
                     })
                     .collect::<Vec<_>>();
 
@@ -197,7 +196,20 @@ impl TyCtx {
             }
 
             TyKind::Adt(def_id, args) => {
-                todo!("resolve adt types")
+                let (def_id, args) = (*def_id, args.clone());
+                let mut updated = false;
+
+                let args = args
+                    .iter()
+                    .map(|arg| match &arg {
+                        GenericArg::Ty(ty_id) => {
+                            let r_ty_id = self.resolve_ty(*ty_id);
+                            GenericArg::Ty((r_ty_id, updated = updated || r_ty_id != *ty_id).0)
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                ternary!(updated, self.make_adt_ty(def_id, args.into()), ty_id)
             }
 
             TyKind::Infer(var_id, _) => {
@@ -215,6 +227,32 @@ impl TyCtx {
 
     pub fn instantiate(&mut self, ty_id: TyId, args: Arc<[GenericArg]>) -> TyId {
         match self.get(ty_id) {
+            TyKind::Array(ty_id) => {
+                let ty_id = self.instantiate(*ty_id, args.clone());
+                self.make_array_ty(ty_id)
+            }
+
+            TyKind::Slice(ty_id) => {
+                let ty_id = self.instantiate(*ty_id, args.clone());
+                self.make_slice_ty(ty_id)
+            }
+
+            TyKind::Tuple(tys) => {
+                let tys = tys
+                    .clone()
+                    .iter()
+                    .map(|ty| self.instantiate(*ty, args.clone()))
+                    .collect::<Arc<_>>();
+                self.make_tuple_ty(tys)
+            }
+
+            TyKind::Ref(ty_id, mutability) => {
+                let mutability = *mutability;
+                let ty_id = self.instantiate(*ty_id, args.clone());
+
+                self.make_ref_ty(ty_id, mutability)
+            }
+
             TyKind::Fn(fn_ty, _) => {
                 let (def_id, ret_ty) = (fn_ty.def_id, fn_ty.ret_ty);
                 let params = fn_ty.params.clone();
@@ -225,9 +263,10 @@ impl TyCtx {
                     .map(|param| self.instantiate(*param, args.clone()))
                     .collect::<Arc<_>>();
                 let ret_ty = self.instantiate(ret_ty, args.clone());
-
                 self.make_fn_ty(args, def_id, params, ret_ty)
             }
+
+            TyKind::Adt(def_id, _) => self.make_adt_ty(*def_id, args.clone()),
 
             TyKind::Param(ParamTy { idx, .. }) => match args.get(*idx) {
                 Some(GenericArg::Ty(ty_id)) => *ty_id,

@@ -210,6 +210,10 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     fn lower_struct(&mut self, strct: &Struct) -> HirStruct<'h> {
         HirStruct {
             ident: self.lower_raw_ident(&strct.ident),
+            generic_params: strct
+                .generic_params
+                .as_ref()
+                .map(|generic_params| self.lower_generic_params(&generic_params)),
             fields: self.lower_struct_fields(&strct.fields),
         }
     }

@@ -50,11 +50,7 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
 
             for i in n..generic_param_count {
                 let gp_def_id = generic_params[i];
-                let def = self.definitions.get(gp_def_id);
-
-                let DefKind::GenericParam(gp_def) = &def.kind else {
-                    unreachable!()
-                };
+                let gp_def = self.definitions.get(gp_def_id).kind.expect_generic_param();
 
                 generic_args.push(match &gp_def.kind {
                     HirGenericParamKind::Ty => {
@@ -67,6 +63,7 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
 
             let raw_ty_id = self.def_to_ty(def_id, ident.span)?;
             let ty_id = self.tctx.instantiate(raw_ty_id, generic_args.into());
+            // dbg!(self.tctx.get(ty_id));
 
             prev_ty_id = Some(ty_id);
             self.tctx

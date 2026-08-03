@@ -36,7 +36,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             HirExprKind::Block(block) => self.infer_block(&block),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
-            HirExprKind::Struct(strct) => self.infer_struct_expr(&strct),
+            HirExprKind::Struct(_) => self.infer_struct_expr(&expr),
             HirExprKind::AnonFn(_) => self.infer_anon_fn(&expr),
             HirExprKind::FnCall(call) => self.infer_fn_call(&call),
             HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
@@ -119,14 +119,18 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         Ok(self.tctx.make_tuple_ty(tys.into()))
     }
 
-    pub(crate) fn infer_struct_expr(&mut self, strct: &HirStructExpr) -> InferResult<TyId> {
+    pub(crate) fn infer_struct_expr(&mut self, struct_expr: &HirExpr) -> InferResult<TyId> {
+        let HirExprKind::Struct(strct) = &struct_expr.kind else {
+            unreachable!()
+        };
+
         let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
             unreachable!()
         };
 
         let def = self.definitions.get(def_id);
 
-        let DefKind::Adt(AdtKind::Struct(strct_def)) = &def.kind else {
+        let Some(strct_def) = def.kind.get_adt().and_then(|adt| adt.get_struct()) else {
             return Err(Some(InferDiag::error(
                 strct.path.span,
                 InferDiagErrorKind::InvalidNonStructInstantiation {
@@ -144,6 +148,12 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         let field_map = strct_def.field_map.clone();
         let field_tys = strct_def.fields.iter().map(|f| f.ty).collect::<Vec<_>>();
+
+        let TyKind::Adt(_, args) = self.tctx.get(self.tctx.expect_hir_ty_id(strct.path.id)) else {
+            unreachable!()
+        };
+
+        let args = args.clone();
 
         for field in &strct.fields {
             let Some(idx) = field_map.get(&field.ident.ident) else {
@@ -174,9 +184,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             field_mask |= 1 << idx;
             initialized[*idx] = Some(&field);
 
-            let t_field_ty = self.tctx.expect_hir_ty(field_tys[*idx]).clone();
+            let raw_field_ty_id = self.tctx.expect_hir_ty_id(field_tys[*idx]);
+            let field_ty_id = self.tctx.instantiate(raw_field_ty_id, args.clone());
 
-            let field_ty_id = match self.infer_expr(&field.val) {
+            let expr_field_ty_id = match self.infer_expr(&field.val) {
                 Ok(ty_id) => ty_id,
                 Err(diag) => {
                     diag.map(|diag| self.dctx.add(diag));
@@ -184,8 +195,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 }
             };
 
-            self.check(&t_field_ty, &Ty::new(field_ty_id, field.val.span))
-                .map(|diag| self.dctx.add(diag));
+            self.check(
+                &Ty::new(field_ty_id, Span::default()),
+                &Ty::new(expr_field_ty_id, field.val.span),
+            )
+            .map(|diag| self.dctx.add(diag));
         }
 
         let missing_mask = !field_mask & ((1 << n) - 1);
@@ -199,7 +213,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             ));
         }
 
-        Ok(self.tctx.get_hir_ty(hir_id).unwrap().id)
+        Ok(self.tctx.expect_hir_ty_id(strct.path.id))
     }
 
     pub(crate) fn infer_anon_fn(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
@@ -334,9 +348,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
                 TyKind::Adt(def_id, args) => {
                     let def = self.definitions.get(*def_id);
-                    let DefKind::Adt(AdtKind::Struct(struct_def)) = &def.kind else {
-                        unreachable!()
-                    };
+                    let struct_def = def.kind.expect_adt().expect_struct();
 
                     let Some(field) = (match &access.field.kind {
                         HirFieldAccessFieldKind::Ident(ident) => struct_def.field_map.get(&ident),
@@ -345,12 +357,8 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                         return err();
                     };
 
-                    let field = &struct_def.fields[*field];
-                    let Some(field_ty) = self.tctx.get_hir_ty(field.ty) else {
-                        bug!("hir {:?} does not have an attached ty_id", field.ty)
-                    };
-
-                    return Ok(field_ty.id);
+                    let field_ty_id = self.tctx.expect_hir_ty_id(struct_def.fields[*field].ty);
+                    return Ok(self.tctx.instantiate(field_ty_id, args.clone()));
                 }
 
                 TyKind::Ref(ty_id, _) => {
@@ -418,7 +426,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let fn_ty = self.tctx.get_ty_of_def(binding.def_id).unwrap();
 
         // Illegal invocation error for non-function bindings
-        let DefKind::Fn(fn_def) = &def.kind else {
+        let Some(fn_def) = def.kind.get_fn() else {
             Err(Some(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::IllegalInvocation(fn_ty.id),

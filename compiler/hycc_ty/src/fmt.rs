@@ -4,7 +4,7 @@ use hycc_util::ternary;
 
 use crate::{
     context::{TyCtx, TyId},
-    ty::{InferKind, IntTy, RefMutability, TyKind},
+    ty::{GenericArg, InferKind, IntTy, RefMutability, TyKind},
 };
 
 #[derive(Debug)]
@@ -91,10 +91,28 @@ impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
                 )
             }
 
-            TyKind::Adt(def_id, _) => {
-                // TODO: add generic arguments
+            TyKind::Adt(def_id, generic_args) => {
                 let def = self.definitions.get(*def_id);
-                format!("{}", self.interner.get(def.name))
+                format!(
+                    "{}{}",
+                    self.interner.get(def.name),
+                    ternary!(
+                        generic_args.is_empty(),
+                        String::from(""),
+                        format!(
+                            "<{}>",
+                            generic_args
+                                .iter()
+                                .map(|arg| {
+                                    match &arg {
+                                        GenericArg::Ty(ty_id) => self.fmt_id(*ty_id),
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    )
+                )
             }
 
             TyKind::Infer(_, kind) => match kind {

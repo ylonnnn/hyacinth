@@ -124,6 +124,7 @@ pub struct HirExtend<'h> {
 #[derive(Debug, Clone)]
 pub struct HirStruct<'h> {
     pub ident: &'h HirRawIdent,
+    pub generic_params: Option<HirGenericParamList<'h>>,
     pub fields: HirStructFieldList<'h>,
 }
 

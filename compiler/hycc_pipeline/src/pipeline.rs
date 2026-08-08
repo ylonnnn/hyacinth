@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};
 
 use hycc_ast::{
     ItemKind,
@@ -119,6 +119,8 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         CollectorDiagDataCtx::new(&collector.interner, &hir_table, &definitions, &scope_ctx),
     );
 
+    fs::write("syms.txt", collector.interner.get_all().join("\n"));
+
     if session.dctx.error_occurred() {
         return;
     }
@@ -143,7 +145,11 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&resolver.collector.interner, &definitions),
+        ResolverDiagDataCtx::new(
+            &resolver.collector.tctx,
+            &definitions,
+            &resolver.collector.interner,
+        ),
     );
 
     if session.dctx.error_occurred() {
@@ -155,12 +161,16 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     let scope_ctx = &mut collector.scope_ctx;
     let petal_ctx = &mut collector.petal_ctx;
 
-    let mut ty_resolver = TyResolver::new(tctx, definitions, scope_ctx);
+    let mut ty_resolver = TyResolver::new(tctx, definitions, scope_ctx, &hir_table);
 
     ty_resolver.resolve(&hir);
     ty_resolver.dctx.emit(
         &mut session.dctx,
-        ResolverDiagDataCtx::new(&session.interner, &ty_resolver.definitions),
+        ResolverDiagDataCtx::new(
+            &ty_resolver.tctx,
+            &ty_resolver.definitions,
+            &session.interner,
+        ),
     );
 
     if session.dctx.error_occurred() {

@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{
@@ -7,7 +9,7 @@ use hycc_hir::{
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
-use hycc_ty::ty::Ty;
+use hycc_ty::ty::{GenericArg, Ty};
 use hycc_util::ternary;
 
 use crate::{
@@ -173,18 +175,70 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        // NOTE: Currently, extension items are not collected during collection as the
-        // target of the extension cannot be resolved as of this point.
-        // Extension items are pre-collected during the resolution of the
-        // extension.
+        let scope_id = self.scope_ctx.attach(extend_item.id, Scope::new());
+        self.enter_scope(scope_id, |s| {
+            if let Some(generic_params) = &extend.generic_params {
+                s.scope_ctx.generic_depth += 1;
 
-        self.scope_ctx.attach(extend_item.id, Scope::new());
+                for (i, generic_param) in generic_params.list.iter().enumerate() {
+                    let res = s.define(Definition::new(
+                        generic_param.ident.ident,
+                        DefKind::GenericParam(Box::new(GenericParamDef::new(
+                            0,
+                            i as u32,
+                            generic_param.kind,
+                        ))),
+                        Some(s.petal_ctx.top_id()),
+                        generic_param.id,
+                        generic_param.span,
+                        DefAccessibility::Priv,
+                    ));
+
+                    match res {
+                        Ok(&Binding {
+                            def_id: gp_def_id, ..
+                        }) => {
+                            let ty = Ty::new(
+                                s.tctx.make_param_ty(
+                                    gp_def_id,
+                                    s.scope_ctx.generic_depth as u32,
+                                    i as u32,
+                                ),
+                                generic_param.span,
+                            );
+                            s.tctx.attach_to_hir(generic_param.id, ty);
+                        }
+
+                        Err(diag) => {
+                            diag.map(|diag| s.dctx.add(diag));
+                        }
+                    };
+                }
+            }
+
+            let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
+            s.enter_scope(scope_id, |s| {
+                for item in &extend.items {
+                    if let Err(Some(diag)) = s.collect_item(&item) {
+                        s.dctx.add(diag);
+                    }
+                }
+            });
+
+            s.scope_ctx.generic_depth -= extend.generic_params.is_some() as u32;
+        });
+
         self.ext_table.attach(
             extend_item.id,
-            Extension {
-                target: extend.target.id,
-                items: extend.items.iter().map(|item| item.id).collect::<Vec<_>>(),
-            },
+            Extension::new(
+                extend.target.id,
+                self.scope_ctx
+                    .get(scope_id)
+                    .clone()
+                    .all()
+                    .into_iter()
+                    .collect::<HashMap<_, _>>(),
+            ),
         );
 
         Ok(())
@@ -210,16 +264,20 @@ impl<'i> Collector<'i> {
             ))?
             .def_id;
 
+        let mut adt_generic_args = Vec::new();
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, |s| {
             if let Some(generic_params) = &strct.generic_params {
+                s.scope_ctx.generic_depth += 1;
+
                 for (i, generic_param) in generic_params.list.iter().enumerate() {
                     let res = s.define(Definition::new(
                         generic_param.ident.ident,
-                        DefKind::GenericParam(Box::new(GenericParamDef {
-                            idx: i,
-                            kind: generic_param.kind,
-                        })),
+                        DefKind::GenericParam(Box::new(GenericParamDef::new(
+                            s.scope_ctx.generic_depth,
+                            i as u32,
+                            generic_param.kind,
+                        ))),
                         Some(s.petal_ctx.top_id()),
                         generic_param.id,
                         generic_param.span,
@@ -228,14 +286,24 @@ impl<'i> Collector<'i> {
 
                     match res {
                         Ok(&Binding {
-                            def_id: tp_def_id, ..
+                            def_id: gp_def_id, ..
                         }) => {
                             let adt_def = &mut s.definitions.get_mut(def_id).kind.expect_mut_adt();
-                            let ty =
-                                Ty::new(s.tctx.make_param_ty(tp_def_id, i), generic_param.span);
+                            // TODO: determine the param to be created and attached based on the
+                            // generic parameter kind
+                            let ty = Ty::new(
+                                s.tctx.make_param_ty(
+                                    gp_def_id,
+                                    s.scope_ctx.generic_depth as u32,
+                                    i as u32,
+                                ),
+                                generic_param.span,
+                            );
 
+                            adt_generic_args.push(GenericArg::Ty(ty.id));
                             s.tctx.attach_to_hir(generic_param.id, ty);
-                            adt_def.generic_params.push(tp_def_id);
+
+                            adt_def.generic_params.push(gp_def_id);
                         }
 
                         Err(diag) => {
@@ -244,10 +312,12 @@ impl<'i> Collector<'i> {
                     };
                 }
             }
+
+            s.scope_ctx.generic_depth -= strct.generic_params.is_some() as u32;
         });
 
         let ty = Ty::new(
-            self.tctx.make_adt_ty(def_id, Vec::new().into()),
+            self.tctx.make_adt_ty(def_id, adt_generic_args.into()),
             struct_item.span,
         );
         self.tctx.attach_to_hir(struct_item.id, ty.clone());
@@ -301,13 +371,16 @@ impl<'i> Collector<'i> {
         self.enter_scope(scope_id, |s| {
             // Define function type parameters
             if let Some(generic_params) = &func.sig.generic_params {
+                s.scope_ctx.generic_depth += 1;
+
                 for (i, generic_param) in generic_params.list.iter().enumerate() {
                     let res = s.define(Definition::new(
                         generic_param.ident.ident,
-                        DefKind::GenericParam(Box::new(GenericParamDef {
-                            idx: i,
-                            kind: generic_param.kind,
-                        })),
+                        DefKind::GenericParam(Box::new(GenericParamDef::new(
+                            s.scope_ctx.generic_depth as u32,
+                            i as u32,
+                            generic_param.kind,
+                        ))),
                         Some(s.petal_ctx.top_id()),
                         generic_param.id,
                         generic_param.span,
@@ -316,16 +389,22 @@ impl<'i> Collector<'i> {
 
                     match res {
                         Ok(&Binding {
-                            def_id: tp_def_id, ..
+                            def_id: gp_def_id, ..
                         }) => {
                             if let Some(fn_def) =
                                 &mut s.definitions.get_mut(def_id).kind.get_mut_fn()
                             {
-                                let ty =
-                                    Ty::new(s.tctx.make_param_ty(tp_def_id, i), generic_param.span);
+                                let ty = Ty::new(
+                                    s.tctx.make_param_ty(
+                                        gp_def_id,
+                                        s.scope_ctx.generic_depth as u32,
+                                        i as u32,
+                                    ),
+                                    generic_param.span,
+                                );
 
                                 s.tctx.attach_to_hir(generic_param.id, ty);
-                                fn_def.generic_params.push(tp_def_id);
+                                fn_def.generic_params.push(gp_def_id);
                             }
                         }
 
@@ -361,6 +440,8 @@ impl<'i> Collector<'i> {
                     }
                 };
             }
+
+            s.scope_ctx.generic_depth -= func.sig.generic_params.is_some() as u32;
         });
 
         Ok(())

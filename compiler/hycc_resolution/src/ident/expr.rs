@@ -2,6 +2,7 @@ use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     def::{DefAccessibility, DefKind, DefSpace, Definition},
     expr::{HirExpr, HirExprKind, HirUnary},
+    path::HirIdentArgument,
     scope::Scope,
 };
 
@@ -118,6 +119,24 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             HirExprKind::MethodCall(call) => {
                 if let Err(Some(diag)) = s.resolve_expr(&call.receiver) {
                     s.dctx.add(diag);
+                }
+
+                if let Some(arguments) = &call.callee.arguments {
+                    for argument in &arguments.data {
+                        let res = match &argument {
+                            HirIdentArgument::Expr(expr) => {
+                                s.expect_space(DefSpace::Value, |s| s.resolve_expr(&expr))
+                            }
+
+                            HirIdentArgument::Ty(ty) => {
+                                s.expect_space(DefSpace::Type, |s| s.resolve_ty(&ty))
+                            }
+                        };
+
+                        if let Err(Some(diag)) = res {
+                            s.dctx.add(diag);
+                        }
+                    }
                 }
 
                 Ok(for argument in &call.arguments.data {

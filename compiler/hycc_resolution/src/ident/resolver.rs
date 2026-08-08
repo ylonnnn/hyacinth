@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use hycc_collection::{collector::Collector, diag::CollectorDiagDataCtx};
 use hycc_diagnostic::{DiagnosticContext, DiagnosticCtx};
 use hycc_hir::{
-    HirTable,
+    HirId, HirTable,
     def::{Binding, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, Definition},
     item::{HirItem, HirItemKind},
     scope::ScopeId,
@@ -16,22 +18,11 @@ use crate::{
     diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagDataCtx, ResolverDiagErrorKind},
 };
 
-#[derive(Debug, Clone, Copy)]
-pub enum ResolutionCtx {
-    /// The default/normal resolution context
-    Default,
-
-    /// The resolution context during `Extension`/`extend` fresolution
-    Extension,
-}
-
 #[derive(Debug)]
 pub struct Resolver<'c, 'i, 'h> {
     pub dctx: ResolverDiagCtx,
     pub collector: &'c mut Collector<'i>,
     pub hir_table: &'h HirTable<'h>,
-
-    // pub(crate) resolution: ResolutionCtx,
 
     // The expected space to retrieve unresolve paths from.
     pub(crate) expected_space: Option<DefSpace>,
@@ -43,7 +34,6 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             dctx: ResolverDiagCtx::new(),
             collector,
             hir_table,
-            // resolution: ResolutionCtx::Default,
             expected_space: None,
         }
     }
@@ -62,12 +52,10 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         self.collector
             .scope_ctx
             .get_def_until_scope(space, name, scope_id)
-            .map(|binding| (binding, scope_id))
+            .map(|(binding, _)| (binding, scope_id))
     }
 
     pub fn get_def_id(&self, space: Option<DefSpace>, name: Symbol) -> Option<(DefId, ScopeId)> {
-        println!("space: {space:?}, name: {name:?}");
-        dbg!(self.get_binding(space, name));
         self.get_binding(space, name)
             .map(|(binding, scope_id)| (binding.def_id, scope_id))
     }

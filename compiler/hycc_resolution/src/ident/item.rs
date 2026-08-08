@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
-    HirNode,
-    def::{Binding, DefAccessibility, DefSpace},
+    HirId, HirNode,
+    def::{Binding, BuiltinKind, DefAccessibility, DefKind, DefResolution, DefSpace, Definition},
     item::{HirItem, HirItemKind, HirReferTarget, HirReferTargetKind},
-    scope::ScopeId,
+    scope::{Scope, ScopeId},
+    ty::HirTyKind,
 };
+use hycc_span::Span;
+use hycc_ty::extension::{Extension, ExtensionTarget};
 use hycc_util::bug;
 
 use crate::{ResolveResult, ident::resolver::Resolver};
@@ -63,12 +68,17 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         &mut self,
         target: &HirReferTarget,
         accessibility: DefAccessibility,
-        mut lookup_scope: Option<ScopeId>,
+        mut resolution: Option<DefResolution>,
     ) -> ResolveResult {
         match &target.kind {
             HirReferTargetKind::Child(alias) => {
                 let target = target.symbol;
-                let def_id = self.resolve_ident(&target, lookup_scope)?;
+                let res = self.resolve_ident(&target, resolution)?.unwrap();
+
+                // TODO: improve
+                let DefResolution::Petal(def_id) = res else {
+                    todo!("throw error: cannot `refer` to non-petal definitions")
+                };
 
                 let sym = target.ident.ident;
                 let actual = self.collector.definitions.get(def_id);
@@ -81,17 +91,19 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             }
 
             HirReferTargetKind::Parent(children) => {
-                lookup_scope.replace(self.expect_space(
-                    DefSpace::Type,
-                    |s| -> ResolveResult<ScopeId> {
-                        let def_id = s.resolve_ident(&target.symbol, lookup_scope)?;
-                        Ok(s.collector.scope_ctx.get_id_from_def(def_id).unwrap())
-                    },
-                )?);
+                resolution.replace(
+                    self.expect_space(
+                        DefSpace::Type,
+                        |s| -> ResolveResult<Option<DefResolution>> {
+                            s.resolve_ident(&target.symbol, resolution)
+                        },
+                    )?
+                    .unwrap(),
+                );
 
                 for child in children {
                     if let Err(Some(diag)) =
-                        self.resolve_refer_target(&child, accessibility, lookup_scope)
+                        self.resolve_refer_target(&child, accessibility, resolution)
                     {
                         self.dctx.add(diag);
                     }
@@ -119,66 +131,72 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
     }
 
     pub(crate) fn resolve_extend(&mut self, extend_item: &HirItem) -> ResolveResult {
-        let HirItemKind::Extend(_) = &extend_item.kind else {
+        let HirItemKind::Extend(extend) = &extend_item.kind else {
             unreachable!()
         };
 
         let ext = self.collector.ext_table.expect_hir_ext(extend_item.id);
-        let HirNode::Path(target) = self.hir_table.get(ext.target) else {
-            unreachable!()
-        };
-
-        let items = ext
-            .items
-            .iter()
-            .map(|id| match self.hir_table.get(*id) {
-                HirNode::Item(item) => item,
-                _ => unreachable!(),
-            })
-            .collect::<Vec<_>>();
-
-        // Resolve extension target
-        self.expect_space(DefSpace::Type, |s| s.resolve_path(&target))?;
-
-        let target_def_id = self.collector.definitions.get_def_id(target.id).unwrap();
-        let target_scope_id = self.collector.scope_ctx.expect_def_scope_id(target_def_id);
-
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
 
         self.enter_scope(scope_id, |s| {
-            // Define `Self`
-            let target_def = s.collector.definitions.get(target_def_id);
-            let target_def_petal = target_def.petal;
-
-            s.collector.scope_ctx.get_mut(scope_id).define(
-                target_def.kind.space(),
-                s.collector.interner.intern("Self"),
-                Binding::new(target_def_id, DefAccessibility::Priv),
-            );
-
-            s.collector
-                .scope_ctx
-                .get_mut(scope_id)
-                .redirect
-                .replace(target_scope_id);
-
-            // Pre-collection
-            for item in &items {
-                if let Err(Some(diag)) = s.collector.collect_item(&item) {
-                    s.collector.dctx.add(diag);
+            if let Some(generic_params) = &extend.generic_params {
+                for generic_param in &generic_params.list {
+                    for proto_req in &generic_param.proto_reqs {
+                        if let Err(Some(diag)) =
+                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                        {
+                            s.dctx.add(diag);
+                        }
+                    }
                 }
-
-                s.collector.definitions.expect_mut_def(item.id).petal = target_def_petal;
             }
 
-            s.collector.scope_ctx.get_mut(scope_id).redirect.take();
+            // Resolve extension target
+            if let Err(Some(diag)) = s.resolve_ty(&extend.target) {
+                s.dctx.add(diag);
+            }
 
-            for item in &items {
+            // Resolve extension items
+            for item in &extend.items {
                 if let Err(Some(diag)) = s.resolve_item(&item) {
                     s.dctx.add(diag);
                 }
             }
         });
+
+        if let HirTyKind::Path(path) = &extend.target.kind {
+            let def_id = self.collector.definitions.expect_def_id(path.id);
+            let def_petal = self.collector.definitions.get(def_id).petal;
+
+            let target = ExtensionTarget::Def(def_id);
+
+            let ext_id = self.collector.tctx.ext_table.attach(
+                target,
+                Extension::new(
+                    extend_item.id,
+                    target,
+                    None,
+                    std::mem::take(
+                        self.collector
+                            .scope_ctx
+                            .expect_hir_mut_scope(extend.target.id),
+                    )
+                    .all()
+                    .into_iter()
+                    .map(|(key, binding)| {
+                        let item_def = self.collector.definitions.get_mut(binding.def_id);
+                        item_def.petal = def_petal;
+                        (key, binding)
+                    })
+                    .collect::<HashMap<_, _>>(),
+                ),
+            );
+
+            self.collector
+                .tctx
+                .ext_table
+                .attach_hir_ext_id(extend_item.id, ext_id);
+        }
 
         Ok(())
     }

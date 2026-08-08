@@ -8,7 +8,7 @@ use hycc_hir::{
 };
 use hycc_ty::ty::{InferKind, Ty};
 
-impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
+impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
     pub(crate) fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         match &expr.kind {
             HirExprKind::Block(block) => self.resolve_block(&block),
@@ -132,6 +132,20 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
             HirExprKind::MethodCall(call) => {
                 if let Err(Some(diag)) = self.resolve_expr(&call.receiver) {
                     self.dctx.add(diag);
+                }
+
+                if let Some(arguments) = &call.callee.arguments {
+                    for argument in &arguments.data {
+                        match argument {
+                            HirIdentArgument::Ty(ty) => {
+                                self.resolve_ty(ty)?;
+                            }
+                            HirIdentArgument::Expr(_expr) => {
+                                // todo: const generics -> GenericArg::Const
+                                todo!("const generic args");
+                            }
+                        }
+                    }
                 }
 
                 for argument in &call.arguments.data {

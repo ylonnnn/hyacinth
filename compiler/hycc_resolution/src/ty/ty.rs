@@ -3,6 +3,7 @@ use std::sync::Arc;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability,
+    scope::Scope,
     ty::{HirTy, HirTyKind},
 };
 use hycc_ty::{
@@ -17,7 +18,7 @@ use crate::{
     ty::resolver::TyResolver,
 };
 
-impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
+impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
     pub(crate) fn resolve_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
         let ty_id = match &ty.kind {
             HirTyKind::Unit(_) => Ok(self.tctx.make_unit_ty()),

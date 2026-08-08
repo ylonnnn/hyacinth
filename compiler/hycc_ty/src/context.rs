@@ -225,15 +225,15 @@ impl TyCtx {
         }
     }
 
-    pub fn instantiate(&mut self, ty_id: TyId, args: Arc<[GenericArg]>) -> TyId {
+    pub fn instantiate(&mut self, ty_id: TyId, args: &[&[GenericArg]]) -> TyId {
         match self.get(ty_id) {
             TyKind::Array(ty_id) => {
-                let ty_id = self.instantiate(*ty_id, args.clone());
+                let ty_id = self.instantiate(*ty_id, args.into());
                 self.make_array_ty(ty_id)
             }
 
             TyKind::Slice(ty_id) => {
-                let ty_id = self.instantiate(*ty_id, args.clone());
+                let ty_id = self.instantiate(*ty_id, args.into());
                 self.make_slice_ty(ty_id)
             }
 
@@ -241,39 +241,75 @@ impl TyCtx {
                 let tys = tys
                     .clone()
                     .iter()
-                    .map(|ty| self.instantiate(*ty, args.clone()))
+                    .map(|ty| self.instantiate(*ty, args.into()))
                     .collect::<Arc<_>>();
                 self.make_tuple_ty(tys)
             }
 
             TyKind::Ref(ty_id, mutability) => {
                 let mutability = *mutability;
-                let ty_id = self.instantiate(*ty_id, args.clone());
+                let ty_id = self.instantiate(*ty_id, args.into());
 
                 self.make_ref_ty(ty_id, mutability)
             }
 
-            TyKind::Fn(fn_ty, _) => {
+            TyKind::Fn(fn_ty, g_args) => {
                 let (def_id, ret_ty) = (fn_ty.def_id, fn_ty.ret_ty);
                 let params = fn_ty.params.clone();
+                let g_args = g_args.clone();
 
                 let params = params
                     .clone()
                     .iter()
-                    .map(|param| self.instantiate(*param, args.clone()))
+                    .map(|param| self.instantiate(*param, args.into()))
                     .collect::<Arc<_>>();
-                let ret_ty = self.instantiate(ret_ty, args.clone());
-                self.make_fn_ty(args, def_id, params, ret_ty)
+                let ret_ty = self.instantiate(ret_ty, args.into());
+
+                let new_args = g_args
+                    .iter()
+                    .map(|arg| match arg {
+                        GenericArg::Ty(ty_id) => {
+                            GenericArg::Ty(self.instantiate(*ty_id, args.into()))
+                        }
+                    })
+                    .collect::<Arc<_>>();
+
+                self.make_fn_ty(new_args, def_id, params, ret_ty)
             }
 
-            TyKind::Adt(def_id, _) => self.make_adt_ty(*def_id, args.clone()),
+            TyKind::Adt(def_id, g_args) => {
+                let def_id = *def_id;
+                let new_args = g_args
+                    .clone()
+                    .iter()
+                    .map(|arg| match arg {
+                        GenericArg::Ty(ty_id) => {
+                            GenericArg::Ty(self.instantiate(*ty_id, args.into()))
+                        }
+                    })
+                    .collect::<Arc<_>>();
+                self.make_adt_ty(def_id, new_args)
+            }
 
-            TyKind::Param(ParamTy { idx, .. }) => match args.get(*idx) {
-                Some(GenericArg::Ty(ty_id)) => *ty_id,
-                _ => ty_id,
-            },
+            TyKind::Param(param) => {
+                let n = args.len();
+                match args
+                    .get(param.depth().saturating_sub(1) as usize)
+                    .and_then(|args| args.get(param.idx() as usize))
+                {
+                    Some(GenericArg::Ty(ty_id)) => *ty_id,
+                    _ => ty_id,
+                }
+            }
 
             _ => ty_id,
+        }
+    }
+
+    pub fn extract_args(&self, ty_id: TyId) -> Arc<[GenericArg]> {
+        match self.get(ty_id) {
+            TyKind::Adt(_, args) => args.clone(),
+            _ => Arc::new([GenericArg::Ty(ty_id)]),
         }
     }
 
@@ -346,7 +382,19 @@ impl TyCtx {
 
             (TyKind::Never, _) | (_, TyKind::Never) => true,
 
-            // (TyKind::Adt(a_inner), TyKind::Adt(b_inner)) => self.unify_ty(*a_inner, *b_inner),
+            (TyKind::Adt(a_def, a_args), TyKind::Adt(b_def, b_args)) => {
+                if a_def != b_def || a_args.len() != b_args.len() {
+                    return false;
+                }
+
+                let (a_args, b_args) = (a_args.clone(), b_args.clone());
+                a_args
+                    .iter()
+                    .zip(b_args.iter())
+                    .all(|(a, b)| match (&a, &b) {
+                        (GenericArg::Ty(a_ty), GenericArg::Ty(b_ty)) => self.unify_ty(*a_ty, *b_ty),
+                    })
+            }
             (_, _) => false,
         }
     }
@@ -508,12 +556,11 @@ impl TyCtx {
 
     pub fn make_inferred_ty(&mut self, kind: InferKind) -> TyId {
         let var_id = self.fresh_var();
-        self.storage.push(TyKind::Infer(var_id, kind));
-        TyId(self.storage.len() - 1)
+        self.intern(TyKind::Infer(var_id, kind))
     }
 
-    pub fn make_param_ty(&mut self, def_id: DefId, idx: usize) -> TyId {
-        self.intern(TyKind::Param(ParamTy { def_id, idx }))
+    pub fn make_param_ty(&mut self, def_id: DefId, depth: u32, idx: u32) -> TyId {
+        self.intern(TyKind::Param(ParamTy::new(def_id, depth, idx)))
     }
 
     pub fn is_inferred(&self, ty_id: TyId) -> bool {

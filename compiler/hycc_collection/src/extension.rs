@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 
-use hycc_hir::HirId;
+use hycc_hir::{
+    HirId,
+    def::{Binding, DefId, DefSpace},
+};
+use hycc_symbol::Symbol;
 
 #[derive(Debug, Clone)]
 pub struct ExtensionTable {
     data: Vec<Extension>,
     hir_map: HashMap<HirId, ExtensionId>,
+    def_map: HashMap<DefId, Vec<ExtensionId>>,
 }
 
 impl ExtensionTable {
@@ -13,6 +18,7 @@ impl ExtensionTable {
         Self {
             data: Vec::new(),
             hir_map: HashMap::new(),
+            def_map: HashMap::new(),
         }
     }
 
@@ -59,6 +65,19 @@ impl ExtensionTable {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Extension {
+    pub target: HirId,
+    // TODO: with: Option<[PROTO]>
+    pub items: HashMap<(DefSpace, Symbol), Binding>,
+}
+
+impl Extension {
+    pub fn new(target: HirId, items: HashMap<(DefSpace, Symbol), Binding>) -> Self {
+        Self { target, items }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExtensionId(usize);
 
@@ -70,11 +89,4 @@ impl ExtensionId {
         assert_ne!(self.0, usize::MAX, "extension id is not valid!");
         self.0
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Extension {
-    pub target: HirId,
-    // TODO: with: Option<[PROTO]>
-    pub items: Vec<HirId>,
 }

@@ -34,7 +34,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
     pub(crate) fn infer_extend(&mut self, extend: &HirExtend) -> InferResult {
         // Infer target
-        self.infer_path(&extend.target)?;
+        // self.infer_ty(&extend.target)?;
 
         // Infer items of the extension
         for item in &extend.items {

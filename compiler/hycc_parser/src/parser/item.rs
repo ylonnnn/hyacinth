@@ -456,10 +456,17 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // extend TY_IDENT { ITEM* }
+    // extend < GENERIC_PARAMS > TY { ITEM* }
+    // extend < GENERIC_PARAM (, GENERIC_PARAM)* > TY { ITEM* }
     pub fn parse_extend(&mut self) -> ParseResult<Extend> {
-        // TY_IDENT
-        let target = self.parse_path(PathKind::Ty)?;
+        let generic_params = ternary!(
+            self.expect_preserved_exact_nonlf(TokenKind::Less).0,
+            Some(self.parse_generic_params()?),
+            None
+        );
+
+        // TY
+        let target = self.parse_ty()?;
 
         let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
             TokenGraph::Collection { data, .. } => data,
@@ -468,6 +475,7 @@ impl<'s> Parser<'s> {
 
         let mut extend = Extend {
             target,
+            generic_params,
             items: Vec::new(),
         };
         let n = data.len();

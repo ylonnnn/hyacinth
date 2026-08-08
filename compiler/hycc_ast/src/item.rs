@@ -147,7 +147,8 @@ pub struct Proto {
 
 #[derive(Debug, Clone)]
 pub struct Extend {
-    pub target: Path,
+    pub target: Ty,
+    pub generic_params: Option<GenericParamList>,
     // TODO: with: Option<[PROTO]> // optional protocol implementation
     // TODO: if: Option<...> // conditional extension clause
     pub items: Vec<Item>,

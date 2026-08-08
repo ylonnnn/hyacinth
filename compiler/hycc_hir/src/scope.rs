@@ -49,9 +49,11 @@ impl ScopeId {
 #[derive(Debug, Clone)]
 pub struct ScopeCtx {
     table: ScopeTable,
-    pub stack: Vec<ScopeId>, // TEMP
+    stack: Vec<ScopeId>,
     node_table: HashMap<HirId, ScopeId>,
     def_table: HashMap<DefId, ScopeId>,
+
+    pub generic_depth: u32,
 }
 
 impl ScopeCtx {
@@ -61,6 +63,7 @@ impl ScopeCtx {
             stack: Vec::new(),
             node_table: HashMap::new(),
             def_table: HashMap::new(),
+            generic_depth: 0,
         };
 
         inst.stack.push(inst.table.insert(Scope::new()));
@@ -231,11 +234,29 @@ impl ScopeCtx {
         self.stack.push(scope_id)
     }
 
+    pub fn generic_push(&mut self, scope: Scope) -> ScopeId {
+        self.generic_depth += 1;
+        self.push(scope)
+    }
+
+    pub fn generic_push_id(&mut self, scope_id: ScopeId) {
+        self.stack.push(scope_id)
+    }
+
     pub fn pop(&mut self) -> bool {
         ternary!(self.stack.len() <= 1, false, {
             self.stack.pop();
             true
         })
+    }
+
+    pub fn generic_pop(&mut self) -> bool {
+        let popped = self.pop();
+        if popped {
+            self.generic_depth -= 1;
+        }
+
+        popped
     }
 
     pub fn top_id(&self) -> ScopeId {
@@ -273,7 +294,7 @@ impl ScopeCtx {
         space: Option<DefSpace>,
         name: Symbol,
         mut stop_cond: F,
-    ) -> Option<(&Binding, ScopeId)>
+    ) -> Option<(&Binding, usize, ScopeId)>
     where
         F: FnMut(&Self, ScopeId, usize) -> bool,
     {
@@ -283,7 +304,7 @@ impl ScopeCtx {
 
             let binding = self.table.get(*scope_id).get(space, name);
             if binding.is_some() {
-                return binding.map(|binding| (binding, *scope_id));
+                return binding.map(|binding| (binding, depth, *scope_id));
             }
 
             depth += 1;
@@ -300,7 +321,7 @@ impl ScopeCtx {
         &self,
         space: Option<DefSpace>,
         name: Symbol,
-    ) -> Option<(&Binding, ScopeId)> {
+    ) -> Option<(&Binding, usize, ScopeId)> {
         self.get_def(space, name, |_, _, _| true)
     }
 
@@ -309,16 +330,16 @@ impl ScopeCtx {
         space: Option<DefSpace>,
         name: Symbol,
         scope_id: ScopeId,
-    ) -> Option<&Binding> {
+    ) -> Option<(&Binding, usize)> {
         self.get_def(space, name, |_, s_id, _| s_id == scope_id)
-            .map(|(binding, _)| binding)
+            .map(|(binding, depth, _)| (binding, depth))
     }
 
     pub fn get_def_until_root(
         &self,
         space: Option<DefSpace>,
         name: Symbol,
-    ) -> Option<(&Binding, ScopeId)> {
+    ) -> Option<(&Binding, usize, ScopeId)> {
         self.get_def(space, name, |_, _, _| false)
     }
 

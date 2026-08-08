@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
+    HirId, HirNode, HirTable,
     def::{Binding, BuiltinKind, BuiltinTyKind, DefId, DefKind, DefSpace, DefinitionTable},
     item::{HirItem, HirItemKind},
     scope::ScopeCtx,
@@ -18,24 +21,27 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyResolver<'t, 'd, 's> {
-    pub tctx: &'t mut TyCtx,
+pub struct TyResolver<'t, 'd, 's, 'h> {
     pub dctx: ResolverDiagCtx,
+    pub tctx: &'t mut TyCtx,
     pub definitions: &'d mut DefinitionTable,
     pub scope_ctx: &'s mut ScopeCtx,
+    pub hir_table: &'h HirTable<'h>,
 }
 
-impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
+impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
     pub fn new(
         tctx: &'t mut TyCtx,
         definitions: &'d mut DefinitionTable,
         scope_ctx: &'s mut ScopeCtx,
+        hir_table: &'h HirTable<'h>,
     ) -> Self {
         Self {
-            tctx,
             dctx: ResolverDiagCtx::new(),
+            tctx,
             definitions,
             scope_ctx,
+            hir_table,
         }
     }
 
@@ -52,9 +58,14 @@ impl<'t, 'd, 's> TyResolver<'t, 'd, 's> {
                 ResolverDiagErrorKind::InvalidPetalResolution(def.name, def_id),
             )))?,
 
-            // DefKind::Adt(_) => self.tctx.expect_hir_ty_id(def.hir_id),
+            DefKind::Fn(fn_def) => {
+                let HirNode::Item(item) = self.hir_table.get(def.hir_id) else {
+                    unreachable!()
+                };
 
-            // DefKind::TyParam(_) => self.tctx.expect_hir_ty_id(def.hir_id),
+                self.resolve_fn(&item)?
+            }
+
             _ => self.tctx.expect_hir_ty_id(def.hir_id),
         };
 

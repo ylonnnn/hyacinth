@@ -197,7 +197,11 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_extend(&mut self, extend: &Extend) -> HirExtend<'h> {
         HirExtend {
-            target: self.lower_path(&extend.target),
+            target: self.lower_ty(&extend.target),
+            generic_params: extend
+                .generic_params
+                .as_ref()
+                .map(|generic_params| self.lower_generic_params(generic_params)),
             items: extend
                 .items
                 .iter()

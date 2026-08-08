@@ -10,18 +10,33 @@ use crate::{
     petal::PetalId,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub enum DefResolution {
+    Petal(DefId),
+    Ty(DefId),
+    Value(DefId),
+}
+
+#[derive(Debug, Clone)]
+pub struct DefNodeResolution {
+    pub base: DefResolution,
+    pub unresolved: usize,
+}
+
 #[derive(Debug)]
 pub struct DefinitionTable {
-    data: Vec<Definition>,
     map: HashMap<HirId, DefId>,
+    pub res_map: HashMap<HirId, DefNodeResolution>,
+    data: Vec<Definition>,
     pub builtins: Vec<DefId>,
 }
 
 impl DefinitionTable {
     pub fn new() -> Self {
         Self {
-            data: Vec::new(),
             map: HashMap::new(),
+            res_map: HashMap::new(),
+            data: Vec::new(),
             builtins: Vec::new(),
         }
     }
@@ -34,7 +49,6 @@ impl DefinitionTable {
         self.data.push(definition);
         DefId(self.data.len() - 1)
     }
-
     pub fn get(&self, id: DefId) -> &Definition {
         &self.data[id.unwrap()]
     }
@@ -76,6 +90,20 @@ impl DefinitionTable {
     pub fn expect_mut_def(&mut self, hir_id: HirId) -> &mut Definition {
         self.get_mut(self.expect_def_id(hir_id))
     }
+
+    pub fn attach_res(&mut self, hir_id: HirId, res: DefNodeResolution) {
+        self.res_map.insert(hir_id, res);
+    }
+
+    pub fn get_res(&self, hir_id: HirId) -> Option<&DefNodeResolution> {
+        self.res_map.get(&hir_id)
+    }
+
+    pub fn expect_res(&self, hir_id: HirId) -> &DefNodeResolution {
+        self.get_res(hir_id).expect(&format!(
+            "expected a resolution attached to hir id {hir_id:?}"
+        ))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,12 +123,21 @@ impl DefId {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DefResKind {
+    Petal,
+    Ty,
+    Value,
+}
+
 #[derive(Debug, Clone)]
 pub enum DefKind {
     Builtin(BuiltinKind),
 
     Petal,
     Proto,
+
+    Alias(Box<DefKind>),
 
     Adt(Box<AdtDef>),
 
@@ -118,6 +155,7 @@ impl DefKind {
             Self::Builtin(_)
             | Self::Petal
             | Self::Proto
+            | Self::Alias(_)
             | Self::GenericParam(_)
             | Self::Fn(_)
             | Self::FnParam
@@ -133,6 +171,8 @@ impl DefKind {
 
             Self::Petal => String::from("petal"),
             Self::Proto => String::from("protocol"),
+
+            Self::Alias(_) => String::from("alias"),
 
             Self::Adt(kind) => kind.kind().into(),
 
@@ -154,16 +194,37 @@ impl DefKind {
     pub fn space(&self) -> DefSpace {
         if let Self::Builtin(kind) = self {
             return match &kind {
-                BuiltinKind::Ty(_) => DefSpace::Type,
+                BuiltinKind::SelfTy | BuiltinKind::Ty(_) => DefSpace::Type,
             };
         }
 
         match self {
             Self::Builtin(_) => unreachable!(),
+            Self::Alias(data) => data.space(),
 
             Self::Petal | Self::Proto | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
+        }
+    }
+
+    pub fn res_kind(&self) -> DefResKind {
+        match &self {
+            DefKind::Petal => DefResKind::Petal,
+
+            DefKind::Proto
+            | DefKind::Builtin(BuiltinKind::SelfTy)
+            | DefKind::Builtin(BuiltinKind::Ty(_))
+            | DefKind::Adt(_) => DefResKind::Ty,
+
+            DefKind::Alias(def_kind) => def_kind.res_kind(),
+
+            DefKind::GenericParam(gp_def) => match &gp_def.kind {
+                HirGenericParamKind::Ty => DefResKind::Ty,
+                _ => DefResKind::Value,
+            },
+
+            _ => DefResKind::Value,
         }
     }
 
@@ -248,6 +309,7 @@ impl DefKind {
 
 #[derive(Debug, Clone)]
 pub enum BuiltinKind {
+    SelfTy,
     Ty(BuiltinTyKind),
 }
 
@@ -374,8 +436,25 @@ pub struct StructFieldDef {
 
 #[derive(Debug, Clone)]
 pub struct GenericParamDef {
-    pub idx: usize,
+    pub data: usize, // 4 bytes for depth; 4 bytes idx
     pub kind: HirGenericParamKind,
+}
+
+impl GenericParamDef {
+    pub fn new(depth: u32, idx: u32, kind: HirGenericParamKind) -> Self {
+        Self {
+            data: (depth as usize) << u32::BITS | (idx as usize),
+            kind,
+        }
+    }
+
+    pub fn depth(&self) -> u32 {
+        (self.data >> u32::BITS) as u32
+    }
+
+    pub fn idx(&self) -> u32 {
+        (self.data & (u32::MAX as usize)) as u32
+    }
 }
 
 #[derive(Debug, Clone)]

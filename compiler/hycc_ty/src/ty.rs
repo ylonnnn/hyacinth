@@ -132,5 +132,22 @@ pub enum TyVar {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParamTy {
     pub def_id: DefId,
-    pub idx: usize,
+    data: usize,
+}
+
+impl ParamTy {
+    pub fn new(def_id: DefId, depth: u32, idx: u32) -> Self {
+        Self {
+            def_id,
+            data: ((depth as usize) << u32::BITS) | idx as usize,
+        }
+    }
+
+    pub fn depth(&self) -> u32 {
+        (self.data >> u32::BITS as usize) as u32
+    }
+
+    pub fn idx(&self) -> u32 {
+        (self.data & u32::MAX as usize) as u32
+    }
 }

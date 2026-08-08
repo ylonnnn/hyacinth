@@ -115,7 +115,8 @@ pub struct HirProto<'h> {
 
 #[derive(Debug, Clone)]
 pub struct HirExtend<'h> {
-    pub target: &'h HirPath<'h>,
+    pub target: &'h HirTy<'h>,
+    pub generic_params: Option<HirGenericParamList<'h>>,
     // TODO: with: Option<[PROTO]>
     pub items: Vec<&'h HirItem<'h>>,
     pub span: Span,

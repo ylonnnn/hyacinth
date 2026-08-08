@@ -2,19 +2,21 @@ use hycc_const::constant::ConstKind;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
     HirMutability, HirNode,
-    def::{AdtKind, DefKind, DefSpace},
+    def::{AdtKind, Binding, DefKind, DefSpace},
     expr::{
         HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
         HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField,
         HirTupleExpr,
     },
+    generic::HirGenericParamKind,
     item::HirItemKind,
     path::HirIdentArgument,
 };
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
-    ty::{AccessKind, InferKind, RefMutability, Ty, TyKind},
+    extension::ExtensionTarget,
+    ty::{AccessKind, GenericArg, InferKind, RefMutability, Ty, TyKind},
 };
 use hycc_util::{bug, ternary};
 
@@ -185,7 +187,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             initialized[*idx] = Some(&field);
 
             let raw_field_ty_id = self.tctx.expect_hir_ty_id(field_tys[*idx]);
-            let field_ty_id = self.tctx.instantiate(raw_field_ty_id, args.clone());
+            let field_ty_id = self.tctx.instantiate(raw_field_ty_id, &[&args]);
 
             let expr_field_ty_id = match self.infer_expr(&field.val) {
                 Ok(ty_id) => ty_id,
@@ -282,8 +284,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )));
         };
 
-        // dbg!(fn_ty);
-
         let (a_len, p_len) = (call.arguments.data.len(), fn_ty.params.len());
         if a_len != p_len {
             return Err(Some(InferDiag::error(
@@ -358,7 +358,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     };
 
                     let field_ty_id = self.tctx.expect_hir_ty_id(struct_def.fields[*field].ty);
-                    return Ok(self.tctx.instantiate(field_ty_id, args.clone()));
+                    return Ok(self.tctx.instantiate(field_ty_id, &[&args.clone()]));
                 }
 
                 TyKind::Ref(ty_id, _) => {
@@ -380,22 +380,56 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let mut access = AccessKind::Owned;
 
         // Find the candidate binding
+        let target = self
+            .tctx
+            .get_ty_def_id(rec_ty_id)
+            .map_or(ExtensionTarget::Ty(rec_ty_id), |def_id| {
+                ExtensionTarget::Def(def_id)
+            });
         loop {
-            if let Some(exts) = self
-                .tctx
-                .get_ty_def_id(rec_ty_id)
-                .and_then(|def_id| self.tctx.ext_table.get_def_native_exts(def_id))
-            {
-                if let Some(binding) = exts.iter().find_map(|ext_id| {
-                    self.tctx
-                        .ext_table
-                        .get(*ext_id)
-                        .get(DefSpace::Value, call.callee.ident.ident)
-                }) {
-                    candidate.replace(binding.clone());
-                    break;
-                }
+            let err = || {
+                Err(Some(InferDiag::error(
+                    call.callee.span,
+                    InferDiagErrorKind::UnrecognizedMethod {
+                        method: call.callee.ident.ident,
+                        ty_id: rec_ty_id,
+                    },
+                )))
+            };
+
+            let Some((ext_id, assoc_item)) = self.tctx.ext_table.get_assoc_item(
+                target,
+                DefSpace::Value,
+                call.callee.ident.ident,
+            ) else {
+                return err();
+            };
+
+            let ext = self.tctx.ext_table.get(ext_id);
+            let (ext_ty_id, ext_hir_id) = (ext.expect_ty_id(), ext.hir_id);
+
+            let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
+                unreachable!()
+            };
+
+            let HirItemKind::Extend(extend) = &item.kind else {
+                unreachable!()
+            };
+
+            let n = extend
+                .generic_params
+                .as_ref()
+                .map_or(0, |generic_params| generic_params.list.len());
+
+            let generic_args = (0..n)
+                .map(|_| GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any)))
+                .collect::<Vec<_>>();
+            let ext_ty_id = self.tctx.instantiate(ext_ty_id, &[&generic_args]);
+            if !self.compatible(ext_ty_id, rec_ty_id) {
+                return err();
             }
+
+            candidate.replace(assoc_item);
 
             if rec_ty_id == deref_rec_ty_id {
                 break;
@@ -409,7 +443,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             deref_rec_ty_id = self.tctx.deref(rec_ty_id);
         }
 
-        let Some(binding) = candidate else {
+        let Some(Binding {
+            def_id,
+            accessibility,
+        }) = candidate
+        else {
             Err(Some(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::UnrecognizedMethod {
@@ -419,27 +457,77 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )))?
         };
 
-        self.definitions
-            .define_id_hir(call.callee.id, binding.def_id);
+        self.definitions.define_id_hir(call.callee.id, def_id);
 
-        let def = self.definitions.get(binding.def_id);
-        let fn_ty = self.tctx.get_ty_of_def(binding.def_id).unwrap();
+        let mut generic_args = Vec::new();
+        let mut g_args = Vec::new();
+
+        if let Some(arguments) = &call.callee.arguments {
+            for argument in &arguments.data {
+                match argument {
+                    HirIdentArgument::Ty(ty) => {
+                        g_args.push(GenericArg::Ty(self.tctx.expect_hir_ty_id(ty.id)));
+                    }
+                    HirIdentArgument::Expr(_expr) => {
+                        // todo: const generics -> GenericArg::Const
+                        todo!("const generic args")
+                    }
+                }
+            }
+        }
+
+        let generic_params = self.definitions.get(def_id).generic_params().unwrap_or(&[]);
+        let generic_param_count = generic_params.len();
+
+        let n = g_args.len();
+        if n > generic_param_count {
+            todo!(
+                "throw error: generic argument arity mismatch. expected: <={:?}, received: {:?}",
+                generic_param_count,
+                n
+            )
+        }
+
+        for i in n..generic_param_count {
+            let gp_def_id = generic_params[i];
+            let gp_def = self.definitions.get(gp_def_id).kind.expect_generic_param();
+
+            g_args.push(match &gp_def.kind {
+                HirGenericParamKind::Ty => {
+                    GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any))
+                }
+
+                HirGenericParamKind::Const => todo!("const generic arg"),
+            });
+        }
+
+        let extracted_args = self.tctx.extract_args(rec_ty_id);
+        for frame in [extracted_args.iter().as_slice(), g_args.as_slice()] {
+            if !frame.is_empty() {
+                generic_args.push(frame);
+            }
+        }
+
+        let fn_ty_id = self
+            .tctx
+            .instantiate(self.tctx.get_ty_of_def(def_id).unwrap().id, &generic_args);
+
+        let def = self.definitions.get(def_id);
 
         // Illegal invocation error for non-function bindings
         let Some(fn_def) = def.kind.get_fn() else {
             Err(Some(InferDiag::error(
                 call.callee.span,
-                InferDiagErrorKind::IllegalInvocation(fn_ty.id),
+                InferDiagErrorKind::IllegalInvocation(fn_ty_id),
             )))?
         };
 
         let fn_def_params = fn_def.params.clone();
-        let fn_ty_id = fn_ty.id;
 
         self.tctx
             .attach_to_hir(call.callee.id, Ty::new(fn_ty_id, call.callee.span));
 
-        let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ty_id) else {
+        let TyKind::Fn(fn_ty, args) = self.tctx.get(fn_ty_id) else {
             unreachable!()
         };
 
@@ -464,7 +552,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 call.callee.span,
                 InferDiagErrorKind::InvalidAssocFnInvocation {
                     name: call.callee.ident.ident,
-                    def_id: binding.def_id,
+                    def_id,
                     ty_id: rec_ty_id,
                 },
             )))?;
@@ -503,7 +591,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                             call.callee.ident.ident,
                             call.callee.span.merge(call.arguments.span),
                         ),
-                        def_id: binding.def_id,
+                        def_id,
                     },
                 )))?;
             }
@@ -519,7 +607,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 call.callee.span,
                 InferDiagErrorKind::InvalidAssocFnInvocation {
                     name: call.callee.ident.ident,
-                    def_id: binding.def_id,
+                    def_id,
                     ty_id: rec_ty_id,
                 },
             )))?;

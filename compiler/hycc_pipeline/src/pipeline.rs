@@ -119,8 +119,6 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
         CollectorDiagDataCtx::new(&collector.interner, &hir_table, &definitions, &scope_ctx),
     );
 
-    fs::write("syms.txt", collector.interner.get_all().join("\n"));
-
     if session.dctx.error_occurred() {
         return;
     }

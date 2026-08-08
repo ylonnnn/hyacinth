@@ -126,6 +126,12 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
             prev_ty_id = Some(self.instantiate_segment(&ident, &mut generic_args)?);
         }
 
+        self.definitions.define_id_hir(
+            path.id,
+            self.definitions
+                .expect_def_id(path.segments.last().unwrap().id),
+        );
+
         let final_ty_id = prev_ty_id.unwrap();
         self.tctx
             .attach_to_hir(path.id, Ty::new(final_ty_id, path.span));

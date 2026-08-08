@@ -418,10 +418,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             unreachable!()
         };
 
-        match self
-            .ctx
-            .expect_def(self.definitions.get_def_id(path.id).unwrap())
-        {
+        match self.ctx.expect_def(self.definitions.expect_def_id(path.id)) {
             MirDef::Local(local_id) => Place::local(local_id),
             MirDef::Global(global_id) => Place::global(global_id),
             MirDef::Body(def_id) => {

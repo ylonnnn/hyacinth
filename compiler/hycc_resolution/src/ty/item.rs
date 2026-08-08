@@ -148,8 +148,7 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         let fn_ty = Ty::new(fn_ty_id, fn_item.span);
 
         self.tctx.attach_to_hir(fn_item.id, fn_ty.clone());
-        self.tctx
-            .attach_to_def(self.definitions.get_def_id(fn_item.id).unwrap(), fn_ty);
+        self.tctx.attach_to_def(def_id, fn_ty);
 
         if let Err(Some(diag)) = self.resolve_block(&func.body) {
             self.dctx.add(diag);

@@ -12,7 +12,8 @@ use crate::context::TyId;
 pub struct ExtensionTable {
     data: Vec<Extension>,
     // native_def: HashMap<DefId, Vec<ExtensionId>>,
-    native: HashMap<ExtensionTarget, Vec<ExtensionId>>,
+    native: HashMap<ExtensionTarget, Vec<ExtensionId>>, // TODO: separate into `nominal` and
+    // `structural` look-up
     hir_map: HashMap<HirId, ExtensionId>,
     // TODO: protocol: HashMap<DefId, Vec<ExtensionId>>
 }

@@ -2,13 +2,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
+    HirId,
     def::{
-        AdtDef, AdtKind, Binding, DefAccessibility, DefKind, Definition, FnDef, GenericParamDef,
-        StructDef, StructFieldDef, VarDef,
+        AdtDef, AdtKind, Binding, BuiltinKind, DefAccessibility, DefKind, Definition, FnDef,
+        GenericParamDef, StructDef, StructFieldDef, VarDef,
     },
     item::{HirItem, HirItemKind, HirPetalKind, HirProtoItem, HirProtoItemAssocFnKind},
     scope::Scope,
 };
+use hycc_span::Span;
 use hycc_ty::ty::{GenericArg, Ty};
 use hycc_util::ternary;
 
@@ -184,7 +186,7 @@ impl<'i> Collector<'i> {
                     let res = s.define(Definition::new(
                         generic_param.ident.ident,
                         DefKind::GenericParam(Box::new(GenericParamDef::new(
-                            0,
+                            s.scope_ctx.generic_depth,
                             i as u32,
                             generic_param.kind,
                         ))),
@@ -215,6 +217,15 @@ impl<'i> Collector<'i> {
                     };
                 }
             }
+
+            // s.define(Definition::new(
+            //     self_sym,
+            //     DefKind::Builtin(BuiltinKind::SelfTy),
+            //     Some(s.petal_ctx.top_id()),
+            //     HirId::Invalid,
+            //     Span::default(),
+            //     DefAccessibility::Priv,
+            // ));
 
             let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
             s.enter_scope(scope_id, |s| {

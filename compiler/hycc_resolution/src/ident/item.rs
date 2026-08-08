@@ -135,6 +135,12 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             unreachable!()
         };
 
+        if !extend_item.is_top_level() {
+            if let Err(Some(diag)) = self.collector.collect_extend(&extend_item) {
+                self.collector.dctx.add(diag);
+            }
+        }
+
         let ext = self.collector.ext_table.expect_hir_ext(extend_item.id);
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
 

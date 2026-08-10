@@ -9,8 +9,8 @@ use hycc_hir::{
     ty::HirTyKind,
 };
 use hycc_span::Span;
-use hycc_ty::extension::{Extension, ExtensionTarget};
-use hycc_util::bug;
+use hycc_ty::extension::{ExtNominalTargetKind, ExtTargetKind, Extension};
+use hycc_util::{bug, ternary};
 
 use crate::{ResolveResult, ident::resolver::Resolver};
 
@@ -172,15 +172,18 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
 
         if let HirTyKind::Path(path) = &extend.target.kind {
             let def_id = self.collector.definitions.expect_def_id(path.id);
-            let def_petal = self.collector.definitions.get(def_id).petal;
-
-            let target = ExtensionTarget::Def(def_id);
+            let def = self.collector.definitions.get(def_id);
+            let def_petal = def.petal;
+            let target = ExtTargetKind::Nominal(ternary!(
+                matches!(def.kind, DefKind::GenericParam(_)),
+                ExtNominalTargetKind::Blanket,
+                ExtNominalTargetKind::Def(def_id)
+            ));
 
             let ext_id = self.collector.tctx.ext_table.attach(
                 target,
                 Extension::new(
                     extend_item.id,
-                    target,
                     None,
                     std::mem::take(
                         self.collector

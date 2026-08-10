@@ -15,7 +15,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
-    extension::ExtensionTarget,
+    extension::{ExtNominalTargetKind, ExtTargetKind},
     ty::{AccessKind, GenericArg, InferKind, RefMutability, Ty, TyKind},
 };
 use hycc_util::{bug, ternary};
@@ -375,17 +375,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         let mut rec_ty_id = initial_ty_id;
         let mut deref_rec_ty_id = self.tctx.deref(rec_ty_id);
+        let mut rec_g_args: Vec<GenericArg>;
 
         let mut candidate = None;
         let mut access = AccessKind::Owned;
 
         // Find the candidate binding
-        let target = self
-            .tctx
-            .get_ty_def_id(rec_ty_id)
-            .map_or(ExtensionTarget::Ty(rec_ty_id), |def_id| {
-                ExtensionTarget::Def(def_id)
-            });
+        let target = self.tctx.ext_target_kind_of(rec_ty_id);
         loop {
             let err = || {
                 Err(Some(InferDiag::error(
@@ -406,7 +402,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             };
 
             let ext = self.tctx.ext_table.get(ext_id);
-            let (ext_ty_id, ext_hir_id) = (ext.expect_ty_id(), ext.hir_id);
+            let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
 
             let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
                 unreachable!()
@@ -421,11 +417,12 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 .as_ref()
                 .map_or(0, |generic_params| generic_params.list.len());
 
-            let generic_args = (0..n)
+            rec_g_args = (0..n)
                 .map(|_| GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any)))
                 .collect::<Vec<_>>();
-            let ext_ty_id = self.tctx.instantiate(ext_ty_id, &[&generic_args]);
-            if !self.compatible(ext_ty_id, rec_ty_id) {
+            let ext_target_ty_id = self.tctx.instantiate(ext_target_ty_id, &[&rec_g_args]);
+
+            if !self.compatible(ext_target_ty_id, rec_ty_id) {
                 return err();
             }
 
@@ -459,9 +456,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         self.definitions.define_id_hir(call.callee.id, def_id);
 
-        let mut generic_args = Vec::new();
         let mut g_args = Vec::new();
-
         if let Some(arguments) = &call.callee.arguments {
             for argument in &arguments.data {
                 match argument {
@@ -501,12 +496,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             });
         }
 
-        let extracted_args = self.tctx.extract_args(rec_ty_id);
-        for frame in [extracted_args.iter().as_slice(), g_args.as_slice()] {
-            if !frame.is_empty() {
-                generic_args.push(frame);
-            }
-        }
+        let mut generic_args = [rec_g_args.iter().as_slice(), g_args.as_slice()]
+            .into_iter()
+            .filter_map(|frame| ternary!(frame.is_empty(), None, Some(frame)))
+            .collect::<Vec<_>>();
 
         let fn_ty_id = self
             .tctx

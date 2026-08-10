@@ -7,7 +7,7 @@ use hycc_hir::{
 use hycc_util::{bug, ternary};
 
 use crate::{
-    extension::ExtensionTable,
+    extension::{ExtNominalTargetKind, ExtTargetKind, ExtensionTable},
     ty::{FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar},
 };
 
@@ -309,8 +309,24 @@ impl TyCtx {
     pub fn extract_args(&self, ty_id: TyId) -> Arc<[GenericArg]> {
         match self.get(ty_id) {
             TyKind::Adt(_, args) => args.clone(),
-            _ => Arc::new([GenericArg::Ty(ty_id)]),
+            _ => Arc::new([]),
         }
+    }
+
+    pub fn ext_target_kind_of(&self, ty_id: TyId) -> ExtTargetKind {
+        self.get_ty_def_id(ty_id).map_or_else(
+            || match &self.get(ty_id) {
+                TyKind::Fn(..) => todo!("allow fn type extensions"),
+
+                TyKind::Array(..) => ExtTargetKind::Array,
+                TyKind::Slice(..) => ExtTargetKind::Slice,
+                TyKind::Tuple(tup) => ExtTargetKind::Tuple(tup.len()),
+                TyKind::Ref(..) => ExtTargetKind::Ref,
+
+                _ => bug!("other type kinds are expected to be defined/have a definition."),
+            },
+            |def_id| ExtTargetKind::Nominal(ExtNominalTargetKind::Def(def_id)),
+        )
     }
 
     pub fn unify(&mut self, a: TyVarId, b: TyVarId) {

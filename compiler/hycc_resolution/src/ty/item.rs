@@ -1,11 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use hycc_diagnostic::DiagnosticContext;
-use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::{
+    item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct},
+    ty::HirTyKind,
+};
 use hycc_symbol::Symbol;
 use hycc_ty::{
     context::TyId,
-    extension::{Extension, ExtensionTarget},
+    extension::{ExtNominalTargetKind, ExtTargetKind, Extension},
     ty::{GenericArg, InferKind, Ty},
 };
 
@@ -51,19 +54,28 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         // dbg!(self.definitions.get_def_id(extend.target.id));
         // self.def_to_ty(def_id, span)
 
-        if let Some(def_id) = self.tctx.get_ty_def_id(target_ty_id) {
+        if matches!(&extend.target.kind, HirTyKind::Path(_)) {
             self.tctx
                 .ext_table
                 .expect_hir_mut_ext(extend_item.id)
-                .attach_ty_id(target_ty_id);
+                .attach_target(target_ty_id);
         } else {
-            let target = ExtensionTarget::Ty(target_ty_id);
+            let kind = match &extend.target.kind {
+                HirTyKind::Path(_) => ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket),
+
+                HirTyKind::Unit(_) => todo!("perhaps allow unit type extensions"),
+                HirTyKind::Fn(_) => todo!("perhaps allow fn type extensions"),
+
+                HirTyKind::Ref(_) => ExtTargetKind::Ref,
+                HirTyKind::Array(_) => ExtTargetKind::Array,
+                HirTyKind::Slice(_) => ExtTargetKind::Slice,
+                HirTyKind::Tuple(tup) => ExtTargetKind::Tuple(tup.data.len()),
+            };
 
             self.tctx.ext_table.attach(
-                target,
+                kind,
                 Extension::new(
                     extend_item.id,
-                    target,
                     Some(target_ty_id),
                     std::mem::take(scope)
                         .all()

@@ -6,14 +6,13 @@ use hycc_hir::{
 };
 use hycc_symbol::Symbol;
 
-use crate::context::TyId;
+use crate::{context::TyId, ty::TyKind};
 
 #[derive(Debug, Clone)]
 pub struct ExtensionTable {
     data: Vec<Extension>,
-    // native_def: HashMap<DefId, Vec<ExtensionId>>,
-    native: HashMap<ExtensionTarget, Vec<ExtensionId>>, // TODO: separate into `nominal` and
-    // `structural` look-up
+    native: HashMap<ExtTargetKind, Vec<ExtensionId>>,
+
     hir_map: HashMap<HirId, ExtensionId>,
     // TODO: protocol: HashMap<DefId, Vec<ExtensionId>>
 }
@@ -69,7 +68,7 @@ impl ExtensionTable {
         self.get_mut(self.expect_hir_ext_id(hir_id))
     }
 
-    pub fn attach(&mut self, target: ExtensionTarget, ext: Extension) -> ExtensionId {
+    pub fn attach(&mut self, target: ExtTargetKind, ext: Extension) -> ExtensionId {
         // TODO: identify whether the extension is native or protocol-based
         let ext_id = self.insert(ext);
         self.attach_id(target, ext_id);
@@ -84,7 +83,7 @@ impl ExtensionTable {
     //     ext_id
     // }
 
-    pub fn attach_id(&mut self, target: ExtensionTarget, ext_id: ExtensionId) {
+    pub fn attach_id(&mut self, target: ExtTargetKind, ext_id: ExtensionId) {
         match self.native.entry(target) {
             Entry::Vacant(entry) => {
                 entry.insert(vec![ext_id]);
@@ -114,65 +113,77 @@ impl ExtensionTable {
     //     }
     // }
 
-    pub fn get_ty_native_exts(&self, target: ExtensionTarget) -> Option<&[ExtensionId]> {
+    pub fn get_ty_native_exts(&self, target: ExtTargetKind) -> Option<&[ExtensionId]> {
         self.native.get(&target).map(|exts| exts.as_slice())
     }
 
     pub fn get_assoc_item(
         &self,
-        target: ExtensionTarget,
+        target: ExtTargetKind,
         space: DefSpace,
         name: Symbol,
     ) -> Option<(ExtensionId, Binding)> {
-        self.get_ty_native_exts(target)?.iter().find_map(|ext_id| {
+        let f = |ext_id: &ExtensionId| {
             self.get(*ext_id)
                 .items
                 .get(&(space, name))
                 .map(|binding| (*ext_id, binding.clone()))
+        };
+
+        let find = |exts: Option<&[ExtensionId]>| exts?.iter().find_map(f);
+        find(self.get_ty_native_exts(target)).or_else(|| {
+            find(self.get_ty_native_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket)))
         })
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ExtensionTarget {
+pub enum ExtTargetKind {
+    Nominal(ExtNominalTargetKind),
+    Tuple(usize),
+    Slice,
+    Array,
+    Ref,
+    // TODO: Fn (?)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExtNominalTargetKind {
     Def(DefId),
-    Ty(TyId),
+    Blanket,
 }
 
 #[derive(Debug, Clone)]
 pub struct Extension {
     items: HashMap<(DefSpace, Symbol), Binding>,
-    pub target: ExtensionTarget,
-    ty_id: Option<TyId>,
+    pub target: Option<TyId>,
     pub hir_id: HirId,
 }
 
 impl Extension {
     pub fn new(
         hir_id: HirId,
-        target: ExtensionTarget,
-        ty_id: Option<TyId>,
+        target: Option<TyId>,
         items: HashMap<(DefSpace, Symbol), Binding>,
     ) -> Self {
         Self {
             items,
             target,
-            ty_id,
             hir_id,
         }
     }
 
-    pub fn get_ty_id(&self) -> Option<TyId> {
-        self.ty_id
+    pub fn get_target(&self) -> Option<TyId> {
+        self.target
     }
 
-    pub fn expect_ty_id(&self) -> TyId {
-        self.ty_id
+    pub fn expect_target(&self) -> TyId {
+        self.target
             .expect("expected the ty id of the extension to already be attached!")
     }
 
-    pub fn attach_ty_id(&mut self, ty_id: TyId) {
-        self.ty_id.replace(ty_id);
+    pub fn attach_target(&mut self, target: TyId) {
+        self.target.replace(target);
     }
 
     pub fn get(&self, space: DefSpace, name: Symbol) -> Option<&Binding> {

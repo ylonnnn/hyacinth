@@ -9,4 +9,5 @@
 - [ ] disallow usage of non-local generic parameters
 - [x] fix an issue with usage of associated items within local extensions
 - [ ] define `Self` per impl scope
-- [ ] separate extension look-up based on whether the target is nominal (consists of their own definitions/is defined), or structural (a basic layer for efficiency which does not have a constant time look-up) which simply compares the structure of the target type
+- [x] separate extension look-up based on whether the target is nominal (consists of their own definitions/is defined), or structural (a basic layer for efficiency which does not have a constant time look-up) which simply compares the structure of the target type
+- [ ] implement some sort of merging step for separate extensions to detect duplications

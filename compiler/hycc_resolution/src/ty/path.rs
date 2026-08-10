@@ -7,7 +7,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
-    extension::ExtensionTarget,
+    extension::ExtTargetKind,
     ty::{GenericArg, InferKind, Ty},
 };
 use hycc_util::bug;
@@ -99,12 +99,7 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         for ident in &path.segments[resolved_count..] {
             if self.definitions.get_def_id(ident.id).is_none() {
                 let ty_id = prev_ty_id.unwrap();
-                let target = self
-                    .tctx
-                    .get_ty_def_id(ty_id)
-                    .map_or(ExtensionTarget::Ty(ty_id), |def_id| {
-                        ExtensionTarget::Def(def_id)
-                    });
+                let target = self.tctx.ext_target_kind_of(ty_id);
 
                 let Some((_, assoc_item)) = self.tctx.ext_table.get_assoc_item(
                     target,

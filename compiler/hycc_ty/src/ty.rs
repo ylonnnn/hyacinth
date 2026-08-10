@@ -3,7 +3,10 @@ use std::{fmt::Display, sync::Arc};
 use hycc_hir::def::DefId;
 use hycc_span::Span;
 
-use crate::context::{TyId, TyVarId};
+use crate::{
+    context::{TyId, TyVarId},
+    extension::ExtTargetKind,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RefMutability {

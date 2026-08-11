@@ -12,9 +12,8 @@ use crate::{context::TyId, ty::TyKind};
 pub struct ExtensionTable {
     data: Vec<Extension>,
     native: HashMap<ExtTargetKind, Vec<ExtensionId>>,
-
+    // TODO: protocol: HashMap<ExtTargetKind, Vec<ExtensionId>>
     hir_map: HashMap<HirId, ExtensionId>,
-    // TODO: protocol: HashMap<DefId, Vec<ExtensionId>>
 }
 
 impl ExtensionTable {
@@ -192,6 +191,16 @@ impl Extension {
 
     pub fn get_mut(&mut self, space: DefSpace, name: Symbol) -> Option<&mut Binding> {
         self.items.get_mut(&(space, name))
+    }
+
+    pub fn collisions<'a>(
+        &'a self,
+        ext: &'a Extension,
+    ) -> Vec<(&(DefSpace, Symbol), &Binding, &Binding)> {
+        self.items
+            .iter()
+            .filter_map(|(key, binding)| ext.items.get(&key).map(|b| (key, binding, b)))
+            .collect::<Vec<_>>()
     }
 }
 

@@ -141,7 +141,6 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
             }
         }
 
-        // let ext = self.collector.ext_table.expect_hir_ext(extend_item.id);
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(extend_item.id);
 
         self.enter_scope(scope_id, |s| {

@@ -76,25 +76,30 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     }
 
     pub(crate) fn infer_array_expr(&mut self, array: &HirArrayExpr) -> InferResult<TyId> {
-        // TODO: improve. use initial state verification for micro-optimization
-        let el_ty_id = self.infer_expr(array.elements[0])?;
+        let el_ty_id = ternary!(
+            array.elements.is_empty(),
+            self.tctx.make_inferred_ty(InferKind::Any),
+            self.infer_expr(array.elements[0])?
+        );
 
-        for expr in &array.elements[1..] {
-            let curr_el_ty_id = match self.infer_expr(&expr) {
-                Ok(ty_id) => ty_id,
-                Err(diag) => {
-                    diag.map(|diag| self.dctx.add(diag));
-                    continue;
-                }
-            };
+        if !array.elements.is_empty() {
+            for expr in &array.elements[1..] {
+                let curr_el_ty_id = match self.infer_expr(&expr) {
+                    Ok(ty_id) => ty_id,
+                    Err(diag) => {
+                        diag.map(|diag| self.dctx.add(diag));
+                        continue;
+                    }
+                };
 
-            self.check(
-                &Ty::new(el_ty_id, Span::default()),
-                &Ty::new(curr_el_ty_id, expr.span),
-            )
-            .map(|diag| self.dctx.add(diag));
+                self.check(
+                    &Ty::new(el_ty_id, Span::default()),
+                    &Ty::new(curr_el_ty_id, expr.span),
+                )
+                .map(|diag| self.dctx.add(diag));
 
-            self.tctx.resolve_ty(curr_el_ty_id);
+                self.tctx.resolve_ty(curr_el_ty_id);
+            }
         }
 
         Ok(self.tctx.make_array_ty(el_ty_id))

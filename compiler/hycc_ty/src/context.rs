@@ -576,6 +576,36 @@ impl TyCtx {
         self.intern(TyKind::Param(ParamTy::new(def_id, depth, idx)))
     }
 
+    pub fn unresolved_infer(&self, ty_id: TyId, ty_ids: &mut Vec<TyId>) {
+        let kind = self.get(ty_id);
+
+        match kind {
+            TyKind::Infer(_, _) => ty_ids.push(ty_id),
+
+            TyKind::Array(inner) | TyKind::Slice(inner) => self.unresolved_infer(*inner, ty_ids),
+
+            TyKind::Ref(inner, _) => self.unresolved_infer(*inner, ty_ids),
+
+            TyKind::Fn(fn_ty, _) => {
+                for param in fn_ty.params.iter() {
+                    self.unresolved_infer(*param, ty_ids);
+                }
+
+                self.unresolved_infer(fn_ty.ret_ty, ty_ids);
+            }
+
+            TyKind::Adt(_, args) => {
+                for arg in args.iter() {
+                    match &arg {
+                        GenericArg::Ty(ty_id) => self.unresolved_infer(*ty_id, ty_ids),
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
     pub fn is_inferred(&self, ty_id: TyId) -> bool {
         let kind = self.get(ty_id);
 

@@ -9,8 +9,8 @@ use hycc_hir::{
     petal::PetalCtx,
 };
 use hycc_ty::{
-    context::{TyCtx, TyId},
-    ty::Ty,
+    context::{TyCtx, TyId, TyVarId},
+    ty::{InferKind, IntTy, Ty, TyKind},
 };
 use hycc_util::bug;
 
@@ -98,10 +98,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             }
         }
 
-        self.check_unresolved();
+        self.analyze_unresolved();
     }
 
-    fn check_unresolved(&mut self) {
+    fn analyze_unresolved(&mut self) {
         let mut tys = self
             .tctx
             .hir_tys()
@@ -109,37 +109,50 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             .map(|(hir_id, ty)| (hir_id, ty.span))
             .collect::<Vec<_>>();
 
-        tys.sort_by_key(|(_, span)| span.offset);
-        let tys = tys
-            .into_iter()
-            .map(|(hir_id, _)| hir_id)
-            .collect::<Vec<_>>();
+        tys.sort_by(|(_, a_span), (_, b_span)| {
+            a_span
+                .offset
+                .cmp(&b_span.offset)
+                .then_with(|| b_span.len.cmp(&a_span.len))
+        });
 
-        let mut checked = HashSet::<TyId>::new();
+        let mut checked = HashSet::<TyVarId>::new();
 
-        for hir_id in tys {
-            let Some(ty) = self.tctx.get_hir_ty(hir_id) else {
-                continue;
-            };
+        let default_int_ty_id = self.tctx.make_int_ty(IntTy::Fixed(32, true));
+        let default_float_ty_id = self.tctx.make_float_ty(32);
 
-            if checked.contains(&ty.id) {
-                continue;
-            }
-
-            checked.insert(ty.id);
-
+        for (hir_id, _) in tys {
+            let ty = self.tctx.expect_hir_ty(hir_id);
             let span = ty.span;
             let ty_id = self.tctx.resolve_ty(ty.id);
 
-            if !self.tctx.is_inferred(ty_id) {
-                continue;
-            };
+            let mut unresolved_infer_tys = Vec::new();
+            self.tctx.unresolved_infer(ty_id, &mut unresolved_infer_tys);
 
-            // dbg!(span);
-            // self.dctx.add(InferDiag::error(
-            //     span,
-            //     InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
-            // ));
+            if unresolved_infer_tys.is_empty() {
+                continue;
+            }
+
+            for infer_ty in unresolved_infer_tys {
+                let TyKind::Infer(var_id, kind) = self.tctx.get(infer_ty) else {
+                    continue;
+                };
+
+                if checked.insert(*var_id) {
+                    match &kind {
+                        InferKind::Int => self.tctx.unify_ty(ty_id, default_int_ty_id),
+                        InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
+                        _ => {
+                            self.dctx.add(InferDiag::error(
+                                span,
+                                InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
+                            ));
+
+                            continue;
+                        }
+                    };
+                }
+            }
         }
     }
 }

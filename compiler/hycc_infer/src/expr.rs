@@ -126,20 +126,26 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
-        let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
-            unreachable!()
+        let err = |name, def_id| {
+            Err(Some(InferDiag::error(
+                strct.path.span,
+                InferDiagErrorKind::InvalidNonStructInstantiation { name, def_id },
+            )))
         };
 
-        let def = self.definitions.get(def_id);
+        let Some(TyKind::Adt(def_id, args)) = self
+            .tctx
+            .get_hir_ty_id(strct.path.id)
+            .map(|ty_id| self.tctx.get(ty_id))
+        else {
+            let def_id = self.definitions.expect_def_id(strct.path.id);
+            return err(self.definitions.expect_def(strct.path.id).name, def_id);
+        };
 
+        let def_id = *def_id;
+        let def = self.definitions.get(def_id);
         let Some(strct_def) = def.kind.get_adt().and_then(|adt| adt.get_struct()) else {
-            return Err(Some(InferDiag::error(
-                strct.path.span,
-                InferDiagErrorKind::InvalidNonStructInstantiation {
-                    name: def.name,
-                    def_id,
-                },
-            )));
+            return err(def.name, def_id);
         };
 
         let hir_id = def.hir_id;

@@ -375,12 +375,10 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                     expectation_span: ann_span,
                     ..
                 } => {
-                    if ann_span.src_id.is_valid() {
-                        diag.detail(
-                            *ann_span,
-                            DiagnosticKind::Note(format!("expected due to this.")),
-                        );
-                    }
+                    diag.detail(
+                        *ann_span,
+                        DiagnosticKind::Note(format!("expected due to this.")),
+                    );
                 }
 
                 Err::InvalidNonStructInstantiation { name, def_id } => {

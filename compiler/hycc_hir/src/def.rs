@@ -194,7 +194,7 @@ impl DefKind {
     pub fn space(&self) -> DefSpace {
         if let Self::Builtin(kind) = self {
             return match &kind {
-                BuiltinKind::SelfTy | BuiltinKind::Ty(_) => DefSpace::Type,
+                BuiltinKind::SelfTy(_) | BuiltinKind::Ty(_) => DefSpace::Type,
             };
         }
 
@@ -213,7 +213,7 @@ impl DefKind {
             DefKind::Petal => DefResKind::Petal,
 
             DefKind::Proto
-            | DefKind::Builtin(BuiltinKind::SelfTy)
+            | DefKind::Builtin(BuiltinKind::SelfTy(_))
             | DefKind::Builtin(BuiltinKind::Ty(_))
             | DefKind::Adt(_) => DefResKind::Ty,
 
@@ -309,7 +309,7 @@ impl DefKind {
 
 #[derive(Debug, Clone)]
 pub enum BuiltinKind {
-    SelfTy,
+    SelfTy(HirId),
     Ty(BuiltinTyKind),
 }
 

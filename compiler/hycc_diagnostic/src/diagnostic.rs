@@ -70,7 +70,10 @@ impl Diagnostic {
     }
 
     pub fn detail(&mut self, span: Span, kind: DiagnosticKind) -> &mut Self {
-        self.add_detail(Diagnostic::new(span, kind));
+        if span.src_id.is_valid() {
+            self.add_detail(Diagnostic::new(span, kind));
+        }
+
         self
     }
 }

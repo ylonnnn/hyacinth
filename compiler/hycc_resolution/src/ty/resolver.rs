@@ -11,7 +11,7 @@ use hycc_span::Span;
 use hycc_symbol::Symbol;
 use hycc_ty::{
     context::{TyCtx, TyId},
-    ty::InferKind,
+    ty::{InferKind, Ty},
 };
 use hycc_util::bug;
 
@@ -27,6 +27,8 @@ pub struct TyResolver<'t, 'd, 's, 'h> {
     pub definitions: &'d mut DefinitionTable,
     pub scope_ctx: &'s mut ScopeCtx,
     pub hir_table: &'h HirTable<'h>,
+
+    pub expected_space: Option<DefSpace>,
 }
 
 impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
@@ -42,15 +44,35 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
             definitions,
             scope_ctx,
             hir_table,
+
+            expected_space: None,
         }
     }
 
     pub(crate) fn def_to_ty(&mut self, def_id: DefId, span: Span) -> ResolveResult<TyId> {
         let def = self.definitions.get(def_id);
         let ty_id = match &def.kind {
-            DefKind::Builtin(BuiltinKind::Ty(kind)) => match kind {
-                BuiltinTyKind::Infer => self.tctx.make_inferred_ty(InferKind::Any),
-                _ => self.tctx.get_ty_of_def(def_id).unwrap().id,
+            DefKind::Builtin(b_kind) => match &b_kind {
+                BuiltinKind::SelfTy(hir_id) => {
+                    let hir_id = *hir_id;
+                    if let Some(ty_id) = self.tctx.get_hir_ty_id(hir_id) {
+                        ty_id
+                    } else {
+                        let HirNode::Ty(ty) = self.hir_table.get(hir_id) else {
+                            unreachable!()
+                        };
+
+                        let ty_id = self.resolve_ty(&ty)?;
+                        self.tctx.attach_to_hir(hir_id, Ty::new(ty_id, ty.span));
+
+                        ty_id
+                    }
+                }
+
+                BuiltinKind::Ty(kind) => match &kind {
+                    BuiltinTyKind::Infer => self.tctx.make_inferred_ty(InferKind::Any),
+                    _ => self.tctx.get_ty_of_def(def_id).unwrap().id,
+                },
             },
 
             DefKind::Petal => Err(Some(ResolverDiag::error(

@@ -14,10 +14,7 @@ use hycc_span::Span;
 use hycc_ty::ty::{GenericArg, Ty};
 use hycc_util::ternary;
 
-use crate::{
-    collector::{CollectResult, Collector},
-    extension::Extension,
-};
+use crate::collector::{CollectResult, Collector};
 
 impl<'i> Collector<'i> {
     pub fn push_petal_item(&mut self, petal_item: &HirItem) -> CollectResult<usize> {
@@ -169,10 +166,6 @@ impl<'i> Collector<'i> {
     }
 
     pub fn collect_extend(&mut self, extend_item: &HirItem) -> CollectResult {
-        if self.ext_table.get_hir_ext_id(extend_item.id).is_some() {
-            return Ok(());
-        }
-
         let HirItemKind::Extend(extend) = &extend_item.kind else {
             unreachable!()
         };
@@ -218,14 +211,15 @@ impl<'i> Collector<'i> {
                 }
             }
 
-            // s.define(Definition::new(
-            //     self_sym,
-            //     DefKind::Builtin(BuiltinKind::SelfTy),
-            //     Some(s.petal_ctx.top_id()),
-            //     HirId::Invalid,
-            //     Span::default(),
-            //     DefAccessibility::Priv,
-            // ));
+            let self_sym = s.interner.intern("Self");
+            s.define(Definition::new(
+                self_sym,
+                DefKind::Builtin(BuiltinKind::SelfTy(extend.target.id)),
+                Some(s.petal_ctx.top_id()),
+                HirId::Invalid,
+                Span::default(),
+                DefAccessibility::Priv,
+            ));
 
             let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
             s.enter_scope(scope_id, |s| {
@@ -238,19 +232,6 @@ impl<'i> Collector<'i> {
 
             s.scope_ctx.generic_depth -= extend.generic_params.is_some() as u32;
         });
-
-        self.ext_table.attach(
-            extend_item.id,
-            Extension::new(
-                extend.target.id,
-                self.scope_ctx
-                    .get(scope_id)
-                    .clone()
-                    .all()
-                    .into_iter()
-                    .collect::<HashMap<_, _>>(),
-            ),
-        );
 
         Ok(())
     }

@@ -75,14 +75,14 @@ impl Span {
 
 impl Default for Span {
     fn default() -> Self {
-        Self::new(0, 0, SourceId(u16::MAX))
+        Self::new(0, 0, SourceId::default())
     }
 }
 
 impl From<(u32, u16, u16)> for Span {
     fn from(value: (u32, u16, u16)) -> Self {
         let (offset, len, src_id) = value;
-        Self::new(offset, len, SourceId(src_id))
+        Self::new(offset, len, SourceId::from(src_id))
     }
 }
 

@@ -14,10 +14,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{context::TyCtx, ty::Ty};
 use hycc_util::{bug, ternary};
 
-use crate::{
-    diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind},
-    extension::ExtensionTable,
-};
+use crate::diag::{CollectorDiag, CollectorDiagCtx, CollectorDiagErrorKind};
 
 #[derive(Debug)]
 pub struct Collector<'i> {
@@ -26,7 +23,6 @@ pub struct Collector<'i> {
     pub petal_ctx: PetalCtx,
     pub definitions: DefinitionTable,
     pub dctx: CollectorDiagCtx,
-    pub ext_table: ExtensionTable,
     pub interner: &'i mut SymbolInterner,
 }
 
@@ -46,7 +42,6 @@ impl<'i> Collector<'i> {
             petal_ctx: PetalCtx::new(),
             definitions: DefinitionTable::new(),
             dctx: CollectorDiagCtx::new(),
-            ext_table: ExtensionTable::new(),
             interner,
         };
 

@@ -306,13 +306,6 @@ impl TyCtx {
         }
     }
 
-    pub fn extract_args(&self, ty_id: TyId) -> Arc<[GenericArg]> {
-        match self.get(ty_id) {
-            TyKind::Adt(_, args) => args.clone(),
-            _ => Arc::new([]),
-        }
-    }
-
     pub fn ext_target_kind_of(&self, ty_id: TyId) -> ExtTargetKind {
         self.get_ty_def_id(ty_id).map_or_else(
             || match &self.get(ty_id) {
@@ -322,6 +315,10 @@ impl TyCtx {
                 TyKind::Slice(..) => ExtTargetKind::Slice,
                 TyKind::Tuple(tup) => ExtTargetKind::Tuple(tup.len()),
                 TyKind::Ref(..) => ExtTargetKind::Ref,
+
+                // TODO: improve?: allow ambiguous inferred types (except `Any`) to be used for
+                // other concrete type extensions
+                TyKind::Infer(_, kind) => ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket),
 
                 _ => bug!("other type kinds are expected to be defined/have a definition."),
             },

@@ -10,7 +10,7 @@ use hycc_ty::{
     extension::ExtTargetKind,
     ty::{GenericArg, InferKind, Ty},
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::{
     ResolveResult,
@@ -96,16 +96,21 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
             prev_ty_id = Some(self.instantiate_segment(&segment, &mut generic_args)?);
         }
 
-        for ident in &path.segments[resolved_count..] {
+        for (i, ident) in path.segments[resolved_count..].iter().enumerate() {
+            let space = ternary!(
+                i == (n - resolved_count) - 1,
+                /* TODO */ DefSpace::Value,
+                DefSpace::Type
+            );
             if self.definitions.get_def_id(ident.id).is_none() {
                 let ty_id = prev_ty_id.unwrap();
                 let target = self.tctx.ext_target_kind_of(ty_id);
 
-                let Some((_, assoc_item)) = self.tctx.ext_table.get_assoc_item(
-                    target,
-                    DefSpace::Value, /* TODO */
-                    ident.ident.ident,
-                ) else {
+                let Some((_, assoc_item)) =
+                    self.tctx
+                        .ext_table
+                        .get_assoc_item(target, space, ident.ident.ident)
+                else {
                     return Err(Some(ResolverDiag::error(
                         ident.span,
                         ResolverDiagErrorKind::UnrecognizedMember {

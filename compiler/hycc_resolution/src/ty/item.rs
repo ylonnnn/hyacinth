@@ -48,11 +48,10 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
 
         // Resolve the target type
         let target_ty_id = self.resolve_ty(&extend.target)?;
-        let scope = self.scope_ctx.expect_hir_mut_scope(extend.target.id);
+        self.tctx
+            .attach_to_hir(extend.target.id, Ty::new(target_ty_id, extend.target.span));
 
-        // TODO: define `Self`
-        // dbg!(self.definitions.get_def_id(extend.target.id));
-        // self.def_to_ty(def_id, span)
+        let scope = self.scope_ctx.expect_hir_mut_scope(extend.target.id);
 
         if matches!(&extend.target.kind, HirTyKind::Path(_)) {
             self.tctx

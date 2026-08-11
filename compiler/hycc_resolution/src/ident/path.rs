@@ -73,7 +73,6 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         resolution: Option<DefResolution>,
     ) -> ResolveResult<Option<DefResolution>> {
         let name = ident.ident.ident;
-
         if let Some(arguments) = &ident.arguments {
             for argument in &arguments.data {
                 let res = match &argument {

@@ -46,7 +46,7 @@ impl Display for Token {
             f,
             "<{:?}:{}:{}:{}>",
             self.kind,
-            self.span.src_id.0,
+            self.span.src_id.data(),
             self.span.offset,
             self.span.offset + self.span.len as u32
         )

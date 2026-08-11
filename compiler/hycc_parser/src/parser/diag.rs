@@ -107,9 +107,9 @@ impl<'s> DiagnosticContext<ParserDiagDataCtx<'s>, ParserDiag> for ParserDiagCtx 
         data.last_mut()
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: ParserDiagDataCtx<'s>) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: ParserDiagDataCtx<'s>) {
         for diag in self.data() {
-            target.add(diag.emit(&ctx));
+            target.add(diag.emit(&mut ctx));
         }
     }
 }
@@ -224,7 +224,7 @@ impl<'s> ParserDiag {
 }
 
 impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
-    fn emit(&self, ctx: &ParserDiagDataCtx<'s>) -> Diagnostic {
+    fn emit(&self, ctx: &mut ParserDiagDataCtx<'s>) -> Diagnostic {
         use ParserDiagErrorKind as Err;
         use ParserDiagKind::*;
 

@@ -58,9 +58,9 @@ impl<'s> DiagnosticContext<LexerDiagDataCtx<'s>, LexerDiag> for LexerDiagCtx {
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: LexerDiagDataCtx<'s>) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: LexerDiagDataCtx<'s>) {
         for diag in self.data() {
-            target.add(diag.emit(&ctx));
+            target.add(diag.emit(&mut ctx));
         }
     }
 }
@@ -95,7 +95,7 @@ pub struct LexerDiag {
 }
 
 impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
-    fn emit(&self, ctx: &LexerDiagDataCtx<'s>) -> Diagnostic {
+    fn emit(&self, ctx: &mut LexerDiagDataCtx<'s>) -> Diagnostic {
         use LexerDiagErrorKind as Err;
         use LexerDiagKind::*;
 

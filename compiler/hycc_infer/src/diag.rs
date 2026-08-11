@@ -22,12 +22,12 @@ pub struct InferDiagDataCtx<'t, 'd, 'i> {
 
 impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
     pub fn new(
-        tctx: &'t TyCtx,
+        tctx: &'t mut TyCtx,
         definitions: &'d DefinitionTable,
         interner: &'i SymbolInterner,
     ) -> Self {
         Self {
-            fmt: TyFormatter::new(&tctx, &definitions, &interner),
+            fmt: TyFormatter::new(tctx, &definitions, &interner),
         }
     }
 }
@@ -74,9 +74,9 @@ impl<'t, 'd, 'i> DiagnosticContext<InferDiagDataCtx<'t, 'd, 'i>, InferDiag> for 
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: InferDiagDataCtx<'t, 'd, 'i>) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: InferDiagDataCtx<'t, 'd, 'i>) {
         for diag in self.data() {
-            target.add(diag.emit(&ctx));
+            target.add(diag.emit(&mut ctx));
         }
     }
 }
@@ -187,7 +187,7 @@ impl InferDiag {
 }
 
 impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
-    fn emit(&self, ctx: &InferDiagDataCtx<'t, 'd, 'i>) -> Diagnostic {
+    fn emit(&self, ctx: &mut InferDiagDataCtx<'t, 'd, 'i>) -> Diagnostic {
         use InferDiagErrorKind as Err;
         use InferDiagKind::*;
 

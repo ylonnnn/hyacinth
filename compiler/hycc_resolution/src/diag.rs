@@ -19,14 +19,14 @@ pub struct ResolverDiagDataCtx<'t, 'd, 'i> {
 
 impl<'t, 'd, 'i> ResolverDiagDataCtx<'t, 'd, 'i> {
     pub fn new(
-        tctx: &'t TyCtx,
+        tctx: &'t mut TyCtx,
         definitions: &'d DefinitionTable,
         interner: &'i SymbolInterner,
         // hir_table: &'t HirTable<'h>,
         // scope_ctx: &'s ScopeCtx,
     ) -> Self {
         Self {
-            fmt: TyFormatter::new(&tctx, &definitions, &interner),
+            fmt: TyFormatter::new(tctx, &definitions, &interner),
             // hir_table,
             // scope_ctx,
         }
@@ -77,9 +77,9 @@ impl<'t, 'd, 'i> DiagnosticContext<ResolverDiagDataCtx<'t, 'd, 'i>, ResolverDiag
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: ResolverDiagDataCtx) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: ResolverDiagDataCtx) {
         for diag in self.data() {
-            target.add(diag.emit(&ctx));
+            target.add(diag.emit(&mut ctx));
         }
     }
 }
@@ -127,11 +127,11 @@ impl<'c> ResolverDiag {
 }
 
 impl<'t, 'd, 'i> Diag<ResolverDiagDataCtx<'t, 'd, 'i>> for ResolverDiag {
-    fn emit(&self, ctx: &ResolverDiagDataCtx) -> Diagnostic {
+    fn emit(&self, ctx: &mut ResolverDiagDataCtx) -> Diagnostic {
         use ResolverDiagErrorKind as Err;
         use ResolverDiagKind::*;
 
-        let ResolverDiagDataCtx { fmt, .. } = &ctx;
+        let ResolverDiagDataCtx { fmt, .. } = ctx;
         let mut diag = Diagnostic::new(
             self.span,
             match &self.kind {

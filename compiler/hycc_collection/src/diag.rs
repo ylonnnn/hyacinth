@@ -78,9 +78,9 @@ impl<'i, 't, 'h, 'd, 's> DiagnosticContext<CollectorDiagDataCtx<'i, 't, 'h, 'd, 
         self.1
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) {
         for diag in self.data() {
-            target.add(diag.emit(&ctx));
+            target.add(diag.emit(&mut ctx));
         }
     }
 }
@@ -123,7 +123,7 @@ impl CollectorDiag {
 }
 
 impl<'i, 't, 'h, 'd, 's> Diag<CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>> for CollectorDiag {
-    fn emit(&self, ctx: &CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) -> Diagnostic {
+    fn emit(&self, ctx: &mut CollectorDiagDataCtx<'i, 't, 'h, 'd, 's>) -> Diagnostic {
         use CollectorDiagErrorKind as Err;
         use CollectorDiagKind::*;
 

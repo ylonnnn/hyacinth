@@ -144,7 +144,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     resolver.dctx.emit(
         &mut session.dctx,
         ResolverDiagDataCtx::new(
-            &resolver.collector.tctx,
+            &mut resolver.collector.tctx,
             &definitions,
             &resolver.collector.interner,
         ),
@@ -165,7 +165,7 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
     ty_resolver.dctx.emit(
         &mut session.dctx,
         ResolverDiagDataCtx::new(
-            &ty_resolver.tctx,
+            &mut ty_resolver.tctx,
             &ty_resolver.definitions,
             &session.interner,
         ),
@@ -187,7 +187,11 @@ pub fn compile(session: &mut Session, unit_id: CompilationUnitId) {
 
     ty_inferer.dctx.emit(
         &mut session.dctx,
-        InferDiagDataCtx::new(&ty_inferer.tctx, &ty_inferer.definitions, &session.interner),
+        InferDiagDataCtx::new(
+            &mut ty_inferer.tctx,
+            &ty_inferer.definitions,
+            &session.interner,
+        ),
     );
 
     if session.dctx.error_occurred() {

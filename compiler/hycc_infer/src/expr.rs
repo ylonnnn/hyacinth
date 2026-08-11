@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hycc_const::constant::ConstKind;
 use hycc_diagnostic::DiagnosticContext;
 use hycc_hir::{
@@ -75,16 +77,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
     pub(crate) fn infer_array_expr(&mut self, array: &HirArrayExpr) -> InferResult<TyId> {
         // TODO: improve. use initial state verification for micro-optimization
-        let mut el_ty_id = self.tctx.make_inferred_ty(InferKind::Any);
+        let el_ty_id = self.infer_expr(array.elements[0])?;
 
-        for expr in &array.elements {
+        for expr in &array.elements[1..] {
             let curr_el_ty_id = match self.infer_expr(&expr) {
                 Ok(ty_id) => ty_id,
                 Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
-
+                    diag.map(|diag| self.dctx.add(diag));
                     continue;
                 }
             };
@@ -95,7 +94,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             )
             .map(|diag| self.dctx.add(diag));
 
-            el_ty_id = self.tctx.resolve_ty(el_ty_id);
             self.tctx.resolve_ty(curr_el_ty_id);
         }
 
@@ -103,22 +101,19 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     }
 
     pub(crate) fn infer_tuple_expr(&mut self, tup: &HirTupleExpr) -> InferResult<TyId> {
-        let mut tys = Vec::new();
-
-        for el in &tup.elements {
-            match self.infer_expr(&el) {
-                Ok(ty_id) => tys.push(ty_id),
+        let tys = tup
+            .elements
+            .iter()
+            .filter_map(|el| match self.infer_expr(&el) {
+                Ok(ty_id) => Some(ty_id),
                 Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
-
-                    continue;
+                    diag.map(|diag| self.dctx.add(diag));
+                    None
                 }
-            }
-        }
+            })
+            .collect::<Arc<_>>();
 
-        Ok(self.tctx.make_tuple_ty(tys.into()))
+        Ok(self.tctx.make_tuple_ty(tys))
     }
 
     pub(crate) fn infer_struct_expr(&mut self, struct_expr: &HirExpr) -> InferResult<TyId> {

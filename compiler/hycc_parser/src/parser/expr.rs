@@ -259,14 +259,14 @@ impl<'s> Parser<'s> {
             | TokenKind::Caret => self.parse_binary_expr(left, min_bp),
 
             TokenKind::Greater => {
-                // This is done in order for the identifier arguments to be properly parsed and
-                // since expressions which contain a combination of `>` and another character to
-                // the left of it is not exactly common, this may be the more efficient solution
-                // rather than manually checking the closing angle brackets of the identifier
-                // arguments.
+                // This is done in order for the identifier arguments to be properly
+                // parsed and since expressions which contain a combination of `>`
+                // and another character to the left of it is not exactly common, this
+                // may be the more efficient solution rather than manually checking
+                // the closing angle brackets of the identifier arguments.
 
-                // TODO: potentially improve this and create a method in the TokenKind for merging
-                // mergeable kinds such as these.
+                // TODO: potentially improve this and create a method in the TokenKind
+                // for merging mergeable kinds such as these.
                 // TokenKind::GreaterEq | TokenKind::GreaterGreater
                 let Some(lead) = self.next_nonlf_token() else {
                     unreachable!()

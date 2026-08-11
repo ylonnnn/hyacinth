@@ -98,6 +98,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             }
         }
 
+        if self.dctx.error_occurred() {
+            return;
+        }
+
         self.analyze_unresolved();
     }
 
@@ -138,20 +142,20 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     continue;
                 };
 
-                if checked.insert(*var_id) {
-                    match &kind {
-                        InferKind::Int => self.tctx.unify_ty(ty_id, default_int_ty_id),
-                        InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
-                        _ => {
+                match &kind {
+                    InferKind::Int => self.tctx.unify_ty(ty_id, default_int_ty_id),
+                    InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
+                    _ => {
+                        if checked.insert(*var_id) {
                             self.dctx.add(InferDiag::error(
                                 span,
                                 InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
                             ));
-
-                            continue;
                         }
-                    };
-                }
+
+                        continue;
+                    }
+                };
             }
         }
     }

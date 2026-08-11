@@ -62,6 +62,14 @@ impl InferDiagCtx {
 }
 
 impl<'t, 'd, 'i> DiagnosticContext<InferDiagDataCtx<'t, 'd, 'i>, InferDiag> for InferDiagCtx {
+    fn add(&mut self, diagnostic: InferDiag) -> Option<&mut InferDiag> {
+        self.1 = self.1 || matches!(&diagnostic.kind, InferDiagKind::Error(_));
+        let data = self.data_mut();
+
+        data.push(diagnostic);
+        data.last_mut()
+    }
+
     fn data(&self) -> &Vec<InferDiag> {
         &self.0
     }

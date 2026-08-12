@@ -230,7 +230,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
-        dbg!(self.definitions.get_def_id(anfn_expr.id));
         let Some(fn_ty) = self.tctx.get_hir_ty(anfn_expr.id).cloned() else {
             bug!(
                 "anon fn hir {:?} does not have an attached ty",

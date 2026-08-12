@@ -102,7 +102,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             }
         }
 
-        self.analyze_unresolved(self.dctx.error_occurred());
+        self.analyze_unresolved(!self.dctx.error_occurred());
     }
 
     fn analyze_unresolved(&mut self, emit_err: bool) {

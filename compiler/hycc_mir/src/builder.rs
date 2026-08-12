@@ -705,11 +705,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         let ret_local_id = self.ctx.table.get_mut(body_id).declare_local_ret(ret_ty);
 
         for param in &anfn.params.list {
-            let Some(ty) = &param.ty else {
-                continue;
-            };
-
-            let ty_id = self.tctx.expect_hir_ty_id(ty.id);
+            let ty_id = self.tctx.expect_hir_ty_id(param.id);
             let local_id = self.ctx.table.get_mut(body_id).declare_local_param(
                 ty_id,
                 Mutability::Mutable,

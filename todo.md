@@ -4,7 +4,7 @@
 - [x] implement generic structs
 - [ ] protocol (`proto`) declarations
 - [ ] expression mutability
-- [ ] fix `MirDef`s of anonymous functions
+- [x] fix MIR lowering issues from lowering anonymous functions
 - [x] fix an issue regarding paths that have tailing segments with generics
 - [ ] disallow usage of non-local generic parameters
 - [x] fix an issue with usage of associated items within local extensions

@@ -334,8 +334,8 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
 
             HirExprKind::Block(_) => self.lower_block_expr(&expr),
 
-            HirExprKind::Array(_) => todo!("lower array expr"),
-            HirExprKind::Tuple(_) => todo!("lower tuple expr"),
+            HirExprKind::Array(_) => self.lower_array_expr(&expr),
+            HirExprKind::Tuple(_) => self.lower_tuple_expr(&expr),
             HirExprKind::Struct(_) => self.lower_struct_expr(&expr),
 
             HirExprKind::AnonFn(_) => self.lower_anon_fn_expr(&expr),
@@ -583,6 +583,74 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         );
 
         self.lower_block(&block, &temp);
+
+        self.read_place(temp)
+    }
+
+    fn lower_array_expr(&mut self, arr_expr: &HirExpr) -> Operand {
+        let HirExprKind::Array(arr) = &arr_expr.kind else {
+            unreachable!()
+        };
+
+        let body_id = self.ctx.table.top_id().unwrap();
+        let operands = arr
+            .elements
+            .iter()
+            .map(|val| self.lower_expr(&val))
+            .collect::<Vec<_>>();
+
+        let ty_id = self.tctx.expect_hir_ty_id(arr_expr.id);
+        let temp = Place::local(
+            self.ctx
+                .table
+                .get_mut(body_id)
+                .declare_local_temp(ty_id, arr_expr.span),
+        );
+
+        self.ctx
+            .table
+            .get_mut(body_id)
+            .insert_stmt(MirStatement::new(
+                MirStatementKind::Assign(Box::new((
+                    temp.clone(),
+                    RValue::Aggregate(ty_id, operands),
+                ))),
+                arr_expr.span,
+            ));
+
+        self.read_place(temp)
+    }
+
+    fn lower_tuple_expr(&mut self, tup_expr: &HirExpr) -> Operand {
+        let HirExprKind::Tuple(tup) = &tup_expr.kind else {
+            unreachable!()
+        };
+
+        let body_id = self.ctx.table.top_id().unwrap();
+        let operands = tup
+            .elements
+            .iter()
+            .map(|val| self.lower_expr(&val))
+            .collect::<Vec<_>>();
+
+        let ty_id = self.tctx.expect_hir_ty_id(tup_expr.id);
+        let temp = Place::local(
+            self.ctx
+                .table
+                .get_mut(body_id)
+                .declare_local_temp(ty_id, tup_expr.span),
+        );
+
+        self.ctx
+            .table
+            .get_mut(body_id)
+            .insert_stmt(MirStatement::new(
+                MirStatementKind::Assign(Box::new((
+                    temp.clone(),
+                    RValue::Aggregate(ty_id, operands),
+                ))),
+                tup_expr.span,
+            ));
 
         self.read_place(temp)
     }

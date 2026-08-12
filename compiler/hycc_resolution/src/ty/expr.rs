@@ -28,7 +28,7 @@ impl<'t, 'd, 's, 'h> ResolveExpr<(), Option<ResolverDiag>> for TyResolver<'t, 'd
             HirExprKind::Literal(_) => Ok(()),
 
             HirExprKind::Binary(_, left, right) => self.resolve_binary_expr(&left, &right),
-            HirExprKind::Unary(unary) => self.resolve_unary_expr(&unary),
+            HirExprKind::Unary(unary) => self.resolve_expr(unary.expr()),
 
             HirExprKind::Assign(assignee, expr) => self.resolve_assign_expr(&assignee, &expr),
 
@@ -53,10 +53,6 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         }
 
         self.resolve_expr(&right)
-    }
-
-    pub(crate) fn resolve_unary_expr(&mut self, unary: &HirUnary) -> ResolveResult {
-        self.resolve_expr(unary.expr())
     }
 
     pub(crate) fn resolve_assign_expr(

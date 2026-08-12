@@ -1,6 +1,6 @@
 use hycc_hir::stmt::{HirStmt, HirStmtKind};
 
-use crate::{ResolveResult, ty::resolver::TyResolver};
+use crate::{ResolveResult, resolver_traits::ResolveExpr, ty::resolver::TyResolver};
 
 impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
     pub(crate) fn resolve_stmt(&mut self, stmt: &HirStmt) -> ResolveResult {

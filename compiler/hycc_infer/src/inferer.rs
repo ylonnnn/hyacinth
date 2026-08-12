@@ -8,6 +8,10 @@ use hycc_hir::{
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
+use hycc_resolution::resolver_traits::{
+    InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy,
+};
+use hycc_span::Span;
 use hycc_ty::{
     context::{TyCtx, TyId, TyVarId},
     ty::{InferKind, IntTy, Ty, TyKind},
@@ -154,5 +158,56 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 };
             }
         }
+    }
+}
+
+impl<'t, 'd, 'c, 'h, 'p> ResolveTy<Option<InferDiag>> for TyInferer<'t, 'd, 'c, 'h, 'p> {
+    fn resolve_ty(&mut self, ty: &hycc_hir::ty::HirTy) -> Result<TyId, Option<InferDiag>> {
+        Ok(self.tctx.expect_hir_ty_id(ty.id))
+    }
+}
+
+impl<'t, 'd, 'c, 'h, 'p> ResolveExpr<TyId, Option<InferDiag>> for TyInferer<'t, 'd, 'c, 'h, 'p> {
+    fn resolve_expr(&mut self, expr: &hycc_hir::expr::HirExpr) -> Result<TyId, Option<InferDiag>> {
+        self.infer_expr(&expr)
+    }
+}
+
+impl<'t, 'd, 'c, 'h, 'p> ResolveIdentArgs<TyId, Option<InferDiag>>
+    for TyInferer<'t, 'd, 'c, 'h, 'p>
+{
+}
+
+impl<'t, 'd, 'c, 'h, 'p> InstantiateIdent<TyId, Option<InferDiag>>
+    for TyInferer<'t, 'd, 'c, 'h, 'p>
+{
+    fn definitions(&self) -> &DefinitionTable {
+        &self.definitions
+    }
+
+    fn tctx(&mut self) -> &mut TyCtx {
+        &mut self.tctx
+    }
+
+    fn def_ty(
+        &mut self,
+        def_id: hycc_hir::def::DefId,
+        _span: hycc_span::Span,
+    ) -> Result<TyId, Option<InferDiag>> {
+        Ok(self.tctx.get_ty_of_def(def_id).unwrap().id)
+    }
+
+    fn generic_arg_arity_mismatch_error(
+        &self,
+        span: Span,
+        expected: u8,
+        received: u8,
+    ) -> Option<InferDiag> {
+        Some(InferDiag::error(
+            span,
+            InferDiagErrorKind::GenericArgumentArityMismatch(
+                ((expected as u16) << u8::BITS) | received as u16,
+            ),
+        ))
     }
 }

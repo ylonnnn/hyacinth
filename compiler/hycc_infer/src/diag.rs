@@ -140,10 +140,8 @@ pub enum InferDiagErrorKind {
     UnresolvedTy(Ty),
 
     IllegalInvocation(TyId),
-    ArgumentArityMismatch {
-        expected: u8,
-        received: u8,
-    },
+    ArgumentArityMismatch(u16), // expected: 8-bits | received: 8-bits
+    GenericArgumentArityMismatch(u16), // expected: 8-bits | received: 8-bits
 
     MissingElseBranch,
 
@@ -312,13 +310,27 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                 )
                             }
 
-                            Err::ArgumentArityMismatch { expected, received } => {
+                            Err::ArgumentArityMismatch(data) => {
+                                let (expected, received) =
+                                    ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
                                 format!(
                                     "expected `{}` argument{}, received `{}` argument{}.",
                                     expected,
-                                    ternary!(*expected == 1, "", "s"),
+                                    ternary!(expected == 1, "", "s"),
                                     received,
-                                    ternary!(*received == 1, "", "s"),
+                                    ternary!(received == 1, "", "s"),
+                                )
+                            }
+
+                            Err::GenericArgumentArityMismatch(data) => {
+                                let (expected, received) =
+                                    ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
+                                format!(
+                                    "expected at most `{}` generic argument{}, received `{}` generic argument{}.",
+                                    expected,
+                                    ternary!(expected == 1, "", "s"),
+                                    received,
+                                    ternary!(received == 1, "", "s"),
                                 )
                             }
 

@@ -15,6 +15,7 @@ use hycc_ty::{
 use crate::{
     ResolveResult,
     diag::{ResolverDiag, ResolverDiagErrorKind},
+    resolver_traits::{ResolveExpr, ResolveTy},
     ty::resolver::TyResolver,
 };
 

@@ -14,6 +14,7 @@ use hycc_hir::{
     item::HirItemKind,
     path::HirIdentArgument,
 };
+use hycc_resolution::resolver_traits::{InstantiateIdent, ResolveIdentArgs};
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
@@ -33,7 +34,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
             HirExprKind::RefExpr(reference) => self.infer_ref_expr(&reference),
-            HirExprKind::Literal(lit) => self.infer_literal(&lit),
+            HirExprKind::Literal(lit) => self.infer_literal_expr(&lit),
             HirExprKind::Binary(op, left, right) => todo!("infer binary"),
             HirExprKind::Unary(unary) => todo!("infer unary"),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
@@ -41,10 +42,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
             HirExprKind::Struct(_) => self.infer_struct_expr(&expr),
-            HirExprKind::AnonFn(_) => self.infer_anon_fn(&expr),
-            HirExprKind::FnCall(call) => self.infer_fn_call(&call),
-            HirExprKind::FieldAccess(access) => self.infer_field_access(&access),
-            HirExprKind::MethodCall(call) => self.infer_method_call(&call),
+            HirExprKind::AnonFn(_) => self.infer_anon_fn_expr(&expr),
+            HirExprKind::FnCall(call) => self.infer_fn_call_expr(&call),
+            HirExprKind::FieldAccess(access) => self.infer_field_access_expr(&access),
+            HirExprKind::MethodCall(call) => self.infer_method_call_expr(&call),
             HirExprKind::If(ite) => self.infer_if_expr(&ite),
         }?;
 
@@ -53,7 +54,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         Ok(ty_id)
     }
 
-    pub(crate) fn infer_literal(&mut self, lit: &HirLiteral) -> InferResult<TyId> {
+    pub(crate) fn infer_literal_expr(&mut self, lit: &HirLiteral) -> InferResult<TyId> {
         let kind = self.const_table.get(lit.const_id());
         Ok(match &kind {
             ConstKind::Int { .. } => self.tctx.make_inferred_ty(InferKind::Int),
@@ -224,7 +225,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         Ok(self.tctx.expect_hir_ty_id(strct.path.id))
     }
 
-    pub(crate) fn infer_anon_fn(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
+    pub(crate) fn infer_anon_fn_expr(&mut self, anfn_expr: &HirExpr) -> InferResult<TyId> {
         let HirExprKind::AnonFn(anfn) = &anfn_expr.kind else {
             unreachable!()
         };
@@ -281,7 +282,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         Ok(self.tctx.get_hir_ty(anfn_expr.id).unwrap().id)
     }
 
-    pub(crate) fn infer_fn_call(&mut self, call: &HirFnCall) -> InferResult<TyId> {
+    pub(crate) fn infer_fn_call_expr(&mut self, call: &HirFnCall) -> InferResult<TyId> {
         let callee_ty_id = self.infer_expr(&call.callee)?;
         let TyKind::Fn(fn_ty, args) = self.tctx.get(callee_ty_id) else {
             return Err(Some(InferDiag::error(
@@ -294,10 +295,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         if a_len != p_len {
             return Err(Some(InferDiag::error(
                 call.arguments.span,
-                InferDiagErrorKind::ArgumentArityMismatch {
-                    expected: p_len as u8,
-                    received: a_len as u8,
-                },
+                InferDiagErrorKind::ArgumentArityMismatch(
+                    ((p_len as u16) << u8::BITS) | a_len as u16,
+                ),
             )));
         }
 
@@ -326,7 +326,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         Ok(self.tctx.resolve_ty(ret_ty))
     }
 
-    pub(crate) fn infer_field_access(&mut self, access: &HirFieldAccess) -> InferResult<TyId> {
+    pub(crate) fn infer_field_access_expr(&mut self, access: &HirFieldAccess) -> InferResult<TyId> {
         let init_lead_ty_id = self.infer_expr(&access.leading)?;
         let mut lead_ty_id = init_lead_ty_id;
 
@@ -376,7 +376,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         }
     }
 
-    pub fn infer_method_call(&mut self, call: &HirMethodCall) -> InferResult<TyId> {
+    pub fn infer_method_call_expr(&mut self, call: &HirMethodCall) -> InferResult<TyId> {
         let initial_ty_id = self.infer_expr(&call.receiver)?;
 
         let mut rec_ty_id = initial_ty_id;
@@ -462,54 +462,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         self.definitions.define_id_hir(call.callee.id, def_id);
 
-        let mut g_args = Vec::new();
-        if let Some(arguments) = &call.callee.arguments {
-            for argument in &arguments.data {
-                match argument {
-                    HirIdentArgument::Ty(ty) => {
-                        g_args.push(GenericArg::Ty(self.tctx.expect_hir_ty_id(ty.id)));
-                    }
-                    HirIdentArgument::Expr(_expr) => {
-                        // todo: const generics -> GenericArg::Const
-                        todo!("const generic args")
-                    }
-                }
-            }
-        }
-
-        let generic_params = self.definitions.get(def_id).generic_params().unwrap_or(&[]);
-        let generic_param_count = generic_params.len();
-
-        let n = g_args.len();
-        if n > generic_param_count {
-            todo!(
-                "throw error: generic argument arity mismatch. expected: <={:?}, received: {:?}",
-                generic_param_count,
-                n
-            )
-        }
-
-        for i in n..generic_param_count {
-            let gp_def_id = generic_params[i];
-            let gp_def = self.definitions.get(gp_def_id).kind.expect_generic_param();
-
-            g_args.push(match &gp_def.kind {
-                HirGenericParamKind::Ty => {
-                    GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any))
-                }
-
-                HirGenericParamKind::Const => todo!("const generic arg"),
-            });
-        }
-
-        let mut generic_args = [rec_g_args.iter().as_slice(), g_args.as_slice()]
+        let mut arg_frames = [rec_g_args]
             .into_iter()
             .filter_map(|frame| ternary!(frame.is_empty(), None, Some(frame)))
             .collect::<Vec<_>>();
-
-        let fn_ty_id = self
-            .tctx
-            .instantiate(self.tctx.get_ty_of_def(def_id).unwrap().id, &generic_args);
+        let fn_ty_id = self.instantiate(&mut arg_frames, &call.callee)?;
 
         let def = self.definitions.get(def_id);
 
@@ -617,10 +574,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         if (a_len + 1) != p_len {
             Err(Some(InferDiag::error(
                 call.arguments.span,
-                InferDiagErrorKind::ArgumentArityMismatch {
-                    expected: p_len.saturating_sub(1) as u8,
-                    received: a_len as u8,
-                },
+                InferDiagErrorKind::ArgumentArityMismatch(
+                    ((p_len.saturating_sub(1) as u16) << u8::BITS) | a_len as u16,
+                ),
             )))?;
         };
 

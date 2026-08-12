@@ -2,6 +2,8 @@ use crate::diag::ResolverDiag;
 
 pub mod diag;
 
+pub mod resolver_traits;
+
 pub mod ident;
 pub mod ty;
 

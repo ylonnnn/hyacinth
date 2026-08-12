@@ -91,6 +91,20 @@ pub enum HirUnary<'h> {
     Post(UnaryOp, &'h HirExpr<'h>),
 }
 
+impl<'h> HirUnary<'h> {
+    pub fn op(&self) -> UnaryOp {
+        match &self {
+            Self::Pre(op, _) | Self::Post(op, _) => *op,
+        }
+    }
+
+    pub fn expr(&self) -> &'h HirExpr<'h> {
+        match &self {
+            Self::Pre(_, expr) | Self::Post(_, expr) => expr,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub enum UnaryOp {
     #[default]

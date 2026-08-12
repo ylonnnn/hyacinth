@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use hycc_hir::{
     HirId,
     def::{BuiltinIntTy, BuiltinTyKind, DefId},
+    path::HirIdentArguments,
 };
 use hycc_util::{bug, ternary};
 

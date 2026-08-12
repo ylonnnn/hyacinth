@@ -18,6 +18,7 @@ use hycc_util::bug;
 use crate::{
     ResolveResult,
     diag::{ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind},
+    resolver_traits::{ResolveIdentArgs, ResolveTy},
 };
 
 #[derive(Debug)]
@@ -105,3 +106,5 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         }
     }
 }
+
+impl<'t, 'd, 's, 'h> ResolveIdentArgs<(), Option<ResolverDiag>> for TyResolver<'t, 'd, 's, 'h> {}

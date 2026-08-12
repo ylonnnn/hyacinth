@@ -106,19 +106,16 @@ impl<'s> Parser<'s> {
             return Err(None);
         };
 
-        let mut arguments = IdentifierArguments {
-            data: Vec::new(),
-            span: op_delim.span,
-        };
-
+        let mut data = Vec::new();
         let mut expect = true;
+
         while !self.expect_preserved_exact_nonlf(TokenKind::Greater).0 {
             if !expect {
                 self.require_exact_nonlf(TokenKind::Comma)?;
             }
 
             if expect {
-                arguments.data.push(self.parse_ident_arg()?);
+                data.push(self.parse_ident_arg()?);
                 expect = false;
             }
 
@@ -128,7 +125,10 @@ impl<'s> Parser<'s> {
             }
         }
 
-        Ok(arguments)
+        Ok(IdentifierArguments {
+            data,
+            span: op_delim.span.merge(self.peek_nonlf_token().unwrap().span),
+        })
     }
 
     // GENERIC_ARG ::= { EXPR } | TYPE

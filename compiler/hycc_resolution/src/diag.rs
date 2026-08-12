@@ -9,6 +9,7 @@ use hycc_ty::{
     context::{TyCtx, TyId},
     fmt::TyFormatter,
 };
+use hycc_util::ternary;
 
 #[derive(Debug)]
 pub struct ResolverDiagDataCtx<'t, 'd, 'i> {
@@ -102,6 +103,8 @@ pub enum ResolverDiagErrorKind {
     InvalidPetalResolution(Symbol, DefId),
     InvalidInference,
     InaccessibleSymbol(Symbol),
+
+    GenericArgumentArityMismatch(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +187,18 @@ impl<'t, 'd, 'i> Diag<ResolverDiagDataCtx<'t, 'd, 'i>> for ResolverDiag {
                                 format!(
                                     "symbol `{}` is inaccessible in this context.",
                                     fmt.interner.get(*symbol)
+                                )
+                            }
+
+                            Err::GenericArgumentArityMismatch(data) => {
+                                let (expected, received) =
+                                    ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
+                                format!(
+                                    "expected at most `{}` generic argument{}, received `{}` generic argument{}.",
+                                    expected,
+                                    ternary!(expected == 1, "", "s"),
+                                    received,
+                                    ternary!(received == 1, "", "s"),
                                 )
                             }
                         },

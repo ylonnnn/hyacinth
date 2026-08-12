@@ -17,8 +17,8 @@ pub enum PathKind {
 
 impl<'s> Parser<'s> {
     pub fn parse_raw_ident(&mut self) -> ParseResult<Token> {
-        let tg = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))?;
-        let Some(tok) = tg.underlying() else {
+        let tokg = self.require_abs_similar_nonlf(TokenKind::Ident(TokenIdentKind::Normal))?;
+        let Some(tok) = tokg.underlying() else {
             return Err(None);
         };
 

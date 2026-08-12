@@ -112,8 +112,8 @@ impl<'s> Parser<'s> {
 
     pub fn parse_item_with_accessibility(&mut self) -> ParseResult<Item> {
         let mut pub_kind = PubAccessibilityKind::All;
-        if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
-            let TokenGraph::Collection { data, .. } = tg else {
+        if let (true, Some(tokg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
+            let TokenGraph::Collection { data, .. } = tokg else {
                 unreachable!()
             };
 
@@ -182,9 +182,9 @@ impl<'s> Parser<'s> {
                 // TODO: *
 
                 // [
-                if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
+                if let (true, Some(tokg)) = self.expect_exact_nonlf(TokenKind::LeftBracket) {
                     // TODO: multi-target parsing
-                    let TokenGraph::Collection { data, .. } = tg else {
+                    let TokenGraph::Collection { data, .. } = tokg else {
                         unreachable!()
                     };
 
@@ -557,12 +557,12 @@ impl<'s> Parser<'s> {
     // { (FIELD (, FIELD)?)* }
     // { (IDENT : TY (, IDENT : TY)?)* }
     pub fn parse_struct_fields(&mut self) -> ParseResult<StructFieldList> {
-        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftBrace) else {
+        let Ok(tokg) = self.require_exact_nonlf(TokenKind::LeftBrace) else {
             return Err(None);
         };
 
-        let span = tg.span();
-        let TokenGraph::Collection { data, .. } = tg else {
+        let span = tokg.span();
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -682,12 +682,12 @@ impl<'s> Parser<'s> {
 
     // (PARAM (, PARAM)*)
     pub fn parse_fn_param_list(&mut self) -> ParseResult<FnParamList> {
-        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
+        let Ok(tokg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
             return Err(None);
         };
 
-        let span = tg.span();
-        let TokenGraph::Collection { data, .. } = tg else {
+        let span = tokg.span();
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 

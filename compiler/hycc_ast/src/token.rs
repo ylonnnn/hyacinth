@@ -98,9 +98,9 @@ impl TokenGraph {
             Self::Node(token) => write!(f, "{token}"),
             Self::Collection { data, .. } => {
                 write!(f, "[\n")?;
-                for tg in data {
+                for tokg in data {
                     write!(f, "{: <indent$}", "", indent = (indent + 1) * 4)?;
-                    tg.fmt_with_indent(f, indent + 1)?;
+                    tokg.fmt_with_indent(f, indent + 1)?;
                     writeln!(f)?;
                 }
 

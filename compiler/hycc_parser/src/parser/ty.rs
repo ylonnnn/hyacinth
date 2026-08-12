@@ -111,10 +111,10 @@ impl<'s> Parser<'s> {
     // Parenthesis-enclosed types
     // e.g. `()`, `(&i32, bool)`
     pub fn parse_paren_enclosed_ty(&mut self) -> ParseResult<TyKind> {
-        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
-        let span = tg.span();
+        let tokg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let span = tokg.span();
 
-        let TokenGraph::Collection { data, .. } = tg else {
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -193,12 +193,12 @@ impl<'s> Parser<'s> {
 
                 let expr = s.parse_expr(0);
                 if !s.eos() {
-                    let Some(tg) = s.peek_nonlf() else {
+                    let Some(tokg) = s.peek_nonlf() else {
                         unreachable!()
                     };
 
                     return Err(Some(ParserDiag::unexpected_token(
-                        tg.underlying().unwrap().clone(),
+                        tokg.underlying().unwrap().clone(),
                     )));
                 }
 
@@ -236,9 +236,9 @@ impl<'s> Parser<'s> {
             unreachable!()
         };
 
-        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
-        let params_span = tg.span();
-        let TokenGraph::Collection { data, .. } = tg else {
+        let tokg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+        let params_span = tokg.span();
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 

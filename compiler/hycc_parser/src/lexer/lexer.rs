@@ -364,12 +364,12 @@ impl<'s> Lexer<'s> {
         let mut eof = true;
         while let Some(c) = self.peek() {
             let end = condition(c);
-            if let Some(tg) = self.tokenize_graph() {
+            if let Some(tokg) = self.tokenize_graph() {
                 if end {
-                    collection.push(TokenGraph::Node(token!(TokenKind::Eos, tg.span())));
+                    collection.push(TokenGraph::Node(token!(TokenKind::Eos, tokg.span())));
                 }
 
-                collection.push(tg);
+                collection.push(tokg);
             }
 
             if end {
@@ -578,22 +578,22 @@ impl<'s> Lexer<'s> {
         let mut terminate = false;
 
         while !terminate {
-            let Some(tg) = self.tokenize_graph() else {
+            let Some(tokg) = self.tokenize_graph() else {
                 continue;
             };
 
             // If the EOF is reached, attempt to trim unnecesary line feeds
-            if let TokenGraph::Node(token) = &tg
+            if let TokenGraph::Node(token) = &tokg
                 && matches!(token.kind, TokenKind::Eof)
             {
                 terminate = true;
 
                 loop {
-                    let Some(tg) = collection.get(collection.len().saturating_sub(2)) else {
+                    let Some(tokg) = collection.get(collection.len().saturating_sub(2)) else {
                         break;
                     };
 
-                    let Some(tok) = tg.underlying() else {
+                    let Some(tok) = tokg.underlying() else {
                         break;
                     };
 
@@ -605,7 +605,7 @@ impl<'s> Lexer<'s> {
                 }
             }
 
-            collection.push(tg);
+            collection.push(tokg);
         }
 
         TokenStream::new(collection)

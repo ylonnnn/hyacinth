@@ -224,16 +224,14 @@ impl<'c, 'i, 'h> Resolver<'c, 'i, 'h> {
         let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
 
         self.enter_scope(scope_id, |s| {
-            let Some(generic_params) = &strct.generic_params else {
-                return;
-            };
-
-            for generic_param in &generic_params.list {
-                for proto_req in &generic_param.proto_reqs {
-                    if let Err(Some(diag)) =
-                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-                    {
-                        s.dctx.add(diag);
+            if let Some(generic_params) = &strct.generic_params {
+                for generic_param in &generic_params.list {
+                    for proto_req in &generic_param.proto_reqs {
+                        if let Err(Some(diag)) =
+                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                        {
+                            s.dctx.add(diag);
+                        }
                     }
                 }
             }

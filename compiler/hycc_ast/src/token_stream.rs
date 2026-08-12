@@ -189,8 +189,8 @@ impl TokenStream {
 
 impl Display for TokenStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for tg in &self.data {
-            writeln!(f, "{tg}")?;
+        for tokg in &self.data {
+            writeln!(f, "{tokg}")?;
         }
 
         Ok(())

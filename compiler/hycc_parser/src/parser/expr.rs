@@ -96,17 +96,8 @@ impl<'s> Parser<'s> {
             Err(_) => Err(None)?,
         };
 
-        let is_lf = self
-            .stream
-            .expect(
-                TokenKind::LnFeed,
-                TokenConsumptionKind::UponSuccess,
-                &[],
-                TokenMatchExpectation::Exact,
-            )
-            .0;
-
-        ternary!(is_lf, Ok(expr), Err(None))
+        self.require_terminator(ParserTerminatorKind::Both)
+            .and_then(|_| Ok(expr))
     }
 
     pub fn parse_expr_stmt(&mut self) -> ParseResult<Expr> {
@@ -232,6 +223,7 @@ impl<'s> Parser<'s> {
             return Err((left, None));
         };
 
+        let peek = self.stream.peek();
         match token.kind {
             TokenKind::Int { .. }
             | TokenKind::Float { .. }
@@ -314,9 +306,18 @@ impl<'s> Parser<'s> {
             | TokenKind::SlashEq
             | TokenKind::PercentEq => Ok(Expr::new(self.parse_assign(left)?)),
 
-            TokenKind::LeftParen => Ok(Expr::new(ExprKind::FnCall(Box::new(
-                self.parse_fn_call(left)?,
-            )))),
+            TokenKind::LeftParen => {
+                if peek.map_or(false, |tokg| {
+                    tokg.underlying()
+                        .map_or(false, |tok| tok.kind == TokenKind::LnFeed)
+                }) {
+                    return Err((left, None));
+                }
+
+                Ok(Expr::new(ExprKind::FnCall(Box::new(
+                    self.parse_fn_call(left)?,
+                ))))
+            }
 
             TokenKind::Dot => Ok(Expr::new(self.parse_field_access_or_method_call(left)?)),
 
@@ -371,10 +372,10 @@ impl<'s> Parser<'s> {
 
     pub fn parse_paren_enclosed_expr(&mut self) -> ParseResult<Expr> {
         self.use_ctx(ParserCtx::Normal, |s| {
-            let tg = s.require_abs_exact_nonlf(TokenKind::LeftParen)?;
-            let span = tg.span();
+            let tokg = s.require_abs_exact_nonlf(TokenKind::LeftParen)?;
+            let span = tokg.span();
 
-            let TokenGraph::Collection { data, .. } = tg else {
+            let TokenGraph::Collection { data, .. } = tokg else {
                 unreachable!()
             };
 
@@ -417,10 +418,15 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_fn_call_arguments(&mut self) -> ParseResult<CallArguments> {
-        let tg = self.require_abs_exact_nonlf(TokenKind::LeftParen)?;
-        let span = tg.span();
+        let tokg = self.require(
+            TokenKind::LeftParen,
+            TokenConsumptionKind::Absolute,
+            &[],
+            TokenMatchExpectation::Exact,
+        )?;
+        let span = tokg.span();
 
-        let TokenGraph::Collection { data, .. } = tg else {
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -477,12 +483,12 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_array_expr(&mut self) -> ParseResult<ArrayExpr> {
-        let Some(tg) = self.next_nonlf() else {
+        let Some(tokg) = self.next_nonlf() else {
             unreachable!()
         };
 
-        let span = tg.span();
-        let TokenGraph::Collection { data, .. } = tg else {
+        let span = tokg.span();
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -519,7 +525,7 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_if_expr(&mut self) -> ParseResult<IfExpr> {
-        let Some(tg) = self.next_nonlf_token() else {
+        let Some(tokg) = self.next_nonlf_token() else {
             unreachable!()
         };
 
@@ -549,7 +555,7 @@ impl<'s> Parser<'s> {
         };
 
         Ok(IfExpr {
-            span: tg.span.merge(
+            span: tokg.span.merge(
                 alternate
                     .as_ref()
                     .map(|alt| alt.span)
@@ -564,12 +570,12 @@ impl<'s> Parser<'s> {
     // PATH { (FIELD (, FIELD)?)* }
     // PATH { (IDENT : EXPR (, IDENT : EXPR)?)* }
     pub fn parse_struct_expr(&mut self, path: Path) -> ParseResult<StructExpr> {
-        let Some(tg) = self.next_nonlf() else {
+        let Some(tokg) = self.next_nonlf() else {
             unreachable!()
         };
 
-        let span = path.span.merge(tg.span());
-        let TokenGraph::Collection { data, .. } = tg else {
+        let span = path.span.merge(tokg.span());
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -657,12 +663,12 @@ impl<'s> Parser<'s> {
     }
 
     pub fn parse_anon_fn_param_list(&mut self) -> ParseResult<AnonFnParamList> {
-        let Ok(tg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
+        let Ok(tokg) = self.require_exact_nonlf(TokenKind::LeftParen) else {
             return Err(None);
         };
 
-        let span = tg.span();
-        let TokenGraph::Collection { data, .. } = tg else {
+        let span = tokg.span();
+        let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()
         };
 
@@ -729,10 +735,10 @@ impl<'s> Parser<'s> {
         self.adjust_to_nonlf();
 
         // Field access for tuples or any integer fields
-        if let (true, Some(tg)) = self.expect_similar_nonlf(TokenKind::Int { base: 64 }) {
+        if let (true, Some(tokg)) = self.expect_similar_nonlf(TokenKind::Int { base: 64 }) {
             return Ok(ExprKind::FieldAccess(Box::new(FieldAccess {
                 leading: Box::new(left),
-                field: tg.underlying().unwrap().clone(),
+                field: tokg.underlying().unwrap().clone(),
             })));
         }
 

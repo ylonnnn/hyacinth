@@ -169,11 +169,11 @@ impl<'s> Parser<'s> {
         exclude: &[TokenKind],
         expectation: TokenMatchExpectation,
     ) -> Result<TokenGraph, Option<ParserDiag>> {
-        let (matched, tg) = self.stream.expect(kind, consumption, exclude, expectation);
-        let Some(tg) = tg else { return Err(None) };
+        let (matched, tokg) = self.stream.expect(kind, consumption, exclude, expectation);
+        let Some(tokg) = tokg else { return Err(None) };
 
         if !matched {
-            match tg.underlying() {
+            match tokg.underlying() {
                 None => Err(None),
                 Some(tok) => Err(Some(ParserDiag::unexpected_token_expected_token(
                     tok.clone(),
@@ -181,7 +181,7 @@ impl<'s> Parser<'s> {
                 ))),
             }
         } else {
-            Ok(tg)
+            Ok(tokg)
         }
     }
 
@@ -253,17 +253,17 @@ impl<'s> Parser<'s> {
             ParserTerminatorKind::SemiColon => self.require_exact_nonlf(TokenKind::SemiColon),
 
             ParserTerminatorKind::Both => {
-                if let (true, Some(tg)) = self.stream.expect(
+                if let (true, Some(tokg)) = self.stream.expect(
                     TokenKind::LnFeed,
                     TokenConsumptionKind::UponSuccess,
                     &[],
                     TokenMatchExpectation::Exact,
                 ) {
-                    return Ok(tg);
+                    return Ok(tokg);
                 }
 
-                if let (true, Some(tg)) = self.expect_exact_nonlf(TokenKind::SemiColon) {
-                    return Ok(tg);
+                if let (true, Some(tokg)) = self.expect_exact_nonlf(TokenKind::SemiColon) {
+                    return Ok(tokg);
                 }
 
                 let Some(token) = self.peek_nonlf_token().cloned() else {

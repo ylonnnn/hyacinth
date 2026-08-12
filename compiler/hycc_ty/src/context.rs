@@ -474,6 +474,7 @@ impl TyCtx {
             | TyKind::String
             | TyKind::Unit
             | TyKind::Never => self.ty_def_map.get(&ty_id).cloned(),
+
             _ => None,
         }
     }

@@ -179,7 +179,9 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
             None => (self.tctx.make_inferred_ty(InferKind::Any), decl.span),
         };
 
-        self.tctx.attach_to_hir(var_decl.id, Ty::new(ty_id, span));
+        if self.definitions.get_def_id(var_decl.id).is_some() {
+            self.tctx.attach_to_hir(var_decl.id, Ty::new(ty_id, span));
+        }
 
         if let Some(expr) = decl.val {
             if let Err(Some(diag)) = self.resolve_expr(&expr) {

@@ -126,7 +126,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 Mutability::Mutable,
                 param.span,
             );
-            let param_def_id = self.definitions.get_def_id(param.id).unwrap();
+            let param_def_id = self.definitions.expect_def_id(param.id);
 
             self.ctx.define(param_def_id, MirDef::Local(local_id));
         }
@@ -150,49 +150,59 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
             return;
         };
 
-        let ty_id = self.tctx.expect_hir_ty_id(var_item.id);
-        let var_def_id = self.definitions.get_def_id(var_item.id).unwrap();
+        let var_def_id = self.definitions.get_def_id(var_item.id);
 
-        if let Some(body) = self.ctx.table.top_mut() {
-            let var_local_id = body.declare_local_var(ty_id, decl.mutability, decl.span);
-
-            self.ctx.define(var_def_id, MirDef::Local(var_local_id));
-            self.scope_ctx.top_mut().map(|top| top.store(var_local_id));
-
-            let operand = self.lower_expr(&expr);
-            let body = self.ctx.table.top_mut().unwrap();
-
-            body.insert_stmt(MirStatement::new(
-                MirStatementKind::StorageLive(var_local_id),
-                var_item.span,
-            ));
-
-            body.insert_stmt(MirStatement::new(
-                MirStatementKind::Assign(Box::new((
-                    Place::local(var_local_id),
-                    RValue::Use(operand),
-                ))),
-                var_item.span,
-            ));
-        } else {
-            let body_id = self.ctx.table.push_new();
-            let MirDef::Global(var_global_id) = self.ctx.expect_def(var_def_id) else {
-                unreachable!()
-            };
-
-            let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
+        if let Some(body_id) = self.ctx.table.top_id() {
             let operand = self.lower_expr(&expr);
 
-            self.ctx
-                .table
-                .get_mut(body_id)
-                .insert_stmt(MirStatement::new(
+            if let Some(var_def_id) = var_def_id {
+                let ty_id = self.tctx.expect_hir_ty_id(var_item.id);
+                let var_local_id = self.ctx.table.get_mut(body_id).declare_local_var(
+                    ty_id,
+                    decl.mutability,
+                    decl.span,
+                );
+
+                self.ctx.define(var_def_id, MirDef::Local(var_local_id));
+                self.scope_ctx.top_mut().map(|top| top.store(var_local_id));
+
+                let body = self.ctx.table.get_mut(body_id);
+
+                body.insert_stmt(MirStatement::new(
+                    MirStatementKind::StorageLive(var_local_id),
+                    var_item.span,
+                ));
+
+                body.insert_stmt(MirStatement::new(
                     MirStatementKind::Assign(Box::new((
-                        Place::global(var_global_id),
+                        Place::local(var_local_id),
                         RValue::Use(operand),
                     ))),
                     var_item.span,
                 ));
+            }
+        } else {
+            let body_id = self.ctx.table.push_new();
+            let saved_scope_ctx = std::mem::take(&mut self.scope_ctx);
+
+            let operand = self.lower_expr(&expr);
+
+            if let Some(var_def_id) = var_def_id {
+                let MirDef::Global(var_global_id) = self.ctx.expect_def(var_def_id) else {
+                    unreachable!()
+                };
+
+                self.ctx
+                    .table
+                    .get_mut(body_id)
+                    .insert_stmt(MirStatement::new(
+                        MirStatementKind::Assign(Box::new((
+                            Place::global(var_global_id),
+                            RValue::Use(operand),
+                        ))),
+                        var_item.span,
+                    ));
+            }
 
             self.scope_ctx = saved_scope_ctx;
             self.ctx
@@ -390,7 +400,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         // TODO: check ctx definitions
         match self
             .ctx
-            .expect_def(self.definitions.get_def_id(ident.id).unwrap())
+            .expect_def(self.definitions.expect_def_id(ident.id))
         {
             MirDef::Local(local_id) => Place::local(local_id),
             MirDef::Global(global_id) => Place::global(global_id),
@@ -637,7 +647,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
                 Mutability::Mutable,
                 param.span,
             );
-            let param_def_id = self.definitions.get_def_id(param.id).unwrap();
+            let param_def_id = self.definitions.expect_def_id(param.id);
 
             self.ctx.define(param_def_id, MirDef::Local(local_id));
         }

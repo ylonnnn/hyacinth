@@ -445,8 +445,9 @@ impl<'i> Collector<'i> {
             unreachable!()
         };
 
-        // var.mutability,
-        if self.definitions.get_def_id(var_item.id).is_none() {
+        if self.definitions.get_def_id(var_item.id).is_none()
+            && var.ident.ident != self.interner.intern("_")
+        {
             self.define(Definition::new(
                 var.ident.ident,
                 DefKind::Var(Box::new(VarDef::new(var_item.level, var.mutability))),

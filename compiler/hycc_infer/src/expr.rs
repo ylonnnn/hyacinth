@@ -381,14 +381,14 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         let mut rec_ty_id = initial_ty_id;
         let mut deref_rec_ty_id = self.tctx.deref(rec_ty_id);
-        let mut rec_g_args: Vec<GenericArg>;
+        let mut rec_g_args = None;
 
         let mut candidate = None;
         let mut access = AccessKind::Owned;
 
         // Find the candidate binding
-        let target = self.tctx.ext_target_kind_of(rec_ty_id);
         loop {
+            let target = self.tctx.ext_target_kind_of(rec_ty_id);
             let err = || {
                 Err(Some(InferDiag::error(
                     call.callee.span,
@@ -399,40 +399,42 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                 )))
             };
 
-            let Some((ext_id, assoc_item)) = self.tctx.ext_table.get_assoc_item(
-                target,
-                DefSpace::Value,
-                call.callee.ident.ident,
-            ) else {
-                return err();
+            if let Some((ext_id, assoc_item)) =
+                self.tctx
+                    .ext_table
+                    .get_assoc_item(target, DefSpace::Value, call.callee.ident.ident)
+            {
+                let ext = self.tctx.ext_table.get(ext_id);
+                let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
+
+                let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
+                    unreachable!()
+                };
+
+                let HirItemKind::Extend(extend) = &item.kind else {
+                    unreachable!()
+                };
+
+                let n = extend
+                    .generic_params
+                    .as_ref()
+                    .map_or(0, |generic_params| generic_params.list.len());
+
+                rec_g_args.replace(
+                    (0..n)
+                        .map(|_| GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any)))
+                        .collect::<Vec<_>>(),
+                );
+
+                let ext_target_ty_id = self
+                    .tctx
+                    .instantiate(ext_target_ty_id, &[rec_g_args.as_ref().unwrap()]);
+                if !self.compatible(ext_target_ty_id, rec_ty_id) {
+                    return err();
+                }
+
+                candidate.replace(assoc_item);
             };
-
-            let ext = self.tctx.ext_table.get(ext_id);
-            let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
-
-            let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
-                unreachable!()
-            };
-
-            let HirItemKind::Extend(extend) = &item.kind else {
-                unreachable!()
-            };
-
-            let n = extend
-                .generic_params
-                .as_ref()
-                .map_or(0, |generic_params| generic_params.list.len());
-
-            rec_g_args = (0..n)
-                .map(|_| GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any)))
-                .collect::<Vec<_>>();
-            let ext_target_ty_id = self.tctx.instantiate(ext_target_ty_id, &[&rec_g_args]);
-
-            if !self.compatible(ext_target_ty_id, rec_ty_id) {
-                return err();
-            }
-
-            candidate.replace(assoc_item);
 
             if rec_ty_id == deref_rec_ty_id {
                 break;
@@ -462,7 +464,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         self.definitions.define_id_hir(call.callee.id, def_id);
 
-        let mut arg_frames = [rec_g_args]
+        let mut arg_frames = [rec_g_args.unwrap()]
             .into_iter()
             .filter_map(|frame| ternary!(frame.is_empty(), None, Some(frame)))
             .collect::<Vec<_>>();

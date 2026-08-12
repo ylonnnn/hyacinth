@@ -86,10 +86,12 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
-        let def_id = self.definitions.expect_def_id(var_decl.id);
-
+        let default_ty_id = self
+            .tctx
+            .get_hir_ty_id(var_decl.id)
+            .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
         let ty = decl.ty.map_or_else(
-            || Ty::new(self.tctx.expect_hir_ty_id(var_decl.id), decl.span),
+            || Ty::new(default_ty_id, decl.span),
             |ty| self.tctx.expect_hir_ty(ty.id).clone(),
         );
 
@@ -99,8 +101,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             self.check(&ty, &Ty::new(expr_ty, expr.span))
                 .map(|diag| self.dctx.add(diag));
 
-            let def = self.definitions.get(def_id);
-            self.tctx.attach_to_hir(def.hir_id, ty);
+            if let Some(def) = self.definitions.get_def(var_decl.id) {
+                self.tctx.attach_to_hir(def.hir_id, ty);
+            }
         }
 
         Ok(())

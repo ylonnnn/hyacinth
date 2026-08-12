@@ -98,14 +98,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             }
         }
 
-        if self.dctx.error_occurred() {
-            return;
-        }
-
-        self.analyze_unresolved();
+        self.analyze_unresolved(self.dctx.error_occurred());
     }
 
-    fn analyze_unresolved(&mut self) {
+    fn analyze_unresolved(&mut self, emit_err: bool) {
         let mut tys = self
             .tctx
             .hir_tys()
@@ -146,7 +142,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     InferKind::Int => self.tctx.unify_ty(ty_id, default_int_ty_id),
                     InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
                     _ => {
-                        if checked.insert(*var_id) {
+                        if checked.insert(*var_id) && emit_err {
                             self.dctx.add(InferDiag::error(
                                 span,
                                 InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),

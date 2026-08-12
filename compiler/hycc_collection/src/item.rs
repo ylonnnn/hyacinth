@@ -211,12 +211,13 @@ impl<'i> Collector<'i> {
                 }
             }
 
+            // Define `Self`
             let self_sym = s.interner.intern("Self");
             s.define(Definition::new(
                 self_sym,
-                DefKind::Builtin(BuiltinKind::SelfTy(extend.target.id)),
+                DefKind::Builtin(BuiltinKind::SelfTy),
                 Some(s.petal_ctx.top_id()),
-                HirId::Invalid,
+                extend.target.id,
                 Span::default(),
                 DefAccessibility::Priv,
             ));

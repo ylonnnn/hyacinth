@@ -53,8 +53,8 @@ impl<'t, 'd, 's, 'h> TyResolver<'t, 'd, 's, 'h> {
         let def = self.definitions.get(def_id);
         let ty_id = match &def.kind {
             DefKind::Builtin(b_kind) => match &b_kind {
-                BuiltinKind::SelfTy(hir_id) => {
-                    let hir_id = *hir_id;
+                BuiltinKind::SelfTy => {
+                    let hir_id = def.hir_id;
                     if let Some(ty_id) = self.tctx.get_hir_ty_id(hir_id) {
                         ty_id
                     } else {

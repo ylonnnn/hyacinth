@@ -42,7 +42,7 @@ impl PetalCtx {
 
         self.add_petal(Petal::Child {
             def_id,
-            parent: self.top_id(),
+            parent: self.expect_top_id(),
         })
     }
 
@@ -75,30 +75,49 @@ impl PetalCtx {
         self.defs.insert(def_id, petal_id);
     }
 
-    pub fn get(&self, id: PetalId) -> &Petal {
-        &self.data[id.unwrap()]
+    pub fn get(&self, id: PetalId) -> Option<&Petal> {
+        self.data.get(id.unwrap())
     }
 
-    pub fn get_mut(&mut self, id: PetalId) -> &mut Petal {
-        &mut self.data[id.unwrap()]
+    pub fn get_mut(&mut self, id: PetalId) -> Option<&mut Petal> {
+        self.data.get_mut(id.unwrap())
     }
 
-    pub fn get_id_by_def(&self, def_id: DefId) -> Option<PetalId> {
+    pub fn expect(&self, id: PetalId) -> &Petal {
+        self.get(id)
+            .unwrap_or_else(|| panic!("expected a petal attached to {id:?}"))
+    }
+
+    pub fn expect_mut(&mut self, id: PetalId) -> &mut Petal {
+        self.get_mut(id)
+            .unwrap_or_else(|| panic!("expected a petal attached to {id:?}"))
+    }
+
+    pub fn get_def_petal_id(&self, def_id: DefId) -> Option<PetalId> {
         self.defs.get(&def_id).cloned()
     }
 
-    pub fn get_by_def(&self, def_id: DefId) -> &Petal {
-        match self.get_id_by_def(def_id) {
-            Some(petal_id) => self.get(petal_id),
-            _ => panic!("def id {def_id:?} does not have an attached petal"),
-        }
+    pub fn get_def_petal(&self, def_id: DefId) -> Option<&Petal> {
+        self.get_def_petal_id(def_id)
+            .and_then(|petal_id| self.get(petal_id))
     }
 
-    pub fn get_mut_by_def(&mut self, def_id: DefId) -> &Petal {
-        match self.get_id_by_def(def_id) {
-            Some(petal_id) => self.get_mut(petal_id),
-            _ => panic!("def id {def_id:?} does not have an attached petal"),
-        }
+    pub fn get_def_mut_petal(&mut self, def_id: DefId) -> Option<&mut Petal> {
+        self.get_def_petal_id(def_id)
+            .and_then(|petal_id| self.get_mut(petal_id))
+    }
+
+    pub fn expect_def_petal_id(&self, def_id: DefId) -> PetalId {
+        self.get_def_petal_id(def_id)
+            .unwrap_or_else(|| panic!("expected a petal attached to {def_id:?}"))
+    }
+
+    pub fn expect_def_petal(&self, def_id: DefId) -> &Petal {
+        self.expect(self.expect_def_petal_id(def_id))
+    }
+
+    pub fn expect_def_mut_petal(&mut self, def_id: DefId) -> &mut Petal {
+        self.expect_mut(self.expect_def_petal_id(def_id))
     }
 
     pub fn push(&mut self, id: PetalId) {
@@ -109,12 +128,29 @@ impl PetalCtx {
         self.stack.pop();
     }
 
-    pub fn top_id(&self) -> PetalId {
-        *self.stack.last().unwrap()
+    pub fn top_id(&self) -> Option<PetalId> {
+        self.stack.last().cloned()
     }
 
-    pub fn top(&self) -> &Petal {
-        &self.data[self.top_id().unwrap()]
+    pub fn top(&self) -> Option<&Petal> {
+        self.top_id().and_then(|id| self.get(id))
+    }
+
+    pub fn top_mut(&mut self) -> Option<&mut Petal> {
+        self.top_id().and_then(|id| self.get_mut(id))
+    }
+
+    pub fn expect_top_id(&self) -> PetalId {
+        self.top_id()
+            .unwrap_or_else(|| panic!("expected a petal at the top of the stack to exist"))
+    }
+
+    pub fn expect_top(&self) -> &Petal {
+        self.expect(self.expect_top_id())
+    }
+
+    pub fn expect_top_mut(&mut self) -> &mut Petal {
+        self.expect_mut(self.expect_top_id())
     }
 
     pub fn from_top_id(&self, offset: usize) -> Option<PetalId> {
@@ -135,7 +171,7 @@ impl PetalCtx {
 
     pub fn is_ancestor(&self, a: PetalId, b: PetalId) -> bool {
         let mut current = b;
-        while let Petal::Child { parent, .. } = self.get(current) {
+        while let Petal::Child { parent, .. } = self.expect(current) {
             if *parent == a {
                 return true;
             }
@@ -151,7 +187,7 @@ impl PetalCtx {
             return PetalRelationship::This;
         }
 
-        let (a_petal, b_petal) = (self.get(a), self.get(b));
+        let (a_petal, b_petal) = (self.expect(a), self.expect(b));
         match (a_petal, b_petal) {
             (Petal::Child { parent: a_par, .. }, _) if *a_par == b => PetalRelationship::Child,
             (_, Petal::Child { parent: b_par, .. }) if *b_par == a => PetalRelationship::Super,
@@ -173,7 +209,7 @@ impl PetalCtx {
             return true;
         };
 
-        let current = self.top_id();
+        let current = self.expect_top_id();
         let relationship = self.relationship(current, petal_id);
 
         use PetalRelationship::*;

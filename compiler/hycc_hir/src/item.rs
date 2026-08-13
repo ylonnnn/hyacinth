@@ -51,6 +51,83 @@ impl<'h> HirItem<'h> {
     pub fn is_top_level(&self) -> bool {
         self.level == HirItemLevel::Top
     }
+
+    pub fn get_refer(&self) -> Option<&HirRefer> {
+        match &self.kind {
+            HirItemKind::Refer(refer) => Some(&refer),
+            _ => None,
+        }
+    }
+
+    pub fn expect_refer(&self) -> &HirRefer {
+        self.get_refer().expect("expected to be Refer")
+    }
+
+    pub fn get_petal(&self) -> Option<&HirPetal> {
+        match &self.kind {
+            HirItemKind::Petal(petal) => Some(&petal),
+            _ => None,
+        }
+    }
+
+    pub fn expect_petal(&self) -> &HirPetal {
+        self.get_petal().expect("expected to be Petal")
+    }
+
+    pub fn get_proto(&self) -> Option<&HirProto> {
+        match &self.kind {
+            HirItemKind::Proto(proto) => Some(&proto),
+            _ => None,
+        }
+    }
+
+    pub fn expect_proto(&self) -> &HirProto {
+        self.get_proto().expect("expected to be Proto")
+    }
+
+    pub fn get_extend(&self) -> Option<&HirExtend> {
+        match &self.kind {
+            HirItemKind::Extend(extend) => Some(&extend),
+            _ => None,
+        }
+    }
+
+    pub fn expect_extend(&self) -> &HirExtend {
+        self.get_extend().expect("expected to be Extend")
+    }
+
+    pub fn get_struct(&self) -> Option<&HirStruct> {
+        match &self.kind {
+            HirItemKind::Struct(strct) => Some(&strct),
+            _ => None,
+        }
+    }
+
+    pub fn expect_struct(&self) -> &HirStruct {
+        self.get_struct().expect("expected to be Struct")
+    }
+
+    pub fn get_fn(&self) -> Option<&HirFn> {
+        match &self.kind {
+            HirItemKind::Fn(func) => Some(&func),
+            _ => None,
+        }
+    }
+
+    pub fn expect_fn(&self) -> &HirFn {
+        self.get_fn().expect("expected to be Fn")
+    }
+
+    pub fn get_var(&self) -> Option<&HirVarDecl> {
+        match &self.kind {
+            HirItemKind::VarDecl(decl) => Some(&decl),
+            _ => None,
+        }
+    }
+
+    pub fn expect_var(&self) -> &HirVarDecl {
+        self.get_var().expect("expected to be Var")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +166,13 @@ pub struct HirPetal<'h> {
 impl<'h> HirPetal<'h> {
     pub fn is_inline(&self) -> bool {
         matches!(self.kind, HirPetalKind::Inline(..))
+    }
+
+    pub fn path(&self) -> Option<&'h HirPath<'h>> {
+        match &self.kind {
+            HirPetalKind::File(path) | HirPetalKind::Inline(path) => Some(&path),
+            _ => None,
+        }
     }
 }
 

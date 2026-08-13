@@ -294,6 +294,11 @@ impl DefKind {
         self.get_fn().expect("expected definition kind to be an Fn")
     }
 
+    pub fn expect_mut_fn(&mut self) -> &mut FnDef {
+        self.get_mut_fn()
+            .expect("expected definition kind to be an Fn")
+    }
+
     pub fn get_var(&self) -> Option<&VarDef> {
         match &self {
             Self::Var(def) => Some(&def),

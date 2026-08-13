@@ -1,6 +1,6 @@
 use hycc_span::Span;
 
-use crate::Stmt;
+use crate::stmt::Stmt;
 
 #[derive(Debug, Clone)]
 pub struct Block {

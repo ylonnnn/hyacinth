@@ -14,7 +14,7 @@ use hycc_hir::{
     item::HirItemKind,
     path::HirIdentArgument,
 };
-use hycc_resolution::resolver_traits::{InstantiateIdent, ResolveIdentArgs};
+use hycc_resolve::resolver_traits::{InstantiateIdent, ResolveIdentArgs};
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,

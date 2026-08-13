@@ -23,18 +23,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hycc_collection"
-version = "0.1.0"
-dependencies = [
- "hycc_diagnostic",
- "hycc_hir",
- "hycc_span",
- "hycc_symbol",
- "hycc_ty",
- "hycc_util",
-]
-
-[[package]]
 name = "hycc_const"
 version = "0.1.0"
 dependencies = [
@@ -64,31 +52,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hycc_infer"
-version = "0.1.0"
-dependencies = [
- "hycc_const",
- "hycc_diagnostic",
- "hycc_hir",
- "hycc_resolution",
- "hycc_span",
- "hycc_symbol",
- "hycc_ty",
- "hycc_util",
-]
-
-[[package]]
-name = "hycc_mir"
-version = "0.1.0"
-dependencies = [
- "hycc_const",
- "hycc_hir",
- "hycc_span",
- "hycc_ty",
- "hycc_util",
-]
-
-[[package]]
 name = "hycc_parser"
 version = "0.1.0"
 dependencies = [
@@ -105,28 +68,25 @@ name = "hycc_pipeline"
 version = "0.1.0"
 dependencies = [
  "hycc_ast",
- "hycc_collection",
  "hycc_const",
  "hycc_diagnostic",
  "hycc_hir",
- "hycc_infer",
- "hycc_mir",
  "hycc_parser",
- "hycc_resolution",
+ "hycc_resolve",
  "hycc_session",
  "hycc_source",
  "hycc_symbol",
- "hycc_ty",
  "hycc_util",
 ]
 
 [[package]]
-name = "hycc_resolution"
+name = "hycc_resolve"
 version = "0.1.0"
 dependencies = [
- "hycc_collection",
  "hycc_diagnostic",
  "hycc_hir",
+ "hycc_session",
+ "hycc_source",
  "hycc_span",
  "hycc_symbol",
  "hycc_ty",

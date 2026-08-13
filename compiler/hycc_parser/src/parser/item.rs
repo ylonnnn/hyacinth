@@ -1,12 +1,15 @@
 use hycc_ast::{
-    Expr, Item, ItemKind, Mutability, Ty,
+    Mutability,
+    expr::Expr,
     item::{
         Extend, Fn, FnParam, FnParamList, FnSig, ItemAccessibility, ItemLevel, Petal, PetalKind,
         Proto, ProtoItem, ProtoItemAssocFnKind, PubAccessibilityKind, Refer, ReferTarget,
         ReferTargetKind, Struct, StructField, StructFieldAccessibility, StructFieldList, VarDecl,
     },
+    item::{Item, ItemKind},
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
+    ty::Ty,
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_session::config;

@@ -1,5 +1,5 @@
 use hycc_ast::{
-    Block,
+    block::Block,
     token::{TokenGraph, TokenKind},
     token_stream::TokenStream,
 };

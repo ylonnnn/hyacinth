@@ -1,6 +1,6 @@
 use hycc_span::Span;
 
-use crate::{Path, token::Token};
+use crate::{path::Path, token::Token};
 
 #[derive(Debug, Clone)]
 pub struct GenericParamList {

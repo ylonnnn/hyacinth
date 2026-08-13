@@ -1,4 +1,4 @@
-use crate::{Expr, Ty, token::Token};
+use crate::{expr::Expr, token::Token, ty::Ty};
 
 use hycc_span::Span;
 use hycc_util::ternary;

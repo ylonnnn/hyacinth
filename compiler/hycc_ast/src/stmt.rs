@@ -1,4 +1,4 @@
-use crate::{Block, Expr, Item, token::Token};
+use crate::{block::Block, expr::Expr, item::Item, token::Token};
 
 use hycc_span::Span;
 

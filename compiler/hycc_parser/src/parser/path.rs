@@ -1,5 +1,5 @@
 use hycc_ast::{
-    Identifier, Path,
+    path::{Identifier, Path},
     path::{IdentifierArgument, IdentifierArguments},
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},

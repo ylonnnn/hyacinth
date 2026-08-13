@@ -8,7 +8,7 @@ use hycc_hir::{
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
-use hycc_resolution::resolver_traits::{
+use hycc_resolve::resolver_traits::{
     InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy,
 };
 use hycc_span::Span;

@@ -1,4 +1,9 @@
-use crate::{Expr, Identifier, Mutability, Path, token::Token};
+use crate::{
+    Mutability,
+    expr::Expr,
+    path::{Identifier, Path},
+    token::Token,
+};
 
 use hycc_span::Span;
 
@@ -78,4 +83,3 @@ pub struct FnTy {
     pub ret_ty: Option<Ty>,
     pub span: Span,
 }
-

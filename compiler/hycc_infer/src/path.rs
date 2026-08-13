@@ -1,5 +1,5 @@
 use hycc_hir::path::HirPath;
-use hycc_resolution::resolver_traits::InstantiateIdent;
+use hycc_resolve::resolver_traits::InstantiateIdent;
 use hycc_ty::context::TyId;
 
 use crate::{

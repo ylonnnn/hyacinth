@@ -1,6 +1,6 @@
 use std::path::{self, PathBuf};
 
-use hycc_ast::{ItemKind, token::{Token, TokenKind}};
+use hycc_ast::{item::ItemKind, token::{Token, TokenKind}};
 use hycc_diagnostic::{
     Diagnostic, DiagnosticContext, DiagnosticCtx,
     diagnostic::{Diag, DiagnosticKind},

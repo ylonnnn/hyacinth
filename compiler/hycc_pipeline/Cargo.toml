@@ -5,16 +5,16 @@ edition = "2024"
 
 [dependencies]
 hycc_ast = { path = "../hycc_ast" }
-hycc_collection = { path = "../hycc_collection" }
+# hycc_collect = { path = "../hycc_collect" }
 hycc_const = { path = "../hycc_const" }
 hycc_diagnostic = { path = "../hycc_diagnostic" }
 hycc_hir = { path = "../hycc_hir" }
-hycc_infer = { path = "../hycc_infer" }
-hycc_mir = { path = "../hycc_mir" }
+# hycc_infer = { path = "../hycc_infer" }
+# hycc_mir = { path = "../hycc_mir" }
 hycc_parser = { path = "../hycc_parser" }
-hycc_resolution = { path = "../hycc_resolution" }
+hycc_resolve = { path = "../hycc_resolve" }
 hycc_session = { path = "../hycc_session" }
 hycc_source = { path = "../hycc_source" }
 hycc_symbol = { path = "../hycc_symbol" }
-hycc_ty = { path = "../hycc_ty" }
+# hycc_ty = { path = "../hycc_ty" }
 hycc_util = { path = "../hycc_util" }

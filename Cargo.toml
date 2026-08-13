@@ -2,4 +2,4 @@
 resolver = "3"
 members = [
     "compiler/hycc"
-]
+, "compiler/hycc_resolve"]

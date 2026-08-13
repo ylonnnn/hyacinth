@@ -12,3 +12,4 @@
 - [x] separate extension look-up based on whether the target is nominal (consists of their own definitions/is defined), or structural (a basic layer for efficiency which does not have a constant time look-up) which simply compares the structure of the target type
 - [ ] implement some sort of collision-check for separate extensions
 - [ ] clean-up `hycc_diagnostic` implementation
+- [ ] remodel the phases to improve experience and be more intuitive

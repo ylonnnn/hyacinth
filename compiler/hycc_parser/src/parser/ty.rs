@@ -1,8 +1,9 @@
 use hycc_ast::{
-    Mutability, Ty, TyKind,
+    Mutability,
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
     ty::{Array, FnTy, Ref, Slice, Tuple},
+    ty::{Ty, TyKind},
 };
 use hycc_diagnostic::DiagnosticContext;
 use hycc_util::ternary;

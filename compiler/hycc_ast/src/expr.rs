@@ -1,4 +1,10 @@
-use crate::{Block, Identifier, Mutability, Path, Ty, token::Token};
+use crate::{
+    Mutability,
+    block::Block,
+    path::{Identifier, Path},
+    token::Token,
+    ty::Ty,
+};
 
 use hycc_span::Span;
 

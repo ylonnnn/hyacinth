@@ -1,20 +1,25 @@
 use std::rc::Rc;
 
 use hycc_ast::{
-    Block, Expr, ExprKind, Identifier, Item, ItemKind, Path, Stmt, StmtKind, Ty, TyKind,
+    block::Block,
     expr::{
         AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, IfExpr, MethodCall,
         RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
+    expr::{Expr, ExprKind},
     generic::{GenericParam, GenericParamList},
     item::{
         Extend, Fn, FnParamList, FnSig, Petal, PetalKind, Proto, ProtoItem, ProtoItemAssocFnKind,
         Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
     },
+    item::{Item, ItemKind},
+    path::{Identifier, Path},
     path::{IdentifierArgument, IdentifierArguments},
     stmt::{PassStmt, RetStmt},
+    stmt::{Stmt, StmtKind},
     token::{Token, TokenKind},
     ty::{Array, FnTy, Ref, Slice, Tuple},
+    ty::{Ty, TyKind},
 };
 use hycc_const::{constant::ConstKind, table::ConstTable};
 use hycc_source::SourceRegistry;

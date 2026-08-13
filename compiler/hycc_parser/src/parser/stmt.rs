@@ -1,6 +1,6 @@
 use hycc_ast::{
-    Stmt, StmtKind,
     stmt::{PassStmt, RetStmt},
+    stmt::{Stmt, StmtKind},
     token::{TokenIdentKind, TokenKind},
 };
 

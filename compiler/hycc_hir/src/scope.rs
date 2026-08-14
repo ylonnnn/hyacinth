@@ -225,22 +225,18 @@ impl ScopeCtx {
 
     pub fn push(&mut self, scope: Scope) -> ScopeId {
         let id = self.table.insert(scope);
-        self.stack.push(id);
+        self.push_id(id);
 
         id
     }
 
-    pub fn push_id(&mut self, scope_id: ScopeId) {
-        self.stack.push(scope_id)
-    }
+    pub fn push_id(&mut self, scope_id: ScopeId) -> bool {
+        let push = scope_id != self.top_id();
+        if push {
+            self.stack.push(scope_id)
+        }
 
-    pub fn generic_push(&mut self, scope: Scope) -> ScopeId {
-        self.generic_depth += 1;
-        self.push(scope)
-    }
-
-    pub fn generic_push_id(&mut self, scope_id: ScopeId) {
-        self.stack.push(scope_id)
+        push
     }
 
     pub fn pop(&mut self) -> bool {
@@ -248,15 +244,6 @@ impl ScopeCtx {
             self.stack.pop();
             true
         })
-    }
-
-    pub fn generic_pop(&mut self) -> bool {
-        let popped = self.pop();
-        if popped {
-            self.generic_depth -= 1;
-        }
-
-        popped
     }
 
     pub fn top_id(&self) -> ScopeId {

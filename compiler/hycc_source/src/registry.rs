@@ -8,14 +8,20 @@ pub struct SourceRegistry {
 impl SourceRegistry {
     const CAPACITY: usize = u16::MAX as usize;
 
-    pub fn new() -> Self {
+    pub fn new(mut source: Source) -> Self {
+        source.identifier.0 = SourceId(0);
         Self {
-            sources: Vec::new(),
+            sources: vec![source],
         }
     }
 
-    pub fn root(&self) -> &Source {
-        &self.sources[0]
+    pub fn sources(&self) -> Vec<SourceId> {
+        self.sources.iter().map(|src| src.identifier.0).collect()
+    }
+
+    pub fn root(&self) -> (SourceId, &Source) {
+        let id = SourceId(0);
+        (id, &self.sources[id.unwrap() as usize])
     }
 
     pub fn register(&mut self, mut source: Source) -> SourceId {

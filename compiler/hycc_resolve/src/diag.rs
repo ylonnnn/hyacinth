@@ -18,17 +18,17 @@ use hycc_util::ternary;
 pub type ResolveResult<T = (), E = ResolverDiag> = Result<T, E>;
 
 #[derive(Debug, Clone)]
-pub struct ResolverDiagDataCtx<'i, 'h, 'd, 's> {
+pub struct ResolverDiagDataCtx<'i, 't, 'h, 'd, 's> {
     pub interner: &'i SymbolInterner,
-    pub hir_table: &'h HirTable<'h>,
+    pub hir_table: &'t HirTable<'h>,
     pub definitions: &'d DefinitionTable,
     pub scope_ctx: &'s ScopeCtx,
 }
 
-impl<'i, 'h, 'd, 's> ResolverDiagDataCtx<'i, 'h, 'd, 's> {
+impl<'i, 't, 'h, 'd, 's> ResolverDiagDataCtx<'i, 't, 'h, 'd, 's> {
     pub fn new(
         interner: &'i SymbolInterner,
-        hir_table: &'h HirTable<'h>,
+        hir_table: &'t HirTable<'h>,
         definitions: &'d DefinitionTable,
         scope_ctx: &'s ScopeCtx,
     ) -> Self {
@@ -77,7 +77,7 @@ impl ResolverDiagCtx {
     }
 }
 
-impl<'i, 'h, 'd, 's> DiagnosticContext<ResolverDiagDataCtx<'i, 'h, 'd, 's>, ResolverDiag>
+impl<'i, 't, 'h, 'd, 's> DiagnosticContext<ResolverDiagDataCtx<'i, 't, 'h, 'd, 's>, ResolverDiag>
     for ResolverDiagCtx
 {
     fn data(&self) -> &Vec<ResolverDiag> {
@@ -100,7 +100,7 @@ impl<'i, 'h, 'd, 's> DiagnosticContext<ResolverDiagDataCtx<'i, 'h, 'd, 's>, Reso
         data.last_mut()
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: ResolverDiagDataCtx<'i, 'h, 'd, 's>) {
+    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: ResolverDiagDataCtx<'i, 't, 'h, 'd, 's>) {
         for diag in self.data() {
             target.add(diag.emit(&mut ctx));
         }
@@ -160,12 +160,12 @@ impl<'i, 'h, 'd, 's> ResolverDiag {
     }
 }
 
-impl<'i, 'h, 'd, 's> Diag<ResolverDiagDataCtx<'i, 'h, 'd, 's>> for ResolverDiag {
-    fn emit(&self, ctx: &mut ResolverDiagDataCtx<'i, 'h, 'd, 's>) -> Diagnostic {
+impl<'i, 't, 'h, 'd, 's> Diag<ResolverDiagDataCtx<'i, 't, 'h, 'd, 's>> for ResolverDiag {
+    fn emit(&self, ctx: &mut ResolverDiagDataCtx<'i, 't, 'h, 'd, 's>) -> Diagnostic {
         use ResolverDiagErrorKind as Err;
         use ResolverDiagKind::*;
 
-        let ResolverDiagDataCtx::<'i, 'h, 'd, 's> {
+        let ResolverDiagDataCtx {
             interner,
             definitions,
             ..

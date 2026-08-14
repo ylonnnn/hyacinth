@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 hycc_ast = { path = "../hycc_ast" }
+hycc_const = { path = "../hycc_const" }
 hycc_diagnostic = { path = "../hycc_diagnostic" }
 hycc_hir = { path = "../hycc_hir" }
 hycc_source = { path = "../hycc_source" }

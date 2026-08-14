@@ -1,5 +1,3 @@
-use hycc_pipeline::pipeline;
-
 fn main() {
-    pipeline::invoke("tests/remodel/src/main.hyc");
+    hycc_pipeline::Driver::invoke("tests/remodel/src/main.hyc");
 }

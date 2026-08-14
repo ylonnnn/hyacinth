@@ -98,6 +98,7 @@ name = "hycc_session"
 version = "0.1.0"
 dependencies = [
  "hycc_ast",
+ "hycc_const",
  "hycc_diagnostic",
  "hycc_hir",
  "hycc_source",

@@ -1,35 +1,26 @@
+use hycc_const::table::ConstTable;
 use hycc_diagnostic::DiagnosticCtx;
-use hycc_source::{Source, SourceRegistry};
+use hycc_hir::HirTable;
+use hycc_source::{Source, SourceRegistry, source::SourceId};
 use hycc_symbol::SymbolInterner;
-
-use crate::unit::{CompilationUnit, CompilationUnitId};
 
 #[derive(Debug)]
 pub struct Session<'h> {
     pub interner: SymbolInterner,
+    pub const_table: ConstTable,
     pub dctx: DiagnosticCtx,
-    pub registry: SourceRegistry,
-    pub units: Vec<CompilationUnit<'h>>,
+    pub hir_table: HirTable<'h>,
+    pub root: SourceId,
 }
 
 impl<'h> Session<'h> {
-    pub fn new() -> Self {
+    pub fn new(root: SourceId) -> Self {
         Self {
             dctx: DiagnosticCtx::default(),
             interner: SymbolInterner::new(),
-            registry: SourceRegistry::new(),
-            units: Vec::new(),
+            hir_table: HirTable::new(),
+            const_table: ConstTable::new(),
+            root,
         }
-    }
-
-    pub fn create_unit(&mut self, root: Source) -> CompilationUnitId {
-        let root_id = self.registry.register(root);
-
-        self.units.push(CompilationUnit::new(root_id));
-        CompilationUnitId(self.units.len() - 1)
-    }
-
-    pub fn get_unit(&self, id: CompilationUnitId) -> &CompilationUnit<'h> {
-        &self.units[id.unwrap()]
     }
 }

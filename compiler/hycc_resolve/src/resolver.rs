@@ -23,6 +23,7 @@ use crate::{
     diag::{ResolveResult, ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind},
 };
 
+#[derive(Debug)]
 pub struct Resolver<'i> {
     pub dctx: ResolverDiagCtx,
     pub collector: Collector<'i>,
@@ -67,9 +68,9 @@ impl<'i> Resolver<'i> {
         Some(self.collector.definitions.get(def_id))
     }
 
-    pub fn expect_space<F, R>(&mut self, space: DefSpace, mut handler: F) -> R
+    pub fn expect_space<F, U>(&mut self, space: DefSpace, mut handler: F) -> U
     where
-        F: FnMut(&mut Self) -> R,
+        F: FnMut(&mut Self) -> U,
     {
         let prev_space = self.expected_space;
         self.expected_space = Some(space);
@@ -84,10 +85,12 @@ impl<'i> Resolver<'i> {
     where
         F: FnMut(&mut Self) -> U,
     {
-        self.collector.scope_ctx.push_id(scope_id);
+        let pushed = self.collector.scope_ctx.push_id(scope_id);
 
         let data = handler(self);
-        self.collector.scope_ctx.pop();
+        if pushed {
+            self.collector.scope_ctx.pop();
+        }
 
         data
     }
@@ -104,7 +107,7 @@ impl<'i> Resolver<'i> {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
-            HirItemKind::Proto(_) => todo!("(ident) resolve proto"),
+            HirItemKind::Proto(_) => todo!("resolve proto"),
             HirItemKind::Extend(_) => self.resolve_extend(&item),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
@@ -213,39 +216,32 @@ impl<'i> Resolver<'i> {
     pub(crate) fn resolve_extend(&mut self, item: &HirItem) -> ResolveResult {
         let extend = item.expect_extend();
 
-        // if !item.is_top_level() {
-        //     if let Err(diag) = self.collector.collect_extend(&item) {
-        //         self.collector.dctx.add(diag);
-        //     }
-        // }
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
+        self.enter_scope(scope_id, |s| {
+            if let Some(generic_params) = &extend.generic_params {
+                for generic_param in &generic_params.list {
+                    for proto_req in &generic_param.proto_reqs {
+                        if let Err(diag) =
+                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                        {
+                            s.dctx.add(diag);
+                        }
+                    }
+                }
+            }
 
-        // let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
+            // Resolve extension target
+            if let Err(diag) = s.resolve_ty(&extend.target) {
+                s.dctx.add(diag);
+            }
 
-        // self.enter_scope(scope_id, |s| {
-        //     if let Some(generic_params) = &extend.generic_params {
-        //         for generic_param in &generic_params.list {
-        //             for proto_req in &generic_param.proto_reqs {
-        //                 if let Err(diag) =
-        //                     s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-        //                 {
-        //                     s.dctx.add(diag);
-        //                 }
-        //             }
-        //         }
-        //     }
-
-        //     // Resolve extension target
-        //     if let Err(diag) = s.resolve_ty(&extend.target) {
-        //         s.dctx.add(diag);
-        //     }
-
-        //     // Resolve extension items
-        //     for item in &extend.items {
-        //         if let Err(diag) = s.resolve_item(&item) {
-        //             s.dctx.add(diag);
-        //         }
-        //     }
-        // });
+            // Resolve extension items
+            for item in &extend.items {
+                if let Err(diag) = s.resolve_item(&item) {
+                    s.dctx.add(diag);
+                }
+            }
+        });
 
         // if let HirTyKind::Path(path) = &extend.target.kind {
         //     let def_id = self.collector.definitions.expect_def_id(path.id);
@@ -257,26 +253,26 @@ impl<'i> Resolver<'i> {
         //         ExtNominalTargetKind::Def(def_id)
         //     ));
 
-        //     let ext_id = self.collector.tctx.ext_table.attach(
-        //         target,
-        //         Extension::new(
-        //             item.id,
-        //             None,
-        //             std::mem::take(
-        //                 self.collector
-        //                     .scope_ctx
-        //                     .expect_hir_mut_scope(extend.target.id),
-        //             )
-        //             .all()
-        //             .into_iter()
-        //             .map(|(key, binding)| {
-        //                 let item_def = self.collector.definitions.get_mut(binding.def_id);
-        //                 item_def.petal = def_petal;
-        //                 (key, binding)
-        //             })
-        //             .collect::<HashMap<_, _>>(),
-        //         ),
-        //     );
+        //     // let ext_id = self.collector.tctx.ext_table.attach(
+        //     //     target,
+        //     //     Extension::new(
+        //     //         item.id,
+        //     //         None,
+        //     //         std::mem::take(
+        //     //             self.collector
+        //     //                 .scope_ctx
+        //     //                 .expect_hir_mut_scope(extend.target.id),
+        //     //         )
+        //     //         .all()
+        //     //         .into_iter()
+        //     //         .map(|(key, binding)| {
+        //     //             let item_def = self.collector.definitions.get_mut(binding.def_id);
+        //     //             item_def.petal = def_petal;
+        //     //             (key, binding)
+        //     //         })
+        //     //         .collect::<HashMap<_, _>>(),
+        //     //     ),
+        //     // );
 
         //     self.collector
         //         .tctx
@@ -289,38 +285,28 @@ impl<'i> Resolver<'i> {
 
     pub(crate) fn resolve_struct(&mut self, item: &HirItem) -> ResolveResult {
         let strct = item.expect_struct();
-        let HirItemKind::Struct(strct) = &item.kind else {
-            unreachable!()
-        };
+        let def_id = self.collector.definitions.expect_def_id(item.id);
+        let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
 
-        // if !item.is_top_level() {
-        //     if let Err(diag) = self.collector.collect_struct(&item) {
-        //         self.collector.dctx.add(diag);
-        //     }
-        // }
+        self.enter_scope(scope_id, |s| {
+            if let Some(generic_params) = &strct.generic_params {
+                for generic_param in &generic_params.list {
+                    for proto_req in &generic_param.proto_reqs {
+                        if let Err(diag) =
+                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                        {
+                            s.dctx.add(diag);
+                        }
+                    }
+                }
+            }
 
-        // let def_id = self.collector.definitions.expect_def_id(item.id);
-        // let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
-
-        // self.enter_scope(scope_id, |s| {
-        //     if let Some(generic_params) = &strct.generic_params {
-        //         for generic_param in &generic_params.list {
-        //             for proto_req in &generic_param.proto_reqs {
-        //                 if let Err(diag) =
-        //                     s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-        //                 {
-        //                     s.dctx.add(diag);
-        //                 }
-        //             }
-        //         }
-        //     }
-
-        //     for field in &strct.fields.list {
-        //         if let Err(diag) = s.resolve_ty(&field.ty) {
-        //             s.dctx.add(diag);
-        //         }
-        //     }
-        // });
+            for field in &strct.fields.list {
+                if let Err(diag) = s.resolve_ty(&field.ty) {
+                    s.dctx.add(diag);
+                }
+            }
+        });
 
         Ok(())
     }
@@ -328,14 +314,6 @@ impl<'i> Resolver<'i> {
     pub(crate) fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
         let func = item.expect_fn();
 
-        // if !item.is_top_level() {
-        //     if let Err(diag) = self.collector.collect_fn(&item) {
-        //         self.collector.dctx.add(diag);
-        //     }
-        // }
-
-        // // TODO: TEMP:
-        // let def_id = self.collector.definitions.get_def_id(fn_item.id).unwrap();
         let def_id = self.collector.definitions.expect_def_id(item.id);
         let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
 
@@ -678,38 +656,26 @@ impl<'i> Resolver<'i> {
             unreachable!()
         };
 
-        let scope_id = self.collector.scope_ctx.attach(anfn_expr.id, Scope::new());
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(anfn_expr.id);
+        self.enter_scope(scope_id, |s| {
+            for param in &anfn.params.list {
+                let Some(p_ty) = param.ty else {
+                    continue;
+                };
 
-        // self.enter_scope(scope_id, |s| {
-        //     for param in &anfn.params.list {
-        //         if let Err(diag) = s.collector.define(Definition::new(
-        //             param.ident.ident,
-        //             DefKind::FnParam,
-        //             s.collector.petal_ctx.top_id(),
-        //             param.id,
-        //             param.span,
-        //             DefAccessibility::Priv,
-        //         )) {
-        //             s.dctx.add(diag);
-        //         }
+                if let Err(diag) = s.resolve_ty(&p_ty) {
+                    s.dctx.add(diag);
+                }
+            }
 
-        //         let Some(p_ty) = param.ty else {
-        //             continue;
-        //         };
+            if let Some(ret_ty) = &anfn.ret_ty {
+                if let Err(diag) = s.resolve_ty(&ret_ty) {
+                    s.dctx.add(diag);
+                }
+            }
 
-        //         if let Err(diag) = s.resolve_ty(&p_ty) {
-        //             s.dctx.add(diag);
-        //         }
-        //     }
-
-        //     if let Some(ret_ty) = &anfn.ret_ty {
-        //         if let Err(diag) = s.resolve_ty(&ret_ty) {
-        //             s.dctx.add(diag);
-        //         }
-        //     }
-
-        //     s.resolve_block(&anfn.body)
-        // })
+            s.resolve_block(&anfn.body)
+        });
 
         Ok(())
     }

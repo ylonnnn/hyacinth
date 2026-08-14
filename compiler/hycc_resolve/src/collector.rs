@@ -34,6 +34,7 @@ pub enum CollectorLevel {
     Local,
 }
 
+#[derive(Debug)]
 pub struct Collector<'i> {
     pub tctx: TyCtx,
     pub scope_ctx: ScopeCtx,
@@ -278,12 +279,14 @@ impl<'i> Collector<'i> {
         F: FnMut(&mut Self) -> U,
     {
         let prev_level = (self.level, self.level = level).0;
-        self.scope_ctx.push_id(scope_id);
+        let pushed = self.scope_ctx.push_id(scope_id);
 
         let data = handler(self);
 
-        self.scope_ctx.pop();
         self.level = prev_level;
+        if pushed {
+            self.scope_ctx.pop();
+        }
 
         data
     }
@@ -311,12 +314,13 @@ impl<'i> Collector<'i> {
             HirItemKind::Extend(_) => self.collect_extend(&item, dctx),
             HirItemKind::Struct(_) => self.collect_struct(&item, dctx),
             HirItemKind::Fn(_) => self.collect_fn(&item, dctx),
-            HirItemKind::VarDecl(_) => ternary!(
+            HirItemKind::VarDecl(decl) => ternary!(
                 self.level == CollectorLevel::Top,
                 self.collect_var(&item, dctx),
-                Ok(())
+                decl.val
+                    .as_ref()
+                    .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx))
             ),
-            _ => todo!(),
         }
     }
 
@@ -465,6 +469,53 @@ impl<'i> Collector<'i> {
         Ok(())
     }
 
+    // pub fn collect_proto(&mut self, proto_item: &HirItem) -> CollectResult {
+    //     if self.definitions.get_def_id(proto_item.id).is_some() {
+    //         return Ok(());
+    //     }
+
+    //     let HirItemKind::Proto(proto) = &proto_item.kind else {
+    //         unreachable!()
+    //     };
+
+    //     let def_id = self
+    //         .define(Definition::new(
+    //             proto.ident.ident,
+    //             DefKind::Proto,
+    //             Some(self.petal_ctx.top_id()),
+    //             proto_item.id,
+    //             proto_item.span,
+    //             proto_item.accessibility,
+    //         ))?
+    //         .def_id;
+
+    //     let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+    //     self.scope_ctx.push_id(scope_id);
+
+    //     for item in &proto.items {
+    //         if let Err(Some(diag)) = self.collect_proto_item(&item) {
+    //             self.dctx.add(diag);
+    //         }
+    //     }
+
+    //     self.scope_ctx.pop();
+    //     Ok(())
+    // }
+
+    // fn collect_proto_item(&mut self, item: &HirProtoItem) -> CollectResult {
+    //     match &item {
+    //         HirProtoItem::AssocConst(decl) => self.collect_var(&decl),
+
+    //         HirProtoItem::AssocFn(kind) => match &kind {
+    //             HirProtoItemAssocFnKind::Sig(sig) => todo!(),
+    //             HirProtoItemAssocFnKind::Impl(func) => self.collect_fn(&func),
+    //         },
+
+    //         #[allow(unreachable_patterns)]
+    //         _ => todo!("collect proto item"),
+    //     }
+    // }
+
     pub(crate) fn collect_struct(
         &mut self,
         item: &HirItem,
@@ -586,8 +637,8 @@ impl<'i> Collector<'i> {
             .map(|binding| binding.def_id)?;
 
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-        self.enter_scope(scope_id, CollectorLevel::Top, |s| {
-            // Define function type parameters
+        self.enter_scope(scope_id, CollectorLevel::Local, |s| {
+            // Define function generic parameters
             if let Some(generic_params) = &func.sig.generic_params {
                 s.scope_ctx.generic_depth += 1;
 
@@ -668,13 +719,9 @@ impl<'i> Collector<'i> {
         item: &HirItem,
         dctx: &mut ResolverDiagCtx,
     ) -> ResolveResult {
-        let HirItemKind::VarDecl(var) = &item.kind else {
-            unreachable!()
-        };
+        let var = item.expect_var();
 
-        if self.definitions.get_def_id(item.id).is_none()
-            && var.ident.ident != self.interner.intern("_")
-        {
+        if var.ident.ident != self.interner.intern("_") {
             self.define(Definition::new(
                 var.ident.ident,
                 DefKind::Var(Box::new(VarDef::new(item.level, var.mutability))),
@@ -715,8 +762,14 @@ impl<'i> Collector<'i> {
         dctx: &mut ResolverDiagCtx,
     ) -> ResolveResult {
         match &stmt.kind {
-            HirStmtKind::Ret(ret) => todo!("ret stmt"),
-            HirStmtKind::Pass(pass) => todo!("pass stmt"),
+            HirStmtKind::Ret(ret) => ret
+                .value
+                .as_ref()
+                .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx)),
+            HirStmtKind::Pass(pass) => pass
+                .value
+                .as_ref()
+                .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx)),
 
             HirStmtKind::Expr(expr) => self.collect_expr(&expr, dctx),
             HirStmtKind::Item(item) => self.collect_item(&item, dctx),
@@ -783,8 +836,28 @@ impl<'i> Collector<'i> {
             }
 
             HirExprKind::AnonFn(anfn) => {
-                // TODO: collect params
-                self.collect_block(&anfn.body, dctx)
+                let scope_id = self.scope_ctx.attach(expr.id, Scope::new());
+                self.enter_scope(scope_id, CollectorLevel::Local, |s| {
+                    for param in &anfn.params.list {
+                        if let Err(diag) = s.define(Definition::new(
+                            param.ident.ident,
+                            DefKind::FnParam,
+                            s.petal_ctx.top_id(),
+                            param.id,
+                            param.span,
+                            DefAccessibility::Priv,
+                        )) {
+                            dctx.add(diag);
+                        }
+
+                        let Some(p_ty) = param.ty else {
+                            continue;
+                        };
+                    }
+
+                    s.scope_ctx.attach_id(anfn.body.id, scope_id);
+                    s.collect_block(&anfn.body, dctx)
+                })
             }
 
             HirExprKind::FnCall(call) => {

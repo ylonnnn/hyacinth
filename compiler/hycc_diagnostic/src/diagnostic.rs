@@ -121,6 +121,10 @@ pub trait DiagEmitter<Ctx> {
     fn emit(&self, ctx: &mut Ctx) -> Diag;
 }
 
+pub trait FromResultEmitter<DCtx: Diagnostics<Ctx, T>, Ctx, T: DiagLike + DiagEmitter<Ctx>> {
+    fn emit(self, dctx: &mut DCtx);
+}
+
 #[derive(Debug, Default)]
 pub struct DiagCtx(Vec<Diag>, bool);
 

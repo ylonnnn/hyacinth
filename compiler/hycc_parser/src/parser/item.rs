@@ -18,8 +18,8 @@ use std::path::{self, PathBuf};
 
 use crate::parser::{
     Parser,
-    diag::{ParserDiag, ParserDiagErrorKind},
-    parser::{ParseResult, ParserTerminatorKind},
+    diag::{ParseResult, ParserDiag, ParserDiagErrorKind},
+    parser::ParserTerminatorKind,
     path::PathKind,
 };
 

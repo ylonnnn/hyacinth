@@ -28,8 +28,6 @@ pub struct Parser<'p> {
     pub(super) ctx: ParserCtx,
 }
 
-pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
-
 #[derive(Debug, Clone, Copy)]
 pub enum ParserTerminatorKind {
     LnFeed,

@@ -5,7 +5,7 @@ use hycc_ast::{
 };
 use hycc_diagnostic::diagnostic::Diagnostics;
 
-use crate::parser::{Parser, parser::ParseResult};
+use crate::parser::{Parser, diag::ParseResult};
 
 impl<'s> Parser<'s> {
     pub fn parse_block(&mut self) -> ParseResult<Block> {

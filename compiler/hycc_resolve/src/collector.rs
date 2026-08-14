@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use hycc_diagnostic::diagnostic::Diagnostics;
+use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{
     HirId,
     block::HirBlock,
@@ -294,9 +294,7 @@ impl<'i> Collector<'i> {
     pub fn collect(&mut self, tree: &HirItem, dctx: &mut ResolverDiagCtx) {
         let petal = tree.expect_petal();
 
-        if let Err(diag) = self.collect_petal(&tree, dctx) {
-            dctx.add(diag);
-        }
+        self.collect_petal(&tree, dctx).emit(dctx);
     }
 
     pub(crate) fn collect_item(
@@ -384,9 +382,7 @@ impl<'i> Collector<'i> {
             let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
             s.enter_scope(scope_id, CollectorLevel::Top, |s| {
                 for item in &extend.items {
-                    if let Err(diag) = s.collect_item(&item, dctx) {
-                        dctx.add(diag);
-                    }
+                    s.collect_item(&item, dctx).emit(dctx);
                 }
             });
 
@@ -456,9 +452,7 @@ impl<'i> Collector<'i> {
         self.init_builtin(dctx);
 
         for item in &petal.items {
-            if let Err(diag) = self.collect_item(&item, dctx) {
-                dctx.add(diag);
-            }
+            self.collect_item(&item, dctx).emit(dctx);
         }
 
         for _ in 0..petals.len() {
@@ -493,8 +487,6 @@ impl<'i> Collector<'i> {
     //     self.scope_ctx.push_id(scope_id);
 
     //     for item in &proto.items {
-    //         if let Err(Some(diag)) = self.collect_proto_item(&item) {
-    //             self.dctx.add(diag);
     //         }
     //     }
 
@@ -704,9 +696,7 @@ impl<'i> Collector<'i> {
             }
 
             s.scope_ctx.attach_id(func.body.id, scope_id);
-            if let Err(diag) = s.collect_block(&func.body, dctx) {
-                dctx.add(diag);
-            }
+            s.collect_block(&func.body, dctx).emit(dctx);
 
             s.scope_ctx.generic_depth -= func.sig.generic_params.is_some() as u32;
         });
@@ -747,9 +737,7 @@ impl<'i> Collector<'i> {
 
         self.enter_scope(scope_id, CollectorLevel::Local, |s| {
             for stmt in &block.stmts {
-                if let Err(diag) = s.collect_stmt(&stmt, dctx) {
-                    dctx.add(diag);
-                }
+                s.collect_stmt(&stmt, dctx).emit(dctx);
             }
         });
 
@@ -786,9 +774,7 @@ impl<'i> Collector<'i> {
             HirExprKind::RefExpr(ref_expr) => self.collect_expr(&ref_expr.expr, dctx),
 
             HirExprKind::Binary(_, left, right) => {
-                if let Err(diag) = self.collect_expr(&left, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_expr(&left, dctx).emit(dctx);
 
                 self.collect_expr(&right, dctx)
             }
@@ -796,9 +782,7 @@ impl<'i> Collector<'i> {
             HirExprKind::Unary(unary) => self.collect_expr(&unary.expr(), dctx),
 
             HirExprKind::Assign(assignee, expr) => {
-                if let Err(diag) = self.collect_expr(&assignee, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_expr(&assignee, dctx).emit(dctx);
 
                 self.collect_expr(&expr, dctx)
             }
@@ -807,9 +791,7 @@ impl<'i> Collector<'i> {
 
             HirExprKind::Array(array) => {
                 for element in &array.elements {
-                    if let Err(diag) = self.collect_expr(&element, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_expr(&element, dctx).emit(dctx);
                 }
 
                 Ok(())
@@ -817,9 +799,7 @@ impl<'i> Collector<'i> {
 
             HirExprKind::Tuple(tup) => {
                 for element in &tup.elements {
-                    if let Err(diag) = self.collect_expr(&element, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_expr(&element, dctx).emit(dctx);
                 }
 
                 Ok(())
@@ -827,9 +807,7 @@ impl<'i> Collector<'i> {
 
             HirExprKind::Struct(strct) => {
                 for field in &strct.fields {
-                    if let Err(diag) = self.collect_expr(&field.val, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_expr(&field.val, dctx).emit(dctx);
                 }
 
                 Ok(())
@@ -839,16 +817,15 @@ impl<'i> Collector<'i> {
                 let scope_id = self.scope_ctx.attach(expr.id, Scope::new());
                 self.enter_scope(scope_id, CollectorLevel::Local, |s| {
                     for param in &anfn.params.list {
-                        if let Err(diag) = s.define(Definition::new(
+                        s.define(Definition::new(
                             param.ident.ident,
                             DefKind::FnParam,
                             s.petal_ctx.top_id(),
                             param.id,
                             param.span,
                             DefAccessibility::Priv,
-                        )) {
-                            dctx.add(diag);
-                        }
+                        ))
+                        .emit(dctx);
 
                         let Some(p_ty) = param.ty else {
                             continue;
@@ -862,14 +839,10 @@ impl<'i> Collector<'i> {
 
             HirExprKind::FnCall(call) => {
                 let dctx = dctx;
-                if let Err(diag) = self.collect_expr(&call.callee, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_expr(&call.callee, dctx).emit(dctx);
 
                 for argument in &call.arguments.data {
-                    if let Err(diag) = self.collect_expr(&argument, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_expr(&argument, dctx).emit(dctx);
                 }
 
                 Ok(())
@@ -878,32 +851,22 @@ impl<'i> Collector<'i> {
             HirExprKind::FieldAccess(access) => self.collect_expr(&access.leading, dctx),
 
             HirExprKind::MethodCall(call) => {
-                if let Err(diag) = self.collect_expr(&call.receiver, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_expr(&call.receiver, dctx).emit(dctx);
 
                 for argument in &call.arguments.data {
-                    if let Err(diag) = self.collect_expr(&argument, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_expr(&argument, dctx).emit(dctx);
                 }
 
                 Ok(())
             }
 
             HirExprKind::If(ite) => {
-                if let Err(diag) = self.collect_expr(&ite.cond, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_expr(&ite.cond, dctx).emit(dctx);
 
-                if let Err(diag) = self.collect_block(&ite.consequent, dctx) {
-                    dctx.add(diag);
-                }
+                self.collect_block(&ite.consequent, dctx).emit(dctx);
 
                 ite.alternate.as_ref().map(|alternate| {
-                    if let Err(diag) = self.collect_block(&alternate, dctx) {
-                        dctx.add(diag);
-                    }
+                    self.collect_block(&alternate, dctx).emit(dctx);
                 });
 
                 Ok(())

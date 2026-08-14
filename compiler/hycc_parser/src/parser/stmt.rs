@@ -6,8 +6,8 @@ use hycc_ast::{
 
 use crate::parser::{
     Parser,
-    diag::ParserDiag,
-    parser::{ParseResult, ParserTerminatorKind},
+    diag::{ParseResult, ParserDiag},
+    parser::ParserTerminatorKind,
 };
 
 impl<'s> Parser<'s> {

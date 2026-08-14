@@ -1,4 +1,4 @@
-use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
+use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
 use hycc_hir::{
     block::HirBlock,
     def::{
@@ -98,9 +98,7 @@ impl<'r> Resolver<'r> {
     pub fn resolve(&mut self, tree: &HirItem) {
         self.collector.collect(&tree, &mut self.dctx);
 
-        if let Err(diag) = self.resolve_petal(&tree) {
-            self.dctx.add(diag);
-        }
+        self.resolve_petal(&tree).emit(&mut self.dctx);
     }
 
     pub(crate) fn resolve_item(&mut self, item: &HirItem) -> ResolveResult {
@@ -120,10 +118,8 @@ impl<'r> Resolver<'r> {
             unreachable!();
         };
 
-        if let Err(diag) = self.resolve_refer_target(&refer.target, refer_item.accessibility, None)
-        {
-            self.dctx.add(diag);
-        }
+        self.resolve_refer_target(&refer.target, refer_item.accessibility, None)
+            .emit(&mut self.dctx);
 
         Ok(())
     }
@@ -163,10 +159,8 @@ impl<'r> Resolver<'r> {
                 )?;
 
                 for child in children {
-                    if let Err(diag) = self.resolve_refer_target(&child, accessibility, resolution)
-                    {
-                        self.dctx.add(diag);
-                    }
+                    self.resolve_refer_target(&child, accessibility, resolution)
+                        .emit(&mut self.dctx);
                 }
             }
         }
@@ -200,9 +194,7 @@ impl<'r> Resolver<'r> {
         }
 
         for item in &petal.items {
-            if let Err(diag) = self.resolve_item(&item) {
-                self.dctx.add(diag);
-            }
+            self.resolve_item(&item).emit(&mut self.dctx);
         }
 
         for _ in 0..petals.len() {
@@ -221,25 +213,18 @@ impl<'r> Resolver<'r> {
             if let Some(generic_params) = &extend.generic_params {
                 for generic_param in &generic_params.list {
                     for proto_req in &generic_param.proto_reqs {
-                        if let Err(diag) =
-                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-                        {
-                            s.dctx.add(diag);
-                        }
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                            .emit(&mut s.dctx);
                     }
                 }
             }
 
             // Resolve extension target
-            if let Err(diag) = s.resolve_ty(&extend.target) {
-                s.dctx.add(diag);
-            }
+            s.resolve_ty(&extend.target).emit(&mut s.dctx);
 
             // Resolve extension items
             for item in &extend.items {
-                if let Err(diag) = s.resolve_item(&item) {
-                    s.dctx.add(diag);
-                }
+                s.resolve_item(&item).emit(&mut s.dctx);
             }
         });
 
@@ -292,19 +277,14 @@ impl<'r> Resolver<'r> {
             if let Some(generic_params) = &strct.generic_params {
                 for generic_param in &generic_params.list {
                     for proto_req in &generic_param.proto_reqs {
-                        if let Err(diag) =
-                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-                        {
-                            s.dctx.add(diag);
-                        }
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                            .emit(&mut s.dctx);
                     }
                 }
             }
 
             for field in &strct.fields.list {
-                if let Err(diag) = s.resolve_ty(&field.ty) {
-                    s.dctx.add(diag);
-                }
+                s.resolve_ty(&field.ty).emit(&mut s.dctx);
             }
         });
 
@@ -321,30 +301,21 @@ impl<'r> Resolver<'r> {
             if let Some(generic_params) = &func.sig.generic_params {
                 for generic_param in &generic_params.list {
                     for proto_req in &generic_param.proto_reqs {
-                        if let Err(diag) =
-                            s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
-                        {
-                            s.dctx.add(diag);
-                        }
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                            .emit(&mut s.dctx);
                     }
                 }
             }
 
             for param in &func.sig.params.list {
-                if let Err(diag) = s.resolve_ty(&param.ty) {
-                    s.dctx.add(diag);
-                }
+                s.resolve_ty(&param.ty).emit(&mut s.dctx);
             }
 
             if let Some(ret_ty) = &func.sig.ret_ty {
-                if let Err(diag) = s.resolve_ty(&ret_ty) {
-                    s.dctx.add(diag);
-                }
+                s.resolve_ty(&ret_ty).emit(&mut s.dctx);
             }
 
-            if let Err(diag) = s.resolve_block(&func.body) {
-                s.dctx.add(diag);
-            }
+            s.resolve_block(&func.body).emit(&mut s.dctx);
         });
 
         Ok(())
@@ -354,21 +325,17 @@ impl<'r> Resolver<'r> {
         let decl = item.expect_var();
 
         if !item.is_top_level() {
-            if let Err(diag) = self.collector.collect_var(item, &mut self.dctx) {
-                self.dctx.add(diag);
-            }
+            self.collector
+                .collect_var(item, &mut self.dctx)
+                .emit(&mut self.dctx);
         }
 
         if let Some(ty) = decl.ty {
-            if let Err(diag) = self.resolve_ty(&ty) {
-                self.dctx.add(diag);
-            }
+            self.resolve_ty(&ty).emit(&mut self.dctx);
         }
 
         if let Some(expr) = decl.val {
-            if let Err(diag) = self.resolve_expr(&expr) {
-                self.dctx.add(diag);
-            }
+            self.resolve_expr(&expr).emit(&mut self.dctx);
         }
 
         Ok(())
@@ -378,9 +345,7 @@ impl<'r> Resolver<'r> {
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(block.id);
         self.enter_scope(scope_id, |s| {
             for stmt in &block.stmts {
-                if let Err(diag) = s.resolve_stmt(&stmt) {
-                    s.dctx.add(diag);
-                }
+                s.resolve_stmt(&stmt).emit(&mut s.dctx);
             }
         });
 
@@ -473,9 +438,7 @@ impl<'r> Resolver<'r> {
                     }
                 };
 
-                if let Err(diag) = res {
-                    self.dctx.add(diag);
-                }
+                res.emit(&mut self.dctx);
             }
         }
 
@@ -533,10 +496,7 @@ impl<'r> Resolver<'r> {
             HirTyKind::Ref(reference) => s.resolve_ty(&reference.ty),
 
             HirTyKind::Array(array) => {
-                if let Err(diag) = s.resolve_expr(&array.size) {
-                    s.dctx.add(diag);
-                }
-
+                s.resolve_expr(&array.size).emit(&mut s.dctx);
                 s.resolve_ty(&array.ty)
             }
 
@@ -544,9 +504,7 @@ impl<'r> Resolver<'r> {
 
             HirTyKind::Tuple(tup) => {
                 for element in &tup.data {
-                    if let Err(diag) = s.resolve_ty(&element) {
-                        s.dctx.add(diag);
-                    }
+                    s.resolve_ty(&element).emit(&mut s.dctx);
                 }
 
                 Ok(())
@@ -554,15 +512,11 @@ impl<'r> Resolver<'r> {
 
             HirTyKind::Fn(func) => {
                 for param in &func.params {
-                    if let Err(diag) = s.resolve_ty(&param) {
-                        s.dctx.add(diag);
-                    }
+                    s.resolve_ty(&param).emit(&mut s.dctx);
                 }
 
                 if let Some(ret_ty) = func.ret_ty {
-                    if let Err(diag) = s.resolve_ty(&ret_ty) {
-                        s.dctx.add(diag);
-                    }
+                    s.resolve_ty(&ret_ty).emit(&mut s.dctx);
                 }
 
                 Ok(())
@@ -598,10 +552,7 @@ impl<'r> Resolver<'r> {
     }
 
     pub(crate) fn resolve_binary_expr(&mut self, left: &HirExpr, right: &HirExpr) -> ResolveResult {
-        if let Err(diag) = self.resolve_expr(&left) {
-            self.dctx.add(diag);
-        }
-
+        self.resolve_expr(&left).emit(&mut self.dctx);
         self.resolve_expr(&right)
     }
 

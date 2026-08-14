@@ -6,7 +6,7 @@ use hycc_ast::{
 };
 use hycc_diagnostic::diagnostic::Diagnostics;
 
-use crate::parser::{Parser, parser::ParseResult};
+use crate::parser::{Parser, diag::ParseResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathKind {

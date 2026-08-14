@@ -8,7 +8,11 @@ use hycc_ast::{
 use hycc_diagnostic::diagnostic::Diagnostics;
 use hycc_util::ternary;
 
-use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};
+use crate::parser::{
+    Parser,
+    diag::{ParseResult, ParserDiag},
+    path::PathKind,
+};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

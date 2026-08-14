@@ -19,8 +19,8 @@ use hycc_util::ternary;
 
 use crate::parser::{
     Parser,
-    diag::ParserDiag,
-    parser::{ParseResult, ParserCtx, ParserTerminatorKind},
+    diag::{ParseResult, ParserDiag},
+    parser::{ParserCtx, ParserTerminatorKind},
     path::PathKind,
 };
 

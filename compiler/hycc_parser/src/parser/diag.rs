@@ -10,6 +10,8 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_util::ternary;
 
+pub type ParseResult<T, E = Option<ParserDiag>> = Result<T, E>;
+
 #[derive(Debug, Clone)]
 pub struct ParserDiagDataCtx<'s> {
     pub registry: &'s SourceRegistry,

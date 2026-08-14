@@ -3,7 +3,7 @@ use hycc_ast::{
     token::TokenKind,
 };
 
-use crate::parser::{Parser, parser::ParseResult, path::PathKind};
+use crate::parser::{Parser, diag::ParseResult, path::PathKind};
 
 impl<'s> Parser<'s> {
     // < GENERIC_PARAM (, GENERIC_PARAM) >

@@ -1,6 +1,8 @@
 use std::path::{self, PathBuf};
 
-use hycc_diagnostic::diagnostic::{Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics};
+use hycc_diagnostic::diagnostic::{
+    Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics, FromResultEmitter,
+};
 use hycc_hir::{
     HirTable,
     def::{DefId, DefSpace, DefinitionTable},
@@ -13,6 +15,16 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_util::ternary;
 
 pub type ResolveResult<T = (), E = ResolverDiag> = Result<T, E>;
+
+impl<'c, 'h, T> FromResultEmitter<ResolverDiagCtx<'c>, ResolverDiagDataCtx<'c, 'h>, ResolverDiag>
+    for ResolveResult<T, ResolverDiag>
+{
+    fn emit(self, dctx: &mut ResolverDiagCtx<'c>) {
+        if let Err(diag) = self {
+            dctx.add(diag)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ResolverDiagDataCtx<'c, 'h> {

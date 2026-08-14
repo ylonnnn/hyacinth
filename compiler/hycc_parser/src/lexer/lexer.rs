@@ -185,15 +185,6 @@ impl<'l> Lexer<'l> {
                         base: base as u8,
                     },
                 );
-
-                // s.dctx.error(
-                //     DiagnosticErrorKind::InvalidNumericLiteralDigit.into(),
-                //     &format!(
-                //         "invalid numeric digit `{}` for numeric literals with base `{}`",
-                //         c as char, base
-                //     ),
-                //     (s.offset, 1, self.source.identifier.0).into(),
-                // );
             }
 
             false
@@ -339,16 +330,6 @@ impl<'l> Lexer<'l> {
                         len: (1, seq_len),
                     },
                 );
-
-                // diagnostics.error(
-                //     DiagnosticErrorKind::InvalidCharacterSequence.into(),
-                //     &format!(
-                //         "character sequence within `'` must contain exactly `{}` character, contains `{}`.",
-                //         1,
-                //         seq_len,
-                //     ),
-                //     span.clone(),
-                // );
             }
 
             Some(token!(TokenKind::Char { terminated }, span))
@@ -551,12 +532,6 @@ impl<'l> Lexer<'l> {
                     inv => {
                         self.dctx
                             .error(span, LexerDiagErrorKind::UnknownChar { c: inv });
-
-                        // self.dctx.error(
-                        //     DiagnosticErrorKind::UnknownCharacter.into(),
-                        //     &format!("unknown character `{}`.", inv as char),
-                        //     span.clone(),
-                        // );
 
                         Some(Token::Invalid(span))
                     }

@@ -3,7 +3,7 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
 use hycc_source::Source;
 use hycc_span::Span;
 
@@ -19,11 +19,11 @@ pub enum ParserCtx {
 }
 
 #[derive(Debug)]
-pub struct Parser<'s> {
+pub struct Parser<'p> {
     pub(super) stream: TokenStream,
-    pub dctx: ParserDiagCtx,
+    pub dctx: ParserDiagCtx<'p>,
     pub(super) petal_stack: Vec<String>,
-    pub(super) source: &'s Source,
+    pub(super) source: &'p Source,
     pub(super) depth: usize,
     pub(super) ctx: ParserCtx,
 }
@@ -37,11 +37,11 @@ pub enum ParserTerminatorKind {
     Both,
 }
 
-impl<'s> Parser<'s> {
-    pub fn new(stream: TokenStream, source: &'s Source) -> Self {
+impl<'p> Parser<'p> {
+    pub fn new(stream: TokenStream, source: &'p Source, dctx: &'p mut DiagCtx) -> Self {
         Self {
             stream,
-            dctx: ParserDiagCtx::new(),
+            dctx: ParserDiagCtx::new(dctx),
             petal_stack: Vec::new(),
             source,
             depth: 0,

@@ -1,5 +1,5 @@
 use hycc_const::table::ConstTable;
-use hycc_diagnostic::DiagnosticCtx;
+use hycc_diagnostic::diagnostic::DiagCtx;
 use hycc_hir::HirTable;
 use hycc_source::{Source, SourceRegistry, source::SourceId};
 use hycc_symbol::SymbolInterner;
@@ -8,7 +8,7 @@ use hycc_symbol::SymbolInterner;
 pub struct Session<'h> {
     pub interner: SymbolInterner,
     pub const_table: ConstTable,
-    pub dctx: DiagnosticCtx,
+    pub dctx: DiagCtx,
     pub hir_table: HirTable<'h>,
     pub root: SourceId,
 }
@@ -16,7 +16,7 @@ pub struct Session<'h> {
 impl<'h> Session<'h> {
     pub fn new(root: SourceId) -> Self {
         Self {
-            dctx: DiagnosticCtx::default(),
+            dctx: DiagCtx::default(),
             interner: SymbolInterner::new(),
             hir_table: HirTable::new(),
             const_table: ConstTable::new(),

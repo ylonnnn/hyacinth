@@ -1,6 +1,6 @@
 use crate::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx, diagnostic::DiagnosticKind,
-    reporter::DiagnosticReporter,
+    diagnostic::{Diag, DiagCtx, DiagKind},
+    reporter::reporter::DiagnosticReporter,
 };
 
 use hycc_source::{Source, SourceRegistry};
@@ -9,23 +9,23 @@ use hycc_util::{Style, color, style, ternary};
 
 #[derive(Debug)]
 pub struct CLIReporter<'d, 's> {
-    pub dctx: &'d DiagnosticCtx,
+    pub dctx: &'d DiagCtx,
     pub source_registry: &'s SourceRegistry,
 }
 
 impl<'d, 's> CLIReporter<'d, 's> {
-    pub fn new(dctx: &'d DiagnosticCtx, source_registry: &'s SourceRegistry) -> Self {
+    pub fn new(dctx: &'d DiagCtx, source_registry: &'s SourceRegistry) -> Self {
         Self {
             dctx,
             source_registry,
         }
     }
 
-    pub fn color(&self, kind: &DiagnosticKind) -> &'static str {
+    pub fn color(&self, kind: &DiagKind) -> &'static str {
         match kind {
-            DiagnosticKind::Note(..) => color::BRIGHT_BLUE,
-            DiagnosticKind::Warning(..) => color::YELLOW,
-            DiagnosticKind::Error(..) => color::RED,
+            DiagKind::Info => color::BRIGHT_BLUE,
+            DiagKind::Warning => color::YELLOW,
+            DiagKind::Error(..) => color::RED,
         }
     }
 
@@ -126,19 +126,12 @@ impl<'d, 's> CLIReporter<'d, 's> {
 }
 
 impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
-    fn format_diagnostic(&self, diagnostic: &Diagnostic, indentation: u8) -> String {
-        let Diagnostic {
-            span,
-            kind,
-            details,
-            ..
-        } = diagnostic;
+    fn format_diagnostic(&self, diag: &Diag, indentation: u8) -> String {
+        let source = self.source_registry.get(diag.span.src_id);
+        let (s_kind, code) = diag.kind.data();
 
-        let source = self.source_registry.get(span.src_id);
-        let (s_kind, code, message) = kind.data();
-
-        let (start, end) = span.to_position_range(&source);
-        let sev_color = self.color(&kind);
+        let (start, end) = diag.span.to_position_range(&source);
+        let sev_color = self.color(&diag.kind);
 
         let indentation = 6 * indentation as usize;
         let indent = " ".repeat(indentation.saturating_sub(2));
@@ -147,11 +140,13 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
             panic!("failed to retrieve the current directory")
         };
 
-        let details = details
-            .iter()
-            .map(|diag| self.format_diagnostic(diag, indentation as u8 + 1))
-            .collect::<Vec<String>>()
-            .join("");
+        // let details = details
+        //     .iter()
+        //     .map(|diag| self.format_diagnostic(diag, indentation as u8 + 1))
+        //     .collect::<Vec<String>>()
+        //     .join("");
+
+        let details = "<TODO: details>";
 
         format!(
             "{indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{emphasis}\n{}{reset}{details}",
@@ -160,7 +155,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
                 || ":".into(),
                 |code| format!("<{}>", code.to_string().style(&sev_color))
             ),
-            self.highlight(message, sev_color),
+            self.highlight(&diag.message, sev_color),
             "----->".bright_black(),
             &source.identifier.1.replace(cwd.to_str().unwrap(), "")[1..],
             start.clone(),

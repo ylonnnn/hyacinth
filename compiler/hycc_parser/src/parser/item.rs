@@ -11,7 +11,7 @@ use hycc_ast::{
     token_stream::TokenStream,
     ty::Ty,
 };
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 use hycc_session::config;
 use hycc_util::ternary;
 use std::path::{self, PathBuf};

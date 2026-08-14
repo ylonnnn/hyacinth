@@ -1,139 +1,163 @@
 use hycc_span::Span;
+use hycc_util::ternary;
 
 #[derive(Debug, Clone)]
-pub enum DiagnosticKind {
-    Note(String),
-    Warning(String),
-    Error(u16, String),
+pub enum DiagKind {
+    Info,
+    Warning,
+    Error(u16),
 }
 
-impl DiagnosticKind {
-    pub fn data(&self) -> (&'static str, Option<u16>, &String) {
+impl DiagKind {
+    pub fn data(&self) -> (&'static str, Option<u16>) {
         let kind = match self {
-            Self::Note(..) => "note",
-            Self::Warning(..) => "warning",
+            Self::Info => "info",
+            Self::Warning => "warning",
             Self::Error(..) => "error",
         };
 
         match self {
-            Self::Note(message) | Self::Warning(message) => (kind, None, message),
-            Self::Error(code, message) => (kind, Some(*code), message),
+            Self::Info | Self::Warning => (kind, None),
+            Self::Error(code) => (kind, Some(*code)),
         }
     }
-}
-
-pub trait IntoDiagnostic {
-    fn into_diag(&self, kind: DiagnosticKind) -> Diagnostic;
-}
-
-impl IntoDiagnostic for Span {
-    fn into_diag(&self, kind: DiagnosticKind) -> Diagnostic {
-        Diagnostic::new(*self, kind)
-    }
-}
-
-pub trait Diag<Ctx> {
-    fn emit(&self, ctx: &mut Ctx) -> Diagnostic;
 }
 
 #[derive(Debug, Clone)]
-pub struct Diagnostic {
-    pub details: Vec<Diagnostic>,
-    pub span: Span,
-    pub kind: DiagnosticKind,
+pub enum DiagDetailKind {
+    Note,
+    Help,
 }
 
-impl Diagnostic {
-    pub fn new(span: Span, kind: DiagnosticKind) -> Self {
+#[derive(Debug, Clone)]
+pub struct DiagDetail {
+    pub message: String,
+    pub span: Span,
+    pub kind: DiagDetailKind,
+}
+
+impl DiagDetail {
+    pub fn new(kind: DiagDetailKind, span: Span, message: String) -> Self {
         Self {
             span,
+            message,
             kind,
+        }
+    }
+
+    pub fn note(span: Span, message: String) -> Self {
+        Self::new(DiagDetailKind::Note, span, message)
+    }
+
+    pub fn help(span: Span, message: String) -> Self {
+        Self::new(DiagDetailKind::Help, span, message)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Diag {
+    pub sub_diagnostics: Vec<Diag>,
+    pub message: String,
+    pub details: Vec<DiagDetail>,
+    pub span: Span,
+    pub kind: DiagKind,
+}
+
+impl Diag {
+    pub fn new(kind: DiagKind, span: Span, message: String) -> Self {
+        Self {
+            sub_diagnostics: Vec::new(),
+            message,
             details: Vec::new(),
+            span,
+            kind,
         }
     }
 
-    pub fn is_note(&self) -> bool {
-        matches!(self.kind, DiagnosticKind::Note(..))
+    pub fn info(span: Span, message: String) -> Self {
+        Self::new(DiagKind::Info, span, message)
     }
 
-    pub fn is_warning(&self) -> bool {
-        matches!(self.kind, DiagnosticKind::Warning(..))
+    pub fn warning(span: Span, message: String) -> Self {
+        Self::new(DiagKind::Warning, span, message)
     }
 
-    pub fn is_error(&self) -> bool {
-        matches!(self.kind, DiagnosticKind::Error(..))
+    pub fn error(code: u16, span: Span, message: String) -> Self {
+        Self::new(DiagKind::Error(code), span, message)
     }
 
-    pub fn add_detail(&mut self, detail: Diagnostic) -> &mut Self {
-        self.details.push(detail);
+    pub fn add_sub_diagnostic(&mut self, sub_diagnostic: Diag) -> &mut Self {
+        if sub_diagnostic.span.src_id.is_valid() {
+            self.sub_diagnostics.push(sub_diagnostic);
+        }
+
         self
     }
 
-    pub fn detail(&mut self, span: Span, kind: DiagnosticKind) -> &mut Self {
+    pub fn note(&mut self, span: Span, message: String) -> &mut Self {
         if span.src_id.is_valid() {
-            self.add_detail(Diagnostic::new(span, kind));
+            self.details.push(DiagDetail::note(span, message))
+        }
+
+        self
+    }
+
+    pub fn help(&mut self, span: Span, message: String) -> &mut Self {
+        if span.src_id.is_valid() {
+            self.details.push(DiagDetail::help(span, message))
         }
 
         self
     }
 }
 
-pub trait DiagnosticContext<Ctx, T = Diagnostic> {
-    fn data(&self) -> &Vec<T>;
-    fn data_mut(&mut self) -> &mut Vec<T>;
-
-    fn error_occurred(&self) -> bool;
-
-    fn add(&mut self, diagnostic: T) -> Option<&mut T> {
-        let data = self.data_mut();
-
-        data.push(diagnostic);
-        data.last_mut()
-    }
-
-    fn emit(&self, target: &mut DiagnosticCtx, ctx: Ctx);
+pub trait DiagLike {
+    fn is_info(&self) -> bool;
+    fn is_warning(&self) -> bool;
+    fn is_error(&self) -> bool;
 }
 
-#[derive(Debug)]
-pub struct DiagnosticCtx(Vec<Diagnostic>, bool);
-
-impl Default for DiagnosticCtx {
-    fn default() -> Self {
-        Self(Vec::with_capacity(32), false)
-    }
+pub trait DiagEmitter<Ctx> {
+    fn emit(&self, ctx: &mut Ctx) -> Diag;
 }
 
-impl DiagnosticCtx {
+#[derive(Debug, Default)]
+pub struct DiagCtx(Vec<Diag>, bool);
+
+impl DiagCtx {
     pub fn new() -> Self {
-        Self(Vec::new(), false)
+        Self::default()
     }
-}
 
-impl DiagnosticContext<()> for DiagnosticCtx {
-    fn data(&self) -> &Vec<Diagnostic> {
+    pub fn data(&self) -> &[Diag] {
         &self.0
     }
 
-    fn data_mut(&mut self) -> &mut Vec<Diagnostic> {
-        &mut self.0
+    pub fn error_occurred(&self) -> Result<(), ()> {
+        ternary!(self.1, Err(()), Ok(()))
     }
 
-    fn add(&mut self, diagnostic: Diagnostic) -> Option<&mut Diagnostic> {
-        self.1 = self.1 || diagnostic.is_error();
-        let data = self.data_mut();
+    pub fn add(&mut self, diag: Diag) {
+        if !diag.span.src_id.is_valid() {
+            return;
+        }
 
-        data.push(diagnostic);
-        data.last_mut()
+        self.1 = self.1 || matches!(&diag.kind, DiagKind::Error(_));
+        self.0.push(diag);
     }
-
-    fn error_occurred(&self) -> bool {
-        self.1
-    }
-
-    fn emit(&self, _target: &mut DiagnosticCtx, _ctx: ()) {}
 }
 
-#[derive(Debug, Clone)]
-pub enum DiagNoteKind {
-    Info(String),
+pub trait Diagnostics<Ctx, T: DiagLike + DiagEmitter<Ctx>> {
+    const ERROR_CODE_OFFSET: u16;
+
+    fn data(&self) -> &[T];
+    fn data_mut(&mut self) -> &mut Vec<T>;
+
+    fn error_flag(&mut self) -> &mut bool;
+    fn add(&mut self, diag: T) {
+        *self.error_flag() = diag.is_error();
+        self.data_mut().push(diag);
+    }
+
+    fn emit(&mut self, ctx: Ctx);
 }

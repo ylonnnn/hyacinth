@@ -1,10 +1,10 @@
 use std::path::{self, PathBuf};
 
-use hycc_ast::{item::ItemKind, token::{Token, TokenKind}};
-use hycc_diagnostic::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx,
-    diagnostic::{Diag, DiagnosticKind},
+use hycc_ast::{
+    item::ItemKind,
+    token::{Token, TokenKind},
 };
+use hycc_diagnostic::diagnostic::{Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics};
 use hycc_session::config;
 use hycc_source::SourceRegistry;
 use hycc_span::Span;
@@ -21,30 +21,25 @@ impl<'s> ParserDiagDataCtx<'s> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ParserDiagCtx {
-    data: Vec<ParserDiag>,
-    state: ParserDiagCtxState,
-    errored: bool,
-}
-
-#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParserDiagCtxState {
     Synchronized,
     Disarray,
 }
 
-impl ParserDiagCtx {
-    #[allow(unused)]
-    const PARSER_NOTE_OFFSET: u16 = 200;
-    #[allow(unused)]
-    const PARSER_WARNING_OFFSET: u16 = 300;
-    const PARSER_ERROR_OFFSET: u16 = 420;
+#[derive(Debug)]
+pub struct ParserDiagCtx<'c> {
+    data: Vec<ParserDiag>,
+    dctx: &'c mut DiagCtx,
+    state: ParserDiagCtxState,
+    errored: bool,
+}
 
-    pub fn new() -> Self {
+impl<'c> ParserDiagCtx<'c> {
+    pub fn new(dctx: &'c mut DiagCtx) -> Self {
         Self {
             data: Vec::new(),
+            dctx,
             state: ParserDiagCtxState::Synchronized,
             errored: false,
         }
@@ -62,13 +57,6 @@ impl ParserDiagCtx {
         self.is(ParserDiagCtxState::Disarray)
     }
 
-    pub fn warning(&mut self, span: Span, kind: ParserDiagWarningKind) {
-        self.add(ParserDiag {
-            span,
-            kind: ParserDiagKind::Warning(kind),
-        });
-    }
-
     pub fn error(&mut self, span: Span, kind: ParserDiagErrorKind) {
         self.add(ParserDiag {
             span,
@@ -77,8 +65,10 @@ impl ParserDiagCtx {
     }
 }
 
-impl<'s> DiagnosticContext<ParserDiagDataCtx<'s>, ParserDiag> for ParserDiagCtx {
-    fn data(&self) -> &Vec<ParserDiag> {
+impl<'c> Diagnostics<ParserDiagDataCtx<'c>, ParserDiag> for ParserDiagCtx<'c> {
+    const ERROR_CODE_OFFSET: u16 = 300;
+
+    fn data(&self) -> &[ParserDiag] {
         &self.data
     }
 
@@ -86,49 +76,45 @@ impl<'s> DiagnosticContext<ParserDiagDataCtx<'s>, ParserDiag> for ParserDiagCtx 
         &mut self.data
     }
 
-    fn error_occurred(&self) -> bool {
-        self.errored
+    fn error_flag(&mut self) -> &mut bool {
+        &mut self.errored
     }
 
-    fn add(&mut self, diagnostic: ParserDiag) -> Option<&mut ParserDiag> {
-        let is_err = diagnostic.kind.is_error();
+    fn add(&mut self, diag: ParserDiag) {
+        let is_err = diag.is_error();
         if is_err {
             if self.is(ParserDiagCtxState::Disarray) {
-                return None;
+                return;
             }
 
             self.state = ParserDiagCtxState::Disarray;
             self.errored = true;
         }
 
-        let data = self.data_mut();
-
-        data.push(diagnostic);
-        data.last_mut()
+        self.data_mut().push(diag);
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: ParserDiagDataCtx<'s>) {
-        for diag in self.data() {
-            target.add(diag.emit(&mut ctx));
+    fn emit(&mut self, mut ctx: ParserDiagDataCtx<'c>) {
+        for diag in &self.data {
+            self.dctx.add(diag.emit(&mut ctx));
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum ParserDiagKind {
-    Warning(ParserDiagWarningKind),
+    Info,
+    Warning,
     Error(ParserDiagErrorKind),
 }
 
-#[derive(Debug, Clone)]
-pub enum ParserDiagWarningKind {}
-
+#[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum ParserDiagErrorKind {
     UnexpectedToken {
         token: Token,
         expected: Option<UnexpectedTokenExpectation>,
-    },
+    } = 0,
 
     InvalidVarDecl {
         ident: Token,
@@ -142,8 +128,11 @@ pub enum ParserDiagErrorKind {
     IllegalLocalNonInlinePetalDeclaration,
 
     InvalidStructFieldCount(u8),
-    UnsupportedItem{ item_kind: ItemKind, context: &'static str }, // TODO: update `context` to
-                                                               // something more optimal
+    UnsupportedItem {
+        item_kind: ItemKind,
+        context: &'static str,
+    }, // TODO: update `context` to
+       // something more optimal
 }
 
 #[derive(Debug, Clone)]
@@ -161,16 +150,6 @@ impl ToString for UnexpectedTokenExpectation {
     }
 }
 
-impl<'s> ParserDiagKind {
-    pub fn is_warning(&self) -> bool {
-        matches!(self, Self::Warning(..))
-    }
-
-    pub fn is_error(&self) -> bool {
-        matches!(self, Self::Error(..))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ParserDiag {
     pub kind: ParserDiagKind,
@@ -178,13 +157,6 @@ pub struct ParserDiag {
 }
 
 impl<'s> ParserDiag {
-    pub fn warning(span: Span, kind: ParserDiagWarningKind) -> Self {
-        Self {
-            span,
-            kind: ParserDiagKind::Warning(kind),
-        }
-    }
-
     pub fn error(span: Span, kind: ParserDiagErrorKind) -> Self {
         Self {
             span,
@@ -223,25 +195,35 @@ impl<'s> ParserDiag {
     }
 }
 
-impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
-    fn emit(&self, ctx: &mut ParserDiagDataCtx<'s>) -> Diagnostic {
-        use ParserDiagErrorKind as Err;
-        use ParserDiagKind::*;
+impl DiagLike for ParserDiag {
+    fn is_info(&self) -> bool {
+        matches!(&self.kind, ParserDiagKind::Info)
+    }
 
-        let ParserDiagDataCtx::<'s> { registry } = *ctx;
-        let source = registry.get(self.span.src_id);
-        let code = (unsafe { *(&self.kind as *const ParserDiagKind as *const u8) }) as u16
-            + ParserDiagCtx::PARSER_ERROR_OFFSET;
+    fn is_warning(&self) -> bool {
+        matches!(&self.kind, ParserDiagKind::Warning)
+    }
 
-        let kind = match &self.kind {
-            Warning(kind) => DiagnosticKind::Warning(match kind {
-                _ => "".into(),
-            }),
+    fn is_error(&self) -> bool {
+        matches!(&self.kind, ParserDiagKind::Error(_))
+    }
+}
 
-            Error(kind) => DiagnosticKind::Error(
-                code,
-                match kind {
-                    Err::UnexpectedToken { token, expected } => {
+impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
+    fn emit(&self, ctx: &mut ParserDiagDataCtx<'c>) -> Diag {
+        use ParserDiagErrorKind::*;
+
+        let source = ctx.registry.get(self.span.src_id);
+        // let code = (unsafe { *(&self.kind as *const ParserDiagKind as *const u8) }) as u16
+        //     + ParserDiagCtx::PARSER_ERROR_OFFSET;
+
+        let (kind, message) = match &self.kind {
+            ParserDiagKind::Info => (DiagKind::Info, "".into()),
+            ParserDiagKind::Warning => (DiagKind::Warning, "".into()),
+
+            ParserDiagKind::Error(kind) => {
+                let message = match kind {
+                    UnexpectedToken { token, expected } => {
                         format!(
                             "unexpected `{}`{}.",
                             token.view(&source.data),
@@ -253,7 +235,7 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         )
                     }
 
-                    Err::InvalidVarDecl { ident, depth } => {
+                    InvalidVarDecl { ident, depth } => {
                         let message = format!(
                             "invalid {}variable declaration for `{}`.",
                             ternary!(*depth == 0, "top-level ", ""),
@@ -263,7 +245,7 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         message
                     }
 
-                    Err::UnrecognizedPetalFile { path } => {
+                    UnrecognizedPetalFile { path } => {
                         format!(
                             "cannot find corresponding petal file for petal `{}`.",
                             path.to_str().unwrap().replace(
@@ -273,51 +255,63 @@ impl<'s> Diag<ParserDiagDataCtx<'s>> for ParserDiag {
                         )
                     }
 
-                    Err::IllegalLocalNonInlinePetalDeclaration => {
+                    IllegalLocalNonInlinePetalDeclaration => {
                         format!("cannot declare non-inline petals locally within local blocks.")
                     }
 
-                    Err::InvalidStructFieldCount(n) => {
-                        format!("structs cannot have more than `{}` fields, found `{}`.", config::HYC_STRUCT_FIELD_LIMIT, n)
+                    InvalidStructFieldCount(n) => {
+                        format!(
+                            "structs cannot have more than `{}` fields, found `{}`.",
+                            config::HYC_STRUCT_FIELD_LIMIT,
+                            n
+                        )
                     }
 
-                    Err::UnsupportedItem { item_kind, context } => 
-                        format!("`{}`s are unsupported within `{context}`s.", item_kind.kind())
-                },
-            ),
+                    UnsupportedItem { item_kind, context } => format!(
+                        "`{}`s are unsupported within `{context}`s.",
+                        item_kind.kind()
+                    ),
+                };
+
+                (
+                    DiagKind::Error(
+                        hycc_util::enums::tag_of::<u16, _>(&kind)
+                            + ParserDiagCtx::ERROR_CODE_OFFSET,
+                    ),
+                    message,
+                )
+            }
         };
 
-        let mut diag = Diagnostic::new(self.span, kind);
+        let mut diag = Diag::new(kind, self.span, message);
 
         match &self.kind {
-            Warning(kind) => match kind {
-                _ => {}
-            },
-
-            Error(kind) => match kind {
-                Err::InvalidVarDecl { depth, .. } => {
-                    diag.detail(diag.span, DiagnosticKind::Note( 
-                            ternary!(*depth == 0, 
-                                format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."), 
-                                format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
-                    )));
+            ParserDiagKind::Error(kind) => match kind {
+                InvalidVarDecl { depth, .. } => {
+                    // diag.detail(diag.span, DiagKind::Note(
+                    //         ternary!(*depth == 0,
+                    //             format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."),
+                    //             format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
+                    // )));
                 }
 
-                Err::UnrecognizedPetalFile { path } => {
+                UnrecognizedPetalFile { path } => {
                     let petal = path.to_str().unwrap();
 
-                    diag.detail(
-                        diag.span,
-                        DiagnosticKind::Note(format!(
-                            "create petal file `{}` or `{}` relative to the current file.",
-                            format_args!("{}.{}", petal, config::HYC_FILE_EXT),
-                            format_args!("{}/{}", petal, config::HYC_DIR_PETAL_FILE)
-                        )),
-                    );
+                    // diag.detail(
+                    //     diag.span,
+                    //     DiagKind::Note(format!(
+                    //         "create petal file `{}` or `{}` relative to the current file.",
+                    //         format_args!("{}.{}", petal, config::HYC_FILE_EXT),
+                    //         format_args!("{}/{}", petal, config::HYC_DIR_PETAL_FILE)
+                    //     )),
+                    // );
                 }
 
                 _ => {}
             },
+
+            _ => {}
         }
 
         diag

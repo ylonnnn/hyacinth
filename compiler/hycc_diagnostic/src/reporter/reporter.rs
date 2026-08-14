@@ -1,6 +1,6 @@
-use crate::diagnostic::Diagnostic;
+use crate::diagnostic::Diag;
 
 pub trait DiagnosticReporter {
-    fn format_diagnostic(&self, diagnostic: &Diagnostic, indentation: u8) -> String;
+    fn format_diagnostic(&self, diagnostic: &Diag, indentation: u8) -> String;
     fn report(&self);
 }

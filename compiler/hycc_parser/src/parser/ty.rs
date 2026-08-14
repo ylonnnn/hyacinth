@@ -5,7 +5,7 @@ use hycc_ast::{
     ty::{Array, FnTy, Ref, Slice, Tuple},
     ty::{Ty, TyKind},
 };
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 use hycc_util::ternary;
 
 use crate::parser::{Parser, diag::ParserDiag, parser::ParseResult, path::PathKind};

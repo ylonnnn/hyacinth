@@ -1,52 +1,38 @@
-use hycc_diagnostic::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx,
-    diagnostic::{Diag, DiagnosticKind},
-};
+use hycc_diagnostic::diagnostic::{Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics};
 use hycc_source::SourceRegistry;
 use hycc_span::Span;
 
 #[derive(Debug, Clone)]
-pub struct LexerDiagDataCtx<'s> {
-    pub registry: &'s SourceRegistry,
+pub struct LexerDiagDataCtx<'c> {
+    pub registry: &'c SourceRegistry,
 }
 
-impl<'s> LexerDiagDataCtx<'s> {
-    pub fn new(registry: &'s SourceRegistry) -> Self {
+impl<'c> LexerDiagDataCtx<'c> {
+    pub fn new(registry: &'c SourceRegistry) -> Self {
         Self { registry }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LexerDiagCtx(Vec<LexerDiag>, bool);
+#[derive(Debug)]
+pub struct LexerDiagCtx<'c>(Vec<LexerDiag>, &'c mut DiagCtx, bool);
 
-impl LexerDiagCtx {
-    #[allow(unused)]
-    const LEXER_NOTE_OFFSET: u16 = 200;
-    #[allow(unused)]
-    const LEXER_WARNING_OFFSET: u16 = 300;
-    const LEXER_ERROR_OFFSET: u16 = 400;
-
-    pub fn new() -> Self {
-        Self(Vec::new(), false)
-    }
-
-    pub fn warning(&mut self, span: Span, kind: LexerDiagWarningKind) {
-        self.add(LexerDiag {
-            span,
-            kind: LexerDiagKind::Warning(kind),
-        });
+impl<'c> LexerDiagCtx<'c> {
+    pub fn new(dctx: &'c mut DiagCtx) -> Self {
+        Self(Vec::new(), dctx, false)
     }
 
     pub fn error(&mut self, span: Span, kind: LexerDiagErrorKind) {
         self.add(LexerDiag {
             span,
             kind: LexerDiagKind::Error(kind),
-        });
+        })
     }
 }
 
-impl<'s> DiagnosticContext<LexerDiagDataCtx<'s>, LexerDiag> for LexerDiagCtx {
-    fn data(&self) -> &Vec<LexerDiag> {
+impl<'c> Diagnostics<LexerDiagDataCtx<'c>, LexerDiag> for LexerDiagCtx<'c> {
+    const ERROR_CODE_OFFSET: u16 = 200;
+
+    fn data(&self) -> &[LexerDiag] {
         &self.0
     }
 
@@ -54,76 +40,82 @@ impl<'s> DiagnosticContext<LexerDiagDataCtx<'s>, LexerDiag> for LexerDiagCtx {
         &mut self.0
     }
 
-    fn error_occurred(&self) -> bool {
-        self.1
+    fn error_flag(&mut self) -> &mut bool {
+        &mut self.2
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: LexerDiagDataCtx<'s>) {
-        for diag in self.data() {
-            target.add(diag.emit(&mut ctx));
+    fn emit(&mut self, mut ctx: LexerDiagDataCtx) {
+        for diag in &self.0 {
+            self.1.add(diag.emit(&mut ctx));
         }
     }
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone)]
-pub enum LexerDiagKind {
-    Warning(LexerDiagWarningKind),
-    Error(LexerDiagErrorKind),
-}
-
-#[derive(Debug, Clone)]
-pub enum LexerDiagWarningKind {}
-
-#[repr(u8)]
-#[derive(Debug, Clone)]
 pub enum LexerDiagErrorKind {
     InvalidNumericLiteralDigit { digit: u8, base: u8 },
-    InvalidNumericLiteralprefix,
-    DanglingNumericLiteralprefix,
-    InvalidLiteral,
+    InvalidNumericLiteralPrefix,
+    DanglingNumericLiteralPrefix,
+
     UnterminatedCharSeq,
     InvalidCharSeq { enclosing: u8, len: (usize, usize) },
+
     UnclosedDelimeterCollection { op: u8, cl: u8 },
+
     UnknownChar { c: u8 },
 }
 
 #[derive(Debug, Clone)]
-pub struct LexerDiag {
-    pub kind: LexerDiagKind,
-    pub span: Span,
+pub enum LexerDiagKind {
+    Info,
+    Warning,
+    Error(LexerDiagErrorKind),
 }
 
-impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
-    fn emit(&self, ctx: &mut LexerDiagDataCtx<'s>) -> Diagnostic {
-        use LexerDiagErrorKind as Err;
-        use LexerDiagKind::*;
+#[derive(Debug)]
+pub struct LexerDiag {
+    kind: LexerDiagKind,
+    span: Span,
+}
 
-        let LexerDiagDataCtx::<'s> { registry } = *ctx;
-        let source = registry.get(self.span.src_id);
-        let code = (unsafe { *(&self.kind as *const LexerDiagKind as *const u8) }) as u16
-            + LexerDiagCtx::LEXER_ERROR_OFFSET;
+impl DiagLike for LexerDiag {
+    fn is_info(&self) -> bool {
+        matches!(&self.kind, LexerDiagKind::Info)
+    }
 
-        let kind = match &self.kind {
-            Warning(kind) => DiagnosticKind::Warning(match kind {
-                _ => "".into(),
-            }),
+    fn is_warning(&self) -> bool {
+        matches!(&self.kind, LexerDiagKind::Warning)
+    }
 
-            Error(kind) => DiagnosticKind::Error(
-                code,
-                match kind {
-                    Err::InvalidNumericLiteralDigit { digit, base } => format!(
+    fn is_error(&self) -> bool {
+        matches!(&self.kind, LexerDiagKind::Error(_))
+    }
+}
+
+impl<'c> DiagEmitter<LexerDiagDataCtx<'c>> for LexerDiag {
+    fn emit(&self, ctx: &mut LexerDiagDataCtx) -> Diag {
+        use LexerDiagErrorKind::*;
+
+        let source = ctx.registry.get(self.span.src_id);
+        let (kind, message) = match &self.kind {
+            LexerDiagKind::Info => (DiagKind::Info, "".into()),
+            LexerDiagKind::Warning => (DiagKind::Warning, "".into()),
+
+            LexerDiagKind::Error(kind) => {
+                let message = match &kind {
+                    InvalidNumericLiteralDigit { digit, base } => format!(
                         "invalid numeric digit `{}` for numeric literals with base `{}`",
                         *digit as char, *base
                     ),
 
-                    Err::InvalidNumericLiteralprefix => format!(
+                    InvalidNumericLiteralPrefix => format!(
                         "invalid numeric literal prefix `{}`.",
                         &source.data[(self.span.offset as usize)
                             ..=((self.span.offset + self.span.len as u32) as usize)]
                     ),
 
-                    Err::DanglingNumericLiteralprefix => {
+                    DanglingNumericLiteralPrefix => {
                         format!(
                             "dangling umeric literal prefix `{}`.",
                             &source.data[(self.span.offset as usize)
@@ -131,26 +123,33 @@ impl<'s> Diag<LexerDiagDataCtx<'s>> for LexerDiag {
                         )
                     }
 
-                    Err::UnterminatedCharSeq => {
+                    UnterminatedCharSeq => {
                         format!("unterminated character sequence.")
                     }
 
-                    Err::InvalidCharSeq { enclosing, len } => format!(
+                    InvalidCharSeq { enclosing, len } => format!(
                         "character sequences within `{}` expect `{}` characters, received `{}`.",
                         *enclosing as char, len.0, len.1
                     ),
 
-                    Err::UnclosedDelimeterCollection { op, cl } => {
+                    UnclosedDelimeterCollection { op, cl } => {
                         format!("missing closing `{}` for `{}`.", *cl as char, *op as char)
                     }
 
-                    Err::UnknownChar { c } => format!("unknown character `{}`.", *c as char),
+                    UnknownChar { c } => format!("unknown character `{}`.", *c as char),
+                };
 
-                    _ => todo!(),
-                },
-            ),
+                (
+                    DiagKind::Error(
+                        hycc_util::enums::tag_of::<u16, _>(&kind) + LexerDiagCtx::ERROR_CODE_OFFSET,
+                    ),
+                    message,
+                )
+            }
+
+            _ => todo!("emit non-error lexer diagnostics"),
         };
 
-        Diagnostic::new(self.span, kind)
+        Diag::new(kind, self.span, message)
     }
 }

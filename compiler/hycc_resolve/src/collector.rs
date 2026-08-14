@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 use hycc_hir::{
     HirId,
     block::HirBlock,

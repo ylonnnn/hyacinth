@@ -1,4 +1,4 @@
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
 use hycc_hir::{
     block::HirBlock,
     def::{
@@ -24,18 +24,18 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Resolver<'i> {
-    pub dctx: ResolverDiagCtx,
-    pub collector: Collector<'i>,
+pub struct Resolver<'r> {
+    pub dctx: ResolverDiagCtx<'r>,
+    pub collector: Collector<'r>,
 
     pub(crate) expected_space: Option<DefSpace>,
 }
 
-impl<'i> Resolver<'i> {
-    pub fn new(interner: &'i mut SymbolInterner) -> Self {
+impl<'r> Resolver<'r> {
+    pub fn new(interner: &'r mut SymbolInterner, dctx: &'r mut DiagCtx) -> Self {
         Self {
             collector: Collector::new(interner),
-            dctx: ResolverDiagCtx::new(),
+            dctx: ResolverDiagCtx::new(dctx),
 
             expected_space: None,
         }

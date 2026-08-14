@@ -4,7 +4,7 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 
 use crate::parser::{Parser, parser::ParseResult};
 

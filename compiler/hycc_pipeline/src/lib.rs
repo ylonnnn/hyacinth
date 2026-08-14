@@ -4,8 +4,8 @@ use hycc_ast::item::{ItemKind, Petal, PetalKind};
 // use hycc_collect::{collector::Collector, diag::CollectorDiagDataCtx};
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::{
-    DiagnosticContext,
-    reporter::{CLIReporter, DiagnosticReporter},
+    diagnostic::Diagnostics,
+    reporter::{cli_reporter::CLIReporter, reporter::DiagnosticReporter},
 };
 use hycc_hir::{HirTable, builder::HirBuilder, item::HirItem};
 // use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
@@ -39,8 +39,7 @@ impl Driver {
             let mut session = Session::new(driver.registry.root().0);
             driver.compile(&mut session);
 
-            let registry = &driver.registry;
-            let reporter = CLIReporter::new(&session.dctx, &registry);
+            let reporter = CLIReporter::new(&session.dctx, &driver.registry);
             reporter.report();
         }
     }
@@ -48,29 +47,27 @@ impl Driver {
     fn parse(&mut self, session: &mut Session) -> Option<Petal> {
         let source = self.registry.get(session.root);
 
-        let mut lexer = Lexer::new(&source);
+        let mut lexer = Lexer::new(&source, &mut session.dctx);
         let tok_stream = lexer.tokenize();
 
-        lexer
+        lexer.dctx.emit(LexerDiagDataCtx::new(&self.registry));
+
+        session
             .dctx
-            .emit(&mut session.dctx, LexerDiagDataCtx::new(&self.registry));
+            .error_occurred()
+            .map_or_else(|_| None, |_| Some(()))?;
 
-        if session.dctx.error_occurred() {
-            return None;
-        }
-
-        let mut parser = Parser::new(tok_stream, &source);
+        let mut parser = Parser::new(tok_stream, &source, &mut session.dctx);
         let petal = parser.parse();
 
-        parser
+        parser.dctx.emit(ParserDiagDataCtx::new(&self.registry));
+
+        session
             .dctx
-            .emit(&mut session.dctx, ParserDiagDataCtx::new(&self.registry));
+            .error_occurred()
+            .map_or_else(|_| None, |_| Some(()))?;
 
-        if session.dctx.error_occurred() {
-            return None;
-        }
-
-        ternary!(parser.dctx.error_occurred(), None, Some(petal))
+        Some(petal)
     }
 
     fn parse_source(&mut self, session: &mut Session) -> Option<Petal> {
@@ -109,20 +106,18 @@ impl Driver {
     where
         'h: 's,
     {
-        let mut resolver = Resolver::new(&mut session.interner);
+        let mut resolver = Resolver::new(&mut session.interner, &mut session.dctx);
         resolver.resolve(&tree);
 
-        resolver.dctx.emit(
-            &mut session.dctx,
-            ResolverDiagDataCtx::new(
-                &resolver.collector.interner,
-                &session.hir_table,
-                &resolver.collector.definitions,
-                &resolver.collector.scope_ctx,
-            ),
-        );
+        resolver.dctx.emit(ResolverDiagDataCtx::new(
+            &resolver.collector.interner,
+            &session.hir_table,
+            &resolver.collector.definitions,
+            &resolver.collector.scope_ctx,
+        ));
 
         let mut ty_resolver = TyResolver::new();
+        ty_resolver.resolve(&tree);
     }
 
     fn compile<'s, 'h>(&mut self, session: &'s mut Session<'h>)
@@ -152,7 +147,7 @@ impl Driver {
         //     CollectorDiagDataCtx::new(&collector.interner, &hir_table, &definitions, &scope_ctx),
         // );
 
-        // if session.dctx.error_occurred() {
+        // if session.dctx.error_flag() {
         //     return;
         // }
 
@@ -183,7 +178,7 @@ impl Driver {
         //     ),
         // );
 
-        // if session.dctx.error_occurred() {
+        // if session.dctx.error_flag() {
         //     return;
         // }
 
@@ -204,7 +199,7 @@ impl Driver {
         //     ),
         // );
 
-        // if session.dctx.error_occurred() {
+        // if session.dctx.error_flag() {
         //     return;
         // }
 
@@ -227,7 +222,7 @@ impl Driver {
         //     ),
         // );
 
-        // if session.dctx.error_occurred() {
+        // if session.dctx.error_flag() {
         //     return;
         // }
 

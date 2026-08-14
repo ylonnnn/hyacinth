@@ -5,29 +5,28 @@ use hycc_ast::{
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
 };
+use hycc_diagnostic::diagnostic::DiagCtx;
 use hycc_source::source::Source;
 use hycc_span::Span;
 use hycc_util::{is_ascii_digit, ternary};
 
-use crate::lexer::diag::{LexerDiagCtx, LexerDiagErrorKind};
+use crate::lexer::diag::{self, LexerDiagCtx, LexerDiagErrorKind};
 
 #[derive(Debug)]
-pub struct Lexer<'s> {
-    pub source: &'s Source,
-    // pub dctx: &'d mut DiagnosticCtx,
+pub struct Lexer<'l> {
+    reserved: HashMap<Box<str>, TokenKind>,
 
-    // pub diagnostics: Vec<LexerDiag>,
-    pub dctx: LexerDiagCtx,
+    pub source: &'l Source,
+    pub dctx: LexerDiagCtx<'l>,
 
     offset: u32,
-    reserved: HashMap<Box<str>, TokenKind>,
 }
 
-impl<'s> Lexer<'s> {
-    pub fn new(source: &'s Source) -> Self {
+impl<'l> Lexer<'l> {
+    pub fn new(source: &'l Source, dctx: &'l mut DiagCtx) -> Self {
         Self {
             source,
-            dctx: LexerDiagCtx::new(),
+            dctx: LexerDiagCtx::new(dctx),
             offset: 0,
             reserved: {
                 let mut reserved = HashMap::<Box<str>, TokenKind>::new();
@@ -235,7 +234,7 @@ impl<'s> Lexer<'s> {
         if base == u8::MAX {
             self.dctx.error(
                 (start, 2, src_id).into(),
-                LexerDiagErrorKind::InvalidNumericLiteralprefix,
+                LexerDiagErrorKind::InvalidNumericLiteralPrefix,
             );
 
             // self.dctx.error(
@@ -258,7 +257,7 @@ impl<'s> Lexer<'s> {
         if _start == self.offset && base != 10 {
             self.dctx.error(
                 (start, (_start - start) as u16, src_id).into(),
-                LexerDiagErrorKind::DanglingNumericLiteralprefix,
+                LexerDiagErrorKind::DanglingNumericLiteralPrefix,
             );
 
             // self.dctx.error(

@@ -3,7 +3,7 @@ use hycc_ast::{
     token::{TokenGraph, TokenKind},
     token_stream::TokenStream,
 };
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 
 use crate::parser::{Parser, parser::ParseResult};
 

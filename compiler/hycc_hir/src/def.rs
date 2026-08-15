@@ -517,12 +517,10 @@ pub type DefAccessibility = HirItemAccessibility;
 
 #[derive(Debug, Clone)]
 pub struct Definition {
-    pub name: Symbol,
-    pub kind: DefKind,
-
     // The definition id of the petal that this defintion belongs to.
     pub petal: Option<PetalId>,
-
+    pub kind: DefKind,
+    pub name: Symbol,
     pub hir_id: HirId,
     pub span: Span,
     pub accessibility: DefAccessibility,

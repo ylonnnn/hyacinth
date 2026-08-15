@@ -121,8 +121,20 @@ pub trait DiagEmitter<Ctx> {
     fn emit(&self, ctx: &mut Ctx) -> Diag;
 }
 
-pub trait FromResultEmitter<DCtx: Diagnostics<Ctx, T>, Ctx, T: DiagLike + DiagEmitter<Ctx>> {
-    fn emit(self, dctx: &mut DCtx);
+mod sealed {
+    pub trait ResultTarget<T, E> {}
+    impl<T, E> ResultTarget<T, E> for Result<T, E> {}
+}
+
+pub trait FromResultEmitter<DCtx: Diagnostics<Ctx, T>, Ctx, T: DiagLike + DiagEmitter<Ctx>, RT>:
+    sealed::ResultTarget<RT, T>
+where
+    Self: Sized,
+{
+    fn emit(self, dctx: &mut DCtx) -> Option<RT>;
+    fn emit_discard(self, dctx: &mut DCtx) {
+        self.emit(dctx);
+    }
 }
 
 #[derive(Debug, Default)]

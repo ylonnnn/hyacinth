@@ -3,7 +3,7 @@ use hycc_hir::{
     block::HirBlock,
     def::{
         Binding, DefAccessibility, DefId, DefKind, DefNodeResolution, DefResKind, DefResolution,
-        DefSpace, Definition,
+        DefSpace, Definition, DefinitionTable,
     },
     expr::{
         HirArrayExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall, HirStructExpr,
@@ -16,6 +16,7 @@ use hycc_hir::{
     ty::{HirTy, HirTyKind},
 };
 use hycc_symbol::{Symbol, SymbolInterner};
+use hycc_ty::context::TyCtx;
 use hycc_util::{bug, ternary};
 
 use crate::{
@@ -32,10 +33,10 @@ pub struct Resolver<'r> {
 }
 
 impl<'r> Resolver<'r> {
-    pub fn new(interner: &'r mut SymbolInterner, dctx: &'r mut DiagCtx) -> Self {
+    pub fn new(dctx: &'r mut DiagCtx, collector: Collector<'r>) -> Self {
         Self {
-            collector: Collector::new(interner),
             dctx: ResolverDiagCtx::new(dctx),
+            collector,
 
             expected_space: None,
         }
@@ -97,7 +98,6 @@ impl<'r> Resolver<'r> {
 
     pub fn resolve(&mut self, tree: &HirItem) {
         self.collector.collect(&tree, &mut self.dctx);
-
         self.resolve_petal(&tree).emit(&mut self.dctx);
     }
 
@@ -383,12 +383,12 @@ impl<'r> Resolver<'r> {
         for (i, segment) in path.segments.iter().enumerate() {
             let is_last = i == n - 1;
 
-            let res = self.expect_space(
+            let res = (self.expect_space(
                 ternary!(is_last, space, DefSpace::Type),
                 |s| -> ResolveResult<Option<DefResolution>> {
                     s.resolve_ident(&segment, resolution)
                 },
-            )?;
+            ))?;
 
             if let Some(res) = res {
                 resolution.replace(res);
@@ -429,13 +429,8 @@ impl<'r> Resolver<'r> {
         if let Some(arguments) = &ident.arguments {
             for argument in &arguments.data {
                 let res = match &argument {
-                    HirIdentArgument::Expr(expr) => {
-                        self.expect_space(DefSpace::Value, |s| s.resolve_expr(&expr))
-                    }
-
-                    HirIdentArgument::Ty(ty) => {
-                        self.expect_space(DefSpace::Type, |s| s.resolve_ty(&ty))
-                    }
+                    HirIdentArgument::Expr(expr) => self.resolve_expr(&expr),
+                    HirIdentArgument::Ty(ty) => self.resolve_ty(&ty),
                 };
 
                 res.emit(&mut self.dctx);

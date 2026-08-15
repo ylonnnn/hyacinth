@@ -14,16 +14,16 @@ use crate::{
 
 #[derive(Debug)]
 pub struct TyCtx {
-    storage: Vec<TyKind>,
-    map: HashMap<TyKind, TyId>,
+    pub ext_table: ExtensionTable,
 
-    vars: Vec<TyVar>,
-
-    node_ty_map: HashMap<HirId, Ty>,
+    hir_ty_map: HashMap<HirId, Ty>,
     def_ty_map: HashMap<DefId, Ty>,
     ty_def_map: HashMap<TyId, DefId>,
 
-    pub ext_table: ExtensionTable,
+    map: HashMap<TyKind, TyId>,
+    storage: Vec<TyKind>,
+
+    vars: Vec<TyVar>,
 }
 
 impl TyCtx {
@@ -34,7 +34,7 @@ impl TyCtx {
 
             vars: Vec::new(),
 
-            node_ty_map: HashMap::new(),
+            hir_ty_map: HashMap::new(),
             def_ty_map: HashMap::new(),
             ty_def_map: HashMap::new(),
 
@@ -64,11 +64,11 @@ impl TyCtx {
     }
 
     pub fn hir_ids(&self) -> Vec<HirId> {
-        self.node_ty_map.keys().cloned().collect()
+        self.hir_ty_map.keys().cloned().collect()
     }
 
     pub fn hir_tys(&self) -> Vec<(HirId, &Ty)> {
-        self.node_ty_map
+        self.hir_ty_map
             .iter()
             .map(|(hir_id, ty)| (*hir_id, ty))
             .collect()
@@ -414,19 +414,19 @@ impl TyCtx {
     }
 
     pub fn attach_to_hir(&mut self, hir_id: HirId, ty: Ty) {
-        self.node_ty_map.insert(hir_id, ty);
+        self.hir_ty_map.insert(hir_id, ty);
     }
 
     pub fn dettach_hir(&mut self, hir_id: HirId) {
-        self.node_ty_map.remove(&hir_id);
+        self.hir_ty_map.remove(&hir_id);
     }
 
     pub fn get_hir_ty(&self, hir_id: HirId) -> Option<&Ty> {
-        self.node_ty_map.get(&hir_id)
+        self.hir_ty_map.get(&hir_id)
     }
 
     pub fn get_hir_mut_ty(&mut self, hir_id: HirId) -> Option<&mut Ty> {
-        self.node_ty_map.get_mut(&hir_id)
+        self.hir_ty_map.get_mut(&hir_id)
     }
 
     pub fn get_hir_ty_id(&self, hir_id: HirId) -> Option<TyId> {
@@ -435,12 +435,12 @@ impl TyCtx {
 
     pub fn expect_hir_ty(&self, hir_id: HirId) -> &Ty {
         self.get_hir_ty(hir_id)
-            .expect(&format!("expected a type attached to hir id {hir_id:?}"))
+            .unwrap_or_else(|| panic!("expected a type attached to hir id {hir_id:?}"))
     }
 
     pub fn expect_hir_mut_ty(&mut self, hir_id: HirId) -> &mut Ty {
         self.get_hir_mut_ty(hir_id)
-            .expect(&format!("expected a type attached to hir id {hir_id:?}"))
+            .unwrap_or_else(|| panic!("expected a type attached to hir id {hir_id:?}"))
     }
 
     pub fn expect_hir_ty_id(&self, hir_id: HirId) -> TyId {
@@ -456,12 +456,31 @@ impl TyCtx {
         self.def_ty_map.remove(&def_id);
     }
 
-    pub fn get_ty_of_def(&self, def_id: DefId) -> Option<&Ty> {
+    pub fn get_def_ty_id(&self, def_id: DefId) -> Option<TyId> {
+        self.def_ty_map.get(&def_id).map(|ty| ty.id)
+    }
+
+    pub fn get_def_ty(&self, def_id: DefId) -> Option<&Ty> {
         self.def_ty_map.get(&def_id)
     }
 
-    pub fn get_mut_ty_of_def(&mut self, def_id: DefId) -> Option<&mut Ty> {
+    pub fn get_def_mut_ty(&mut self, def_id: DefId) -> Option<&mut Ty> {
         self.def_ty_map.get_mut(&def_id)
+    }
+
+    pub fn expect_def_ty_id(&self, def_id: DefId) -> TyId {
+        self.get_def_ty_id(def_id)
+            .unwrap_or_else(|| panic!("expected a ty attached to {def_id:?}"))
+    }
+
+    pub fn expect_def_ty(&self, def_id: DefId) -> &Ty {
+        self.get_def_ty(def_id)
+            .unwrap_or_else(|| panic!("expected a ty attached to {def_id:?}"))
+    }
+
+    pub fn expect_def_mut_ty(&mut self, def_id: DefId) -> &mut Ty {
+        self.get_def_mut_ty(def_id)
+            .unwrap_or_else(|| panic!("expected a ty attached to {def_id:?}"))
     }
 
     pub fn get_ty_def_id(&self, ty_id: TyId) -> Option<DefId> {

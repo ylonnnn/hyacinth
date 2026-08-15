@@ -14,3 +14,4 @@
 - [x] clean-up `hycc_diagnostic` implementation
 - [ ] improve diagnostic reporting
 - [ ] remodel the phases to improve experience and be more intuitive
+- [ ] check behavior of having an error in the `collection` phase and in the `resolution` phase at the same time.

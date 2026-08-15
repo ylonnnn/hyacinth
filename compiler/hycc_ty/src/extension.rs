@@ -1,4 +1,7 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{
+    HashMap,
+    hash_map::{Entry, Keys},
+};
 
 use hycc_hir::{
     HirId,
@@ -23,6 +26,14 @@ impl ExtensionTable {
             native: HashMap::new(),
             hir_map: HashMap::new(),
         }
+    }
+
+    pub fn native_exts(&self) -> &HashMap<ExtTargetKind, Vec<ExtensionId>> {
+        &self.native
+    }
+
+    pub fn native_exts_resolved(&self) -> bool {
+        !self.native.is_empty()
     }
 
     pub fn insert(&mut self, ext: Extension) -> ExtensionId {
@@ -93,6 +104,13 @@ impl ExtensionTable {
                 extensions.push(ext_id);
             }
         }
+    }
+
+    pub fn attach_hir_ext(&mut self, hir_id: HirId, ext: Extension) -> ExtensionId {
+        let ext_id = self.insert(ext);
+        self.attach_hir_ext_id(hir_id, ext_id);
+
+        ext_id
     }
 
     pub fn attach_hir_ext_id(&mut self, hir_id: HirId, ext_id: ExtensionId) {

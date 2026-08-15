@@ -8,17 +8,17 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyFormatter<'t, 'd, 'i> {
-    pub tctx: &'t mut TyCtx,
-    pub definitions: &'d DefinitionTable,
-    pub interner: &'i SymbolInterner,
+pub struct TyFormatter<'f> {
+    pub tctx: &'f mut TyCtx,
+    pub definitions: &'f DefinitionTable,
+    pub interner: &'f SymbolInterner,
 }
 
-impl<'t, 'd, 'i> TyFormatter<'t, 'd, 'i> {
+impl<'f> TyFormatter<'f> {
     pub fn new(
-        tctx: &'t mut TyCtx,
-        definitions: &'d DefinitionTable,
-        interner: &'i SymbolInterner,
+        tctx: &'f mut TyCtx,
+        definitions: &'f DefinitionTable,
+        interner: &'f SymbolInterner,
     ) -> Self {
         Self {
             tctx,

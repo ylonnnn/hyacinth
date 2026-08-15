@@ -12,39 +12,47 @@ use hycc_session::config;
 use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
+use hycc_ty::{
+    context::{TyCtx, TyId},
+    fmt::TyFormatter,
+};
 use hycc_util::ternary;
 
 pub type ResolveResult<T = (), E = ResolverDiag> = Result<T, E>;
 
-impl<'c, 'h, T> FromResultEmitter<ResolverDiagCtx<'c>, ResolverDiagDataCtx<'c, 'h>, ResolverDiag>
-    for ResolveResult<T, ResolverDiag>
+impl<'c, 'h, RT>
+    FromResultEmitter<ResolverDiagCtx<'c>, ResolverDiagDataCtx<'c, 'h>, ResolverDiag, RT>
+    for ResolveResult<RT, ResolverDiag>
 {
-    fn emit(self, dctx: &mut ResolverDiagCtx<'c>) {
-        if let Err(diag) = self {
-            dctx.add(diag)
+    fn emit(self, dctx: &mut ResolverDiagCtx<'c>) -> Option<RT> {
+        match self {
+            Ok(val) => Some(val),
+            Err(diag) => {
+                dctx.add(diag);
+                None
+            }
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ResolverDiagDataCtx<'c, 'h> {
-    pub interner: &'c SymbolInterner,
+    pub fmt: TyFormatter<'c>,
     pub hir_table: &'c HirTable<'h>,
-    pub definitions: &'c DefinitionTable,
     pub scope_ctx: &'c ScopeCtx,
 }
 
 impl<'c, 'h> ResolverDiagDataCtx<'c, 'h> {
     pub fn new(
+        tctx: &'c mut TyCtx,
         interner: &'c SymbolInterner,
         hir_table: &'c HirTable<'h>,
         definitions: &'c DefinitionTable,
         scope_ctx: &'c ScopeCtx,
     ) -> Self {
         Self {
-            interner,
+            fmt: TyFormatter::new(tctx, definitions, interner),
             hir_table,
-            definitions,
             scope_ctx,
         }
     }
@@ -103,11 +111,13 @@ pub enum ResolverDiagErrorKind {
     Duplication { ident: Symbol, earlier_def: DefId },
 
     UnrecognizedSymbol(Symbol, Option<DefSpace>),
-    // UnrecognizedMember { name: Symbol, ty_id: TyId },
+    UnrecognizedMember { name: Symbol, ty_id: TyId },
 
-    // InvalidPetalResolution(Symbol, DefId),
-    // InvalidInference,
+    IllegalPetalTyUsage(DefId),
+    InvalidInference,
     InaccessibleSymbol(Symbol),
+
+    GenericArgumentArityMismatch(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +162,7 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     Duplication { ident, earlier_def } => {
                         format!(
                             "definition with the identifier `{}` already exists.",
-                            ctx.interner.get(*ident)
+                            ctx.fmt.interner.get(*ident)
                         )
                     }
 
@@ -160,14 +170,44 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         format!(
                             "cannot resolved unrecognized {} `{}`",
                             space.map_or_else(|| String::from("symbol"), |space| space.to_string()),
-                            ctx.interner.get(*name)
+                            ctx.fmt.interner.get(*name)
                         )
                     }
+
+                    UnrecognizedMember { name, ty_id } => {
+                        format!(
+                            "cannot recognize associated item `{}` from type `{}`.",
+                            ctx.fmt.interner.get(*name),
+                            ctx.fmt.fmt_id(*ty_id)
+                        )
+                    }
+
+                    IllegalPetalTyUsage(def_id) => {
+                        let def = ctx.fmt.definitions.get(*def_id);
+                        format!(
+                            "cannot use petal `{}` as a type.",
+                            ctx.fmt.interner.get(def.name)
+                        )
+                    }
+
+                    InvalidInference => format!("cannot infer type in this context."),
 
                     InaccessibleSymbol(symbol) => {
                         format!(
                             "`{}` is inaccessible in this context.",
-                            ctx.interner.get(*symbol)
+                            ctx.fmt.interner.get(*symbol)
+                        )
+                    }
+
+                    GenericArgumentArityMismatch(data) => {
+                        let (expected, received) =
+                            ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
+                        format!(
+                            "expected at most `{}` generic argument{}, received `{}` generic argument{}.",
+                            expected,
+                            ternary!(expected == 1, "", "s"),
+                            received,
+                            ternary!(received == 1, "", "s"),
                         )
                     }
                 };
@@ -189,6 +229,8 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                 Duplication { ident, earlier_def } => {
                     // let def = definitions.get(*earlier_def);
 
+                    // TODO: add note that builtin definitions cannot be overwritten
+
                     // if def.span.src_id.is_valid() {
                     //     diag.detail(
                     //         def.span,
@@ -198,8 +240,11 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     //         )),
                     //     );
                     // }
+                }
 
-                    // TODO: add note that builtin definitions cannot be overwritten
+                IllegalPetalTyUsage(def_id) => {
+                    // TODO: add note and/or sub-diagnostic pointing to
+                    // the definition of the petal
                 }
 
                 _ => {}

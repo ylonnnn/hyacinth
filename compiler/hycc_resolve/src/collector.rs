@@ -22,6 +22,7 @@ use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     context::TyCtx,
+    extension::Extension,
     ty::{GenericArg, Ty},
 };
 use hycc_util::{bug, ternary};
@@ -35,22 +36,26 @@ pub enum CollectorLevel {
 }
 
 #[derive(Debug)]
-pub struct Collector<'i> {
-    pub tctx: TyCtx,
+pub struct Collector<'c> {
     pub scope_ctx: ScopeCtx,
-    pub definitions: DefinitionTable,
     pub petal_ctx: PetalCtx,
-    pub interner: &'i mut SymbolInterner,
+    pub tctx: &'c mut TyCtx,
+    pub definitions: &'c mut DefinitionTable,
+    pub interner: &'c mut SymbolInterner,
     pub(crate) level: CollectorLevel,
 }
 
-impl<'i> Collector<'i> {
-    pub fn new(interner: &'i mut SymbolInterner) -> Self {
+impl<'c> Collector<'c> {
+    pub fn new(
+        interner: &'c mut SymbolInterner,
+        tctx: &'c mut TyCtx,
+        definitions: &'c mut DefinitionTable,
+    ) -> Self {
         Self {
-            tctx: TyCtx::new(),
             scope_ctx: ScopeCtx::new(),
-            definitions: DefinitionTable::new(),
             petal_ctx: PetalCtx::new(),
+            tctx,
+            definitions,
             interner,
             level: CollectorLevel::Top,
         }
@@ -348,23 +353,17 @@ impl<'i> Collector<'i> {
                         DefAccessibility::Priv,
                     ));
 
-                    match res {
-                        Ok(b) => {
-                            let ty_id = s.tctx.make_param_ty(
-                                b.def_id,
-                                s.scope_ctx.generic_depth as u32,
-                                i as u32,
-                            );
-                            s.tctx.attach_to_hir(
-                                generic_param.id,
-                                Ty::new(ty_id, generic_param.span),
-                            );
-                        }
-
-                        Err(diag) => {
-                            dctx.add(diag);
-                        }
+                    let Some(binding) = res.emit(dctx) else {
+                        continue;
                     };
+
+                    let ty_id = s.tctx.make_param_ty(
+                        binding.def_id,
+                        s.scope_ctx.generic_depth as u32,
+                        i as u32,
+                    );
+                    s.tctx
+                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
                 }
             }
 
@@ -381,10 +380,23 @@ impl<'i> Collector<'i> {
 
             let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
             s.enter_scope(scope_id, CollectorLevel::Top, |s| {
-                for item in &extend.items {
-                    s.collect_item(&item, dctx).emit(dctx);
-                }
+                extend
+                    .items
+                    .iter()
+                    .for_each(|item| s.collect_item(&item, dctx).emit_discard(dctx))
             });
+
+            s.tctx.ext_table.attach_hir_ext(
+                item.id,
+                Extension::new(
+                    item.id,
+                    None,
+                    std::mem::take(s.scope_ctx.get_mut(scope_id))
+                        .all()
+                        .into_iter()
+                        .collect(),
+                ),
+            );
 
             s.scope_ctx.generic_depth -= extend.generic_params.is_some() as u32;
         });
@@ -549,30 +561,24 @@ impl<'i> Collector<'i> {
                         DefAccessibility::Priv,
                     ));
 
-                    match res {
-                        Ok(b) => {
-                            let adt_def = s.definitions.get_mut(def_id).kind.expect_mut_adt();
-                            adt_def.generic_params.push(b.def_id);
-
-                            // TODO: determine the param to be created and attached based on the
-                            // generic parameter kind
-                            let ty_id = s.tctx.make_param_ty(
-                                b.def_id,
-                                s.scope_ctx.generic_depth as u32,
-                                i as u32,
-                            );
-
-                            adt_generic_args.push(GenericArg::Ty(ty_id));
-                            s.tctx.attach_to_hir(
-                                generic_param.id,
-                                Ty::new(ty_id, generic_param.span),
-                            );
-                        }
-
-                        Err(diag) => {
-                            dctx.add(diag);
-                        }
+                    let Some(binding) = res.emit(dctx) else {
+                        continue;
                     };
+
+                    let adt_def = s.definitions.get_mut(def_id).kind.expect_mut_adt();
+                    adt_def.generic_params.push(binding.def_id);
+
+                    // TODO: determine the param to be created and attached based on the
+                    // generic parameter kind
+                    let ty_id = s.tctx.make_param_ty(
+                        binding.def_id,
+                        s.scope_ctx.generic_depth as u32,
+                        i as u32,
+                    );
+
+                    adt_generic_args.push(GenericArg::Ty(ty_id));
+                    s.tctx
+                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
                 }
             }
 
@@ -648,27 +654,21 @@ impl<'i> Collector<'i> {
                         DefAccessibility::Priv,
                     ));
 
-                    match res {
-                        Ok(b) => {
-                            let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
-                            fn_def.generic_params.push(b.def_id);
-
-                            let ty_id = s.tctx.make_param_ty(
-                                b.def_id,
-                                s.scope_ctx.generic_depth as u32,
-                                i as u32,
-                            );
-
-                            s.tctx.attach_to_hir(
-                                generic_param.id,
-                                Ty::new(ty_id, generic_param.span),
-                            );
-                        }
-
-                        Err(diag) => {
-                            dctx.add(diag);
-                        }
+                    let Some(binding) = res.emit(dctx) else {
+                        continue;
                     };
+
+                    let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
+                    fn_def.generic_params.push(binding.def_id);
+
+                    let ty_id = s.tctx.make_param_ty(
+                        binding.def_id,
+                        s.scope_ctx.generic_depth as u32,
+                        i as u32,
+                    );
+
+                    s.tctx
+                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
                 }
             }
 
@@ -683,16 +683,16 @@ impl<'i> Collector<'i> {
                     DefAccessibility::Priv,
                 ));
 
-                match res {
-                    Ok(b) => {
-                        let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
-                        fn_def.params.push(b.def_id);
-                    }
-
-                    Err(diag) => {
-                        dctx.add(diag);
-                    }
+                let Some(binding) = res.emit(dctx) else {
+                    continue;
                 };
+
+                s.definitions
+                    .get_mut(def_id)
+                    .kind
+                    .expect_mut_fn()
+                    .params
+                    .push(binding.def_id);
             }
 
             s.scope_ctx.attach_id(func.body.id, scope_id);

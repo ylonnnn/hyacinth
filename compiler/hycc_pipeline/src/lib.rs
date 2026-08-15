@@ -15,6 +15,7 @@ use hycc_parser::{
     parser::{Parser, diag::ParserDiagDataCtx},
 };
 use hycc_resolve::{
+    collector::Collector,
     diag::ResolverDiagDataCtx,
     resolver::{self, Resolver},
     ty_resolver::TyResolver,
@@ -102,32 +103,55 @@ impl Driver {
         }
     }
 
-    fn resolve<'s, 'h>(&mut self, session: &'s mut Session<'h>, tree: &HirItem)
+    fn resolve<'s, 'h>(&mut self, session: &'s mut Session<'h>, tree: &HirItem) -> Result<(), ()>
     where
         'h: 's,
     {
-        let mut resolver = Resolver::new(&mut session.interner, &mut session.dctx);
+        let collector = Collector::new(
+            &mut session.interner,
+            &mut session.tctx,
+            &mut session.definitions,
+        );
+
+        let mut resolver = Resolver::new(&mut session.dctx, collector);
         resolver.resolve(&tree);
 
         resolver.dctx.emit(ResolverDiagDataCtx::new(
+            resolver.collector.tctx,
             &resolver.collector.interner,
             &session.hir_table,
             &resolver.collector.definitions,
             &resolver.collector.scope_ctx,
         ));
 
-        let mut ty_resolver = TyResolver::new();
+        let scope_ctx = &resolver.collector.scope_ctx;
+
+        session.dctx.error_occurred()?;
+
+        let mut ty_resolver = TyResolver::new(
+            &mut session.dctx,
+            &mut session.tctx,
+            &mut session.definitions,
+            &session.hir_table,
+        );
         ty_resolver.resolve(&tree);
+
+        ty_resolver.dctx.emit(ResolverDiagDataCtx::new(
+            ty_resolver.tctx,
+            &session.interner,
+            &session.hir_table,
+            &ty_resolver.definitions,
+            &scope_ctx,
+        ));
+
+        Ok(())
     }
 
-    fn compile<'s, 'h>(&mut self, session: &'s mut Session<'h>)
+    fn compile<'s, 'h>(&mut self, session: &'s mut Session<'h>) -> Result<(), ()>
     where
         'h: 's,
     {
-        let Some(tree) = self.parse_source(session) else {
-            return;
-        };
-
+        let tree = self.parse_source(session).ok_or_else(|| ())?;
         let mut hir_builder = HirBuilder::new(
             &mut session.interner,
             &self.registry,
@@ -137,6 +161,8 @@ impl Driver {
         let hir = hir_builder.lower(tree);
 
         self.resolve(session, hir);
+
+        Ok(())
 
         // let mut collector = Collector::new(&mut session.interner);
         // collector.collect(&hir);

@@ -48,10 +48,10 @@ impl ScopeId {
 
 #[derive(Debug, Clone)]
 pub struct ScopeCtx {
+    hir_map: HashMap<HirId, ScopeId>,
+    def_map: HashMap<DefId, ScopeId>,
     table: ScopeTable,
     stack: Vec<ScopeId>,
-    node_table: HashMap<HirId, ScopeId>,
-    def_table: HashMap<DefId, ScopeId>,
 
     pub generic_depth: u32,
 }
@@ -61,8 +61,8 @@ impl ScopeCtx {
         let mut inst = Self {
             table: ScopeTable::new(),
             stack: Vec::new(),
-            node_table: HashMap::new(),
-            def_table: HashMap::new(),
+            hir_map: HashMap::new(),
+            def_map: HashMap::new(),
             generic_depth: 0,
         };
 
@@ -80,7 +80,7 @@ impl ScopeCtx {
 
     pub fn attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
         assert!(
-            !self.node_table.contains_key(&hir_id),
+            !self.hir_map.contains_key(&hir_id),
             "hir node already has a scope attached!"
         );
 
@@ -91,7 +91,7 @@ impl ScopeCtx {
     }
 
     pub fn try_attach(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
-        if let Some(scope_id) = self.node_table.get(&hir_id) {
+        if let Some(scope_id) = self.hir_map.get(&hir_id) {
             *scope_id
         } else {
             self.attach(hir_id, scope)
@@ -100,22 +100,22 @@ impl ScopeCtx {
 
     pub fn overwrite(&mut self, hir_id: HirId, scope: Scope) -> ScopeId {
         let scope_id = self.table.insert(scope);
-        self.node_table.insert(hir_id, scope_id);
+        self.hir_map.insert(hir_id, scope_id);
 
         scope_id
     }
 
     pub fn attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) {
         assert!(
-            !self.node_table.contains_key(&hir_id),
+            !self.hir_map.contains_key(&hir_id),
             "hir node already has a scope attached!"
         );
 
-        self.node_table.insert(hir_id, scope_id);
+        self.hir_map.insert(hir_id, scope_id);
     }
 
     pub fn try_attach_id(&mut self, hir_id: HirId, scope_id: ScopeId) -> ScopeId {
-        if let Some(scope_id) = self.node_table.get(&hir_id) {
+        if let Some(scope_id) = self.hir_map.get(&hir_id) {
             *scope_id
         } else {
             self.attach_id(hir_id, scope_id);
@@ -132,7 +132,7 @@ impl ScopeCtx {
     }
 
     pub fn get_hir_scope_id(&self, hir_id: HirId) -> Option<ScopeId> {
-        Some(*self.node_table.get(&hir_id)?)
+        Some(*self.hir_map.get(&hir_id)?)
     }
 
     pub fn expect_hir_scope_id(&self, hir_id: HirId) -> ScopeId {
@@ -160,7 +160,7 @@ impl ScopeCtx {
 
     pub fn attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
         assert!(
-            !self.def_table.contains_key(&def_id),
+            !self.def_map.contains_key(&def_id),
             "definition already has a scope attached!"
         );
 
@@ -171,7 +171,7 @@ impl ScopeCtx {
     }
 
     pub fn try_attach_to_def(&mut self, def_id: DefId, scope: Scope) -> ScopeId {
-        if let Some(scope_id) = self.def_table.get(&def_id) {
+        if let Some(scope_id) = self.def_map.get(&def_id) {
             *scope_id
         } else {
             self.attach_to_def(def_id, scope)
@@ -180,15 +180,15 @@ impl ScopeCtx {
 
     pub fn attach_id_to_def(&mut self, def_id: DefId, scope_id: ScopeId) {
         assert!(
-            !self.def_table.contains_key(&def_id),
+            !self.def_map.contains_key(&def_id),
             "definition already has a scope attached!"
         );
 
-        self.def_table.insert(def_id, scope_id);
+        self.def_map.insert(def_id, scope_id);
     }
 
     pub fn try_attach_id_to_def(&mut self, def_id: DefId, scope_id: ScopeId) -> ScopeId {
-        if let Some(scope_id) = self.def_table.get(&def_id) {
+        if let Some(scope_id) = self.def_map.get(&def_id) {
             *scope_id
         } else {
             self.attach_id_to_def(def_id, scope_id);
@@ -197,7 +197,7 @@ impl ScopeCtx {
     }
 
     pub fn get_id_from_def(&self, def_id: DefId) -> Option<ScopeId> {
-        Some(*self.def_table.get(&def_id)?)
+        Some(*self.def_map.get(&def_id)?)
     }
 
     pub fn expect_def_scope_id(&self, def_id: DefId) -> ScopeId {

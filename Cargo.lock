@@ -103,6 +103,7 @@ dependencies = [
  "hycc_hir",
  "hycc_source",
  "hycc_symbol",
+ "hycc_ty",
 ]
 
 [[package]]

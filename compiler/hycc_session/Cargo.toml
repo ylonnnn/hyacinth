@@ -10,3 +10,4 @@ hycc_diagnostic = { path = "../hycc_diagnostic" }
 hycc_hir = { path = "../hycc_hir" }
 hycc_source = { path = "../hycc_source" }
 hycc_symbol = { path = "../hycc_symbol" }
+hycc_ty = { path = "../hycc_ty" }

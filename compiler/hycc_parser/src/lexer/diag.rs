@@ -51,7 +51,7 @@ impl<'c> Diagnostics<LexerDiagDataCtx<'c>, LexerDiag> for LexerDiagCtx<'c> {
     }
 }
 
-#[repr(u8)]
+#[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum LexerDiagErrorKind {
     InvalidNumericLiteralDigit { digit: u8, base: u8 },

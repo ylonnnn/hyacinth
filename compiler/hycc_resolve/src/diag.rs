@@ -106,6 +106,7 @@ pub enum ResolverDiagKind {
 #[derive(Debug, Clone)]
 pub enum ResolverDiagWarningKind {}
 
+#[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum ResolverDiagErrorKind {
     Duplication { ident: Symbol, earlier_def: DefId },
@@ -153,93 +154,104 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
     fn emit(&self, ctx: &mut ResolverDiagDataCtx<'c, 'h>) -> Diag {
         use ResolverDiagErrorKind::*;
 
-        let (kind, message) = match &self.kind {
-            ResolverDiagKind::Info => (DiagKind::Info, "".into()),
-            ResolverDiagKind::Warning => (DiagKind::Warning, "".into()),
+        let (kind, message, extra) = match &self.kind {
+            ResolverDiagKind::Info => (DiagKind::Info, "".into(), None),
+            ResolverDiagKind::Warning => (DiagKind::Warning, "".into(), None),
 
             ResolverDiagKind::Error(kind) => {
-                let message = match kind {
+                let (message, extra) = match kind {
                     Duplication { ident, earlier_def } => {
-                        format!(
-                            "definition with the identifier `{}` already exists.",
-                            ctx.fmt.interner.get(*ident)
+                        let s_ident = ctx.fmt.interner.get(*ident);
+                        (
+                            format!(
+                                "definition with the identifier `{}` already exists.",
+                                s_ident
+                            ),
+                            Some(format!("redefinition of `{}`", s_ident)),
                         )
                     }
 
-                    UnrecognizedSymbol(name, space) => {
+                    UnrecognizedSymbol(name, space) => (
                         format!(
                             "cannot resolved unrecognized {} `{}`",
                             space.map_or_else(|| String::from("symbol"), |space| space.to_string()),
-                            ctx.fmt.interner.get(*name)
-                        )
-                    }
+                            ctx.fmt.interner.get(*name),
+                        ),
+                        Some(format!("could not find in this scope")),
+                    ),
 
                     UnrecognizedMember { name, ty_id } => {
-                        format!(
-                            "cannot recognize associated item `{}` from type `{}`.",
-                            ctx.fmt.interner.get(*name),
-                            ctx.fmt.fmt_id(*ty_id)
+                        let s_ty = ctx.fmt.fmt_id(*ty_id);
+                        (
+                            format!(
+                                "unrecognized associated item `{}` from `{}`.",
+                                ctx.fmt.interner.get(*name),
+                                s_ty,
+                            ),
+                            Some(format!("no associated item from `{s_ty}`")),
                         )
                     }
 
                     IllegalPetalTyUsage(def_id) => {
                         let def = ctx.fmt.definitions.get(*def_id);
-                        format!(
-                            "cannot use petal `{}` as a type.",
-                            ctx.fmt.interner.get(def.name)
+                        (
+                            format!(
+                                "cannot use petal `{}` as a type.",
+                                ctx.fmt.interner.get(def.name)
+                            ),
+                            None,
                         )
                     }
 
-                    InvalidInference => format!("cannot infer type in this context."),
+                    InvalidInference => (
+                        format!("cannot infer type in this context."),
+                        Some("requires known type".into()),
+                    ),
 
-                    InaccessibleSymbol(symbol) => {
+                    InaccessibleSymbol(symbol) => (
                         format!(
                             "`{}` is inaccessible in this context.",
                             ctx.fmt.interner.get(*symbol)
-                        )
-                    }
+                        ),
+                        None,
+                    ),
 
                     GenericArgumentArityMismatch(data) => {
                         let (expected, received) =
                             ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
-                        format!(
-                            "expected at most `{}` generic argument{}, received `{}` generic argument{}.",
-                            expected,
-                            ternary!(expected == 1, "", "s"),
-                            received,
-                            ternary!(received == 1, "", "s"),
+                        (
+                            "generic argument arity mismatch.".into(),
+                            Some(format!(
+                                "expected at most `{}` but received `{}`.",
+                                expected, received,
+                            )),
                         )
                     }
                 };
 
                 (
                     DiagKind::Error(
-                        hycc_util::enums::tag_of::<u16, _>(&kind)
+                        hycc_util::enums::tag_of::<u16, ResolverDiagErrorKind>(&kind)
                             + ResolverDiagCtx::ERROR_CODE_OFFSET,
                     ),
                     message,
+                    extra,
                 )
             }
         };
 
-        let mut diag = Diag::new(kind, self.span, message);
+        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
 
         match &self.kind {
             ResolverDiagKind::Error(kind) => match kind {
                 Duplication { ident, earlier_def } => {
-                    // let def = definitions.get(*earlier_def);
-
                     // TODO: add note that builtin definitions cannot be overwritten
+                    let def = ctx.fmt.definitions.get(*earlier_def);
 
-                    // if def.span.src_id.is_valid() {
-                    //     diag.detail(
-                    //         def.span,
-                    //         DiagKind::Note(format!(
-                    //             "earlier definition of `{}`",
-                    //             interner.get(*ident)
-                    //         )),
-                    //     );
-                    // }
+                    diag.note(
+                        def.span,
+                        format!("earlier definition of `{}`", ctx.fmt.interner.get(*ident)),
+                    );
                 }
 
                 IllegalPetalTyUsage(def_id) => {

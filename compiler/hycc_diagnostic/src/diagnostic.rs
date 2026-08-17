@@ -57,7 +57,7 @@ impl DiagDetail {
 #[derive(Debug, Clone)]
 pub struct Diag {
     pub sub_diagnostics: Vec<Diag>,
-    pub message: String,
+    pub message: (String, Option<String>),
     pub details: Vec<DiagDetail>,
     pub span: Span,
     pub kind: DiagKind,
@@ -67,7 +67,22 @@ impl Diag {
     pub fn new(kind: DiagKind, span: Span, message: String) -> Self {
         Self {
             sub_diagnostics: Vec::new(),
-            message,
+            message: (message, None),
+            details: Vec::new(),
+            span,
+            kind,
+        }
+    }
+
+    pub fn new_with_extra(
+        kind: DiagKind,
+        span: Span,
+        message: String,
+        extra: Option<String>,
+    ) -> Self {
+        Self {
+            sub_diagnostics: Vec::new(),
+            message: (message, extra),
             details: Vec::new(),
             span,
             kind,

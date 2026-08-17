@@ -18,6 +18,14 @@ impl Span {
         }
     }
 
+    pub fn overlaps(self, other: Span) -> bool {
+        self.within(other) || other.within(self)
+    }
+
+    pub fn within(self, other: Span) -> bool {
+        other.offset <= self.offset && other.end() >= self.end()
+    }
+
     pub fn dummy(src_id: SourceId) -> Self {
         Self::new(0, 1, src_id)
     }

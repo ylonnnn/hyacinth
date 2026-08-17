@@ -249,7 +249,9 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .unwrap_or_else(|| panic!("expected a definition space"));
 
         let n = path.segments.len();
-        let res = self.definitions.expect_res(path.id);
+        let Some(res) = self.definitions.get_res(path.id) else {
+            return Ok(self.tctx.make_inferred_ty(InferKind::Any));
+        };
 
         let mut prev_ty_id = None;
         let mut generic_args = Vec::new();

@@ -126,8 +126,6 @@ impl Driver {
 
         let scope_ctx = &resolver.collector.scope_ctx;
 
-        session.dctx.error_occurred()?;
-
         let mut ty_resolver = TyResolver::new(
             &mut session.dctx,
             &mut session.tctx,

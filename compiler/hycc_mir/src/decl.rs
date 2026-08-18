@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use hycc_hir::def::DefId;
 use hycc_span::Span;
-use hycc_ty::context::TyId;
+use hycc_ty::ctx::TyId;
 
 // #[derive(Debug, Clone)]
 // pub struct DeclTable {

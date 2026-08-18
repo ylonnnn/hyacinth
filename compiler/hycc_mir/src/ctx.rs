@@ -5,7 +5,7 @@ use hycc_hir::{
     item::HirItemLevel,
 };
 use hycc_span::Span;
-use hycc_ty::context::TyId;
+use hycc_ty::ctx::TyId;
 
 use crate::{
     decl::{Decl, GlobalDeclId, LocalDeclId, Mutability},

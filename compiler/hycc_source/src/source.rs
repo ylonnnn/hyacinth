@@ -1,6 +1,6 @@
 use std::fs;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceId(pub(crate) u16);
 
 impl SourceId {

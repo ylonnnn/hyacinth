@@ -516,7 +516,7 @@ impl<'s> Parser<'s> {
             item.span,
             ParserDiagErrorKind::UnsupportedItem {
                 item_kind: item.kind,
-                context: "type extension",
+                ctx: "type extension",
             },
         )))
     }

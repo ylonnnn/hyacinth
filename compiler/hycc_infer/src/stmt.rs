@@ -1,8 +1,9 @@
-use hycc_diagnostic::diagnostic::Diagnostics;
+use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{
     HirNode,
     stmt::{HirStmt, HirStmtKind},
 };
+use hycc_resolve::InstantiateIdent;
 use hycc_span::Span;
 use hycc_ty::ty::{Ty, TyKind};
 use hycc_util::bug;
@@ -11,7 +12,7 @@ use crate::{diag::InferResult, inferer::TyInferer};
 
 impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
-        match &stmt.kind {
+        let ty_id = match &stmt.kind {
             HirStmtKind::Ret(ret) => {
                 let Some(fn_ctx) = &self.fn_ctx else {
                     bug!("fn ctx must exist when entering a function")
@@ -23,7 +24,22 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
                 // TODO: improve diagnostics (?)
                 let fn_body = fn_ctx.fn_body;
-                let ret_ty = Ty::new(fn_ty.ret_ty, Span::default());
+                let ret_ty = Ty::new(
+                    fn_ty.ret_ty,
+                    fn_ty
+                        .def_id
+                        .and_then(|def_id| {
+                            let def = self.definitions.get(def_id).kind.expect_fn();
+                            def.ret_ty.and_then(|ret_ty| {
+                                let HirNode::Ty(ty) = self.hir_table.get(ret_ty) else {
+                                    return None;
+                                };
+
+                                Some(ty.span)
+                            })
+                        })
+                        .unwrap_or_else(|| Span::default()),
+                );
 
                 let val_ty = if let Some(val) = ret.value {
                     Ty::new(self.infer_expr(&val)?, val.span)
@@ -37,10 +53,12 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     unreachable!()
                 };
 
-                let ret_ty = Ty::new(ret_ty.id, fn_body.span);
+                let ret_ty_id = ret_ty.id;
+                let ret_ty = Ty::new(ret_ty_id, fn_body.span);
+
                 self.tctx.attach_to_hir(fn_body.id, ret_ty);
 
-                Ok(())
+                Ok(Some(ret_ty_id))
             }
 
             HirStmtKind::Pass(pass) => {
@@ -51,11 +69,17 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 };
 
                 self.tctx.attach_to_hir(stmt.id, Ty::new(ty_id, span));
-                Ok(())
+                Ok(Some(ty_id))
             }
 
-            HirStmtKind::Item(item) => self.infer_item(&item),
-            HirStmtKind::Expr(expr) => self.infer_expr(&expr).map(|_| ()),
-        }
+            HirStmtKind::Item(item) => {
+                self.infer_item(&item)?;
+                Ok(self.tctx.get_hir_ty_id(item.id))
+            }
+            HirStmtKind::Expr(expr) => self.infer_expr(&expr).map(|ty_id| Some(ty_id)),
+        }?;
+
+        ty_id.map(|ty_id| self.tctx.attach_to_hir(stmt.id, Ty::new(ty_id, stmt.span)));
+        Ok(())
     }
 }

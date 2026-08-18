@@ -4,7 +4,7 @@ use hycc_hir::def::DefId;
 use hycc_span::Span;
 
 use crate::{
-    context::{TyId, TyVarId},
+    ctx::{TyId, TyVarId},
     extension::ExtTargetKind,
 };
 
@@ -126,10 +126,22 @@ pub enum IntTy {
 }
 
 #[derive(Debug, Clone)]
-pub enum TyVar {
+pub enum TyVarKind {
     Unbound,
     Bound(TyId),
     Linked(TyVarId),
+}
+
+#[derive(Debug, Clone)]
+pub struct TyVar {
+    pub kind: TyVarKind,
+    pub span: Span,
+}
+
+impl TyVar {
+    pub fn new(span: Span, kind: TyVarKind) -> Self {
+        Self { kind, span }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

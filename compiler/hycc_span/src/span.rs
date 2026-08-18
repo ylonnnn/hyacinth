@@ -2,7 +2,7 @@ use crate::Position;
 
 use hycc_source::source::{Source, SourceId};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub offset: u32,
     pub len: u16,

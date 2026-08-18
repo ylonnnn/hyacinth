@@ -9,7 +9,7 @@ use hycc_resolve::diag::ResolverDiagDataCtx;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    context::{TyCtx, TyId},
+    ctx::{TyCtx, TyId},
     fmt::TyFormatter,
     ty::{AccessKind, RefMutability, Ty},
 };
@@ -312,11 +312,10 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         None,
                     ),
 
-                    UnresolvedTy(ty) => {
-                        let Ty { id, .. } = ty;
-
-                        (format!("unresolved type `{}`", ctx.fmt.fmt_id(*id)), None)
-                    }
+                    UnresolvedTy(ty) => (
+                        format!("cannot resolve type `{}`", ctx.fmt.fmt_id(ty.id)),
+                        Some("type annotation required".into()),
+                    ),
 
                     IllegalInvocation(ty_id) => (
                         "cannot invoke expression".into(),
@@ -379,7 +378,7 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         };
                         (
                             format!(
-                                "{s_kind} `{}` is inaccessible in this context",
+                                "{s_kind} `{}` is inaccessible in this ctx",
                                 ctx.fmt.interner.get(*name)
                             ),
                             Some(format!("cannot access {s_kind}")),
@@ -484,10 +483,12 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                 }
 
                 UnresolvedTy(ty) => {
-                    diag.note(
+                    diag.add_sub_diagnostic(Diag::new_with_extra(
+                        DiagKind::Info,
                         ty.span,
-                        "requires `type annotation` or be used in a context with `known type`",
-                    );
+                        "requires context with known type",
+                        Some("type annotation or usage in a context with known type is needed"),
+                    ));
                 }
 
                 MissingElseBranch => {

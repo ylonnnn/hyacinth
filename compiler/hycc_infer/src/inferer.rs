@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
 use hycc_hir::{
-    HirTable,
+    HirNode, HirTable,
     def::DefinitionTable,
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
@@ -11,10 +11,10 @@ use hycc_hir::{
 use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy};
 use hycc_span::Span;
 use hycc_ty::{
-    context::{TyCtx, TyId, TyVarId},
+    ctx::{TyCtx, TyId, TyVarId},
     ty::{InferKind, IntTy, Ty, TyKind},
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::{
     diag::{InferDiag, InferDiagCtx, InferDiagErrorKind},
@@ -86,63 +86,90 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         data
     }
 
-    pub fn infer(&mut self, tree: &HirItem) {
-        let petal = tree.expect_petal();
-        self.infer_petal(&petal);
+    pub(crate) fn analyze_unresolved(&mut self) {
+        let emit_err = !*self.dctx.error_flag();
 
-        let err = *self.dctx.error_flag();
-        self.analyze_unresolved(!err);
-    }
+        let Some(fn_ctx) = &self.fn_ctx else {
+            bug!("unresolved type analysis can only be performed within a function body")
+        };
 
-    fn analyze_unresolved(&mut self, emit_err: bool) {
-        let mut tys = self
-            .tctx
-            .hir_tys()
-            .into_iter()
-            .map(|(hir_id, ty)| (hir_id, ty.span))
-            .collect::<Vec<_>>();
-
-        tys.sort_by(|(_, a_span), (_, b_span)| {
-            a_span
-                .offset
-                .cmp(&b_span.offset)
-                .then_with(|| b_span.len.cmp(&a_span.len))
-        });
-
-        let mut checked = HashSet::<TyVarId>::new();
+        let HirNode::Block(block) = self.hir_table.get(fn_ctx.fn_body) else {
+            unreachable!()
+        };
 
         let default_int_ty_id = self.tctx.make_int_ty(IntTy::Fixed(32, true));
         let default_float_ty_id = self.tctx.make_float_ty(32);
 
-        for (hir_id, _) in tys {
-            let ty = self.tctx.expect_hir_ty(hir_id);
-            let span = ty.span;
-            let ty_id = self.tctx.resolve_ty(ty.id);
+        let mut seen = HashSet::new();
 
-            let mut unresolved_infer_tys = Vec::new();
-            self.tctx.unresolved_infer(ty_id, &mut unresolved_infer_tys);
+        for stmt in &block.stmts {
+            let Some(ty_id) = self.tctx.get_hir_ty_id(stmt.id) else {
+                continue;
+            };
 
-            for infer_ty in unresolved_infer_tys {
-                let TyKind::Infer(var_id, kind) = self.tctx.get(infer_ty) else {
+            let mut unresolved_tys = Vec::new();
+            self.tctx.unresolved_infer(ty_id, &mut unresolved_tys);
+
+            for unresolved_ty_id in unresolved_tys {
+                let TyKind::Infer(var_id, kind) = self.tctx.get(unresolved_ty_id) else {
                     continue;
                 };
 
                 match &kind {
-                    InferKind::Int => self.tctx.unify_ty(ty_id, default_int_ty_id),
-                    InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
+                    InferKind::Int => self.tctx.bind_var(*var_id, default_int_ty_id),
+                    InferKind::Float => self.tctx.bind_var(*var_id, default_float_ty_id),
                     _ => {
-                        if checked.insert(*var_id) && emit_err {
+                        if seen.insert(*var_id) && emit_err {
+                            let span = self.tctx.get_var(*var_id).span;
                             self.dctx.error(
                                 span,
-                                InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
+                                InferDiagErrorKind::UnresolvedTy(Ty::new(
+                                    self.tctx.intern(TyKind::Infer(*var_id, *kind)),
+                                    span,
+                                )),
                             );
                         }
 
                         continue;
                     }
-                };
+                }
             }
         }
+
+        // let mut tys = self.tctx.unresolved_tys();
+        // tys.sort_by(|(a_var_id, _), (b_var_id, _)| {
+        //     let (a_var, b_var) = (self.tctx.get_var(*a_var_id), self.tctx.get_var(*b_var_id));
+        //     a_var.span.offset.cmp(&b_var.span.offset)
+        // });
+
+        // for (var_id, kind) in &tys {
+        //     match &kind {
+        //         InferKind::Int => self.tctx.bind_var(*var_id, default_int_ty_id),
+        //         InferKind::Float => self.tctx.bind_var(*var_id, default_float_ty_id),
+        //         _ => {
+        //             if emit_err {
+        //                 let span = self.tctx.get_var(*var_id).span;
+        //                 self.dctx.error(
+        //                     span,
+        //                     InferDiagErrorKind::UnresolvedTy(Ty::new(
+        //                         self.tctx.intern(TyKind::Infer(*var_id, *kind)),
+        //                         span,
+        //                     )),
+        //                 );
+        //             }
+
+        //             continue;
+        //         }
+        //     };
+        // }
+    }
+
+    pub fn infer(&mut self, tree: &HirItem) {
+        let petal = tree.expect_petal();
+        self.infer_petal(&petal);
+
+        // let err = *self.dctx.error_flag();
+        // self.analyze_unresolved(!err);
     }
 }
 

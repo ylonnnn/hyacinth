@@ -45,7 +45,6 @@ impl<'s> Parser<'s> {
         // <
         let mut closed = true;
         let mut args = Option::<IdentifierArguments>::None;
-        // auto initial = context.offset();
 
         if let (matched, Some(_)) = self.expect_preserved_exact_nonlf(TokenKind::Less)
             && matched

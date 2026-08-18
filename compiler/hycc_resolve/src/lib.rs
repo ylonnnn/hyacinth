@@ -7,7 +7,7 @@ use hycc_hir::{
 };
 use hycc_span::Span;
 use hycc_ty::{
-    context::{TyCtx, TyId},
+    ctx::{TyCtx, TyId},
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
 
@@ -83,15 +83,12 @@ pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
 
         for i in g_args.len()..generic_param_count {
             let gp_def_id = generic_params[i];
-            let gp_def = self
-                .definitions()
-                .get(gp_def_id)
-                .kind
-                .expect_generic_param();
+            let def = self.definitions().get(gp_def_id);
+            let (gp_span, gp_def) = (def.span, def.kind.expect_generic_param());
 
             g_args.push(match &gp_def.kind {
                 HirGenericParamKind::Ty => {
-                    GenericArg::Ty(self.tctx().make_inferred_ty(InferKind::Any))
+                    GenericArg::Ty(self.tctx().make_inferred_ty(gp_span, InferKind::Any))
                 }
 
                 HirGenericParamKind::Const => todo!("const generic arg"),

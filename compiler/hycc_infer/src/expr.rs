@@ -17,7 +17,7 @@ use hycc_hir::{
 use hycc_resolve::{InstantiateIdent, ResolveExpr};
 use hycc_span::Span;
 use hycc_ty::{
-    context::TyId,
+    ctx::TyId,
     extension::{ExtNominalTargetKind, ExtTargetKind},
     ty::{AccessKind, GenericArg, InferKind, RefMutability, Ty, TyKind},
 };
@@ -40,7 +40,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
             HirExprKind::RefExpr(reference) => self.infer_ref_expr(&reference),
-            HirExprKind::Literal(lit) => self.infer_literal_expr(&lit),
+            HirExprKind::Literal(_) => self.infer_literal_expr(&expr),
             HirExprKind::Binary(op, left, right) => todo!("infer binary"),
             HirExprKind::Unary(unary) => todo!("infer unary"),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
@@ -60,11 +60,15 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(ty_id)
     }
 
-    pub(crate) fn infer_literal_expr(&mut self, lit: &HirLiteral) -> InferResult<TyId> {
+    pub(crate) fn infer_literal_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
+        let HirExprKind::Literal(lit) = &expr.kind else {
+            unreachable!()
+        };
+
         let kind = self.const_table.get(lit.const_id());
         Ok(match &kind {
-            ConstKind::Int { .. } => self.tctx.make_inferred_ty(InferKind::Int),
-            ConstKind::Float(_) => self.tctx.make_inferred_ty(InferKind::Float),
+            ConstKind::Int { .. } => self.tctx.make_inferred_ty(expr.span, InferKind::Int),
+            ConstKind::Float(_) => self.tctx.make_inferred_ty(expr.span, InferKind::Float),
             ConstKind::Bool(_) => self.tctx.make_bool_ty(),
             ConstKind::Char(_) => self.tctx.make_char_ty(),
             ConstKind::String(_) => self.tctx.make_string_ty(),
@@ -85,7 +89,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_array_expr(&mut self, array: &HirArrayExpr) -> InferResult<TyId> {
         let el_ty_id = ternary!(
             array.elements.is_empty(),
-            self.tctx.make_inferred_ty(InferKind::Any),
+            self.tctx.make_inferred_ty(array.span, InferKind::Any),
             self.infer_expr(array.elements[0])?
         );
 
@@ -410,7 +414,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
                 rec_g_args.replace(
                     (0..n)
-                        .map(|_| GenericArg::Ty(self.tctx.make_inferred_ty(InferKind::Any)))
+                        .map(|_| {
+                            GenericArg::Ty(
+                                self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
+                            )
+                        })
                         .collect::<Vec<_>>(),
                 );
 

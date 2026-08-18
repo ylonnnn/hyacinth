@@ -1,15 +1,22 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::FilterMap,
+    sync::Arc,
+};
 
 use hycc_hir::{
     HirId,
     def::{BuiltinIntTy, BuiltinTyKind, DefId},
     path::HirIdentArguments,
 };
+use hycc_span::Span;
 use hycc_util::{bug, ternary};
 
 use crate::{
     extension::{ExtNominalTargetKind, ExtTargetKind, ExtensionTable},
-    ty::{FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar},
+    ty::{
+        FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar, TyVarKind,
+    },
 };
 
 #[derive(Debug)]
@@ -78,15 +85,23 @@ impl TyCtx {
         self.def_ty_map.keys().cloned().collect()
     }
 
-    pub fn fresh_var(&mut self) -> TyVarId {
-        self.vars.push(TyVar::Unbound);
+    pub fn get_var(&self, var_id: TyVarId) -> &TyVar {
+        &self.vars[var_id.unwrap()]
+    }
+
+    pub fn fresh_var(&mut self, span: Span) -> TyVarId {
+        self.vars.push(TyVar::new(span, TyVarKind::Unbound));
         TyVarId(self.vars.len() - 1)
     }
 
     pub fn resolve_var(&mut self, var_id: TyVarId) -> TyVarId {
-        if let Some(TyVar::Linked(id)) = self.vars.get(var_id.unwrap()) {
+        let Some(var) = self.vars.get(var_id.unwrap()) else {
+            return var_id;
+        };
+
+        if let TyVarKind::Linked(id) = &var.kind {
             let root = self.resolve_var(*id);
-            self.vars[var_id.unwrap()] = TyVar::Linked(root);
+            self.vars[var_id.unwrap()].kind = TyVarKind::Linked(root);
             root
         } else {
             var_id
@@ -98,7 +113,7 @@ impl TyCtx {
 
         // TODO: check infinite types
 
-        self.vars[root.unwrap()] = TyVar::Bound(ty_id);
+        self.vars[root.unwrap()].kind = TyVarKind::Bound(ty_id);
     }
 
     pub fn resolve_ty(&mut self, ty_id: TyId) -> TyId {
@@ -216,8 +231,8 @@ impl TyCtx {
             TyKind::Infer(var_id, _) => {
                 let root = self.resolve_var(*var_id);
 
-                match &self.vars[root.unwrap()] {
-                    TyVar::Bound(ty_id) => self.resolve_ty(*ty_id),
+                match &self.vars[root.unwrap()].kind {
+                    TyVarKind::Bound(ty_id) => self.resolve_ty(*ty_id),
                     _ => ty_id,
                 }
             }
@@ -332,14 +347,16 @@ impl TyCtx {
         let a = self.resolve_var(a);
         let b = self.resolve_var(b);
 
-        match (&self.vars[a.unwrap()], &self.vars[b.unwrap()]) {
-            (TyVar::Bound(a_ty), TyVar::Bound(b_ty)) => {
+        match (&self.vars[a.unwrap()].kind, &self.vars[b.unwrap()].kind) {
+            (TyVarKind::Bound(a_ty), TyVarKind::Bound(b_ty)) => {
                 self.unify_ty(*a_ty, *b_ty);
             }
-            (_, TyVar::Bound(v)) => self.bind_var(a, *v),
-            (TyVar::Bound(v), _) => self.bind_var(b, *v),
-            (TyVar::Unbound, TyVar::Unbound) => self.vars[a.unwrap()] = TyVar::Linked(b),
-            (_, TyVar::Linked(..)) | (TyVar::Linked(..), _) => {
+            (_, TyVarKind::Bound(v)) => self.bind_var(a, *v),
+            (TyVarKind::Bound(v), _) => self.bind_var(b, *v),
+            (TyVarKind::Unbound, TyVarKind::Unbound) => {
+                self.vars[a.unwrap()].kind = TyVarKind::Linked(b)
+            }
+            (_, TyVarKind::Linked(..)) | (TyVarKind::Linked(..), _) => {
                 bug!("resolve_var must eliminate links");
             }
         }
@@ -512,7 +529,7 @@ impl TyCtx {
 
     pub fn expect_ty_def_id(&self, ty_id: TyId) -> DefId {
         self.get_ty_def_id(ty_id)
-            .expect(&format!("expected a def id attached to ty id {ty_id:?}"))
+            .unwrap_or_else(|| panic!("expected a def id attached to ty id {ty_id:?}"))
     }
 
     pub fn make_builtin_ty(&mut self, kind: &BuiltinTyKind) -> TyId {
@@ -531,7 +548,7 @@ impl TyCtx {
             BuiltinTyKind::Char => self.make_char_ty(),
             BuiltinTyKind::String => self.make_string_ty(),
 
-            BuiltinTyKind::Infer => self.make_inferred_ty(InferKind::Any),
+            BuiltinTyKind::Infer => unreachable!(),
         }
     }
 
@@ -600,8 +617,8 @@ impl TyCtx {
         self.intern(TyKind::Adt(def_id, arguments))
     }
 
-    pub fn make_inferred_ty(&mut self, kind: InferKind) -> TyId {
-        let var_id = self.fresh_var();
+    pub fn make_inferred_ty(&mut self, span: Span, kind: InferKind) -> TyId {
+        let var_id = self.fresh_var(span);
         self.intern(TyKind::Infer(var_id, kind))
     }
 
@@ -609,51 +626,61 @@ impl TyCtx {
         self.intern(TyKind::Param(ParamTy::new(def_id, depth, idx)))
     }
 
-    pub fn unresolved_infer(&self, ty_id: TyId, ty_ids: &mut Vec<TyId>) {
-        let kind = self.get(ty_id);
+    pub fn unresolved_infer(&mut self, ty_id: TyId, tys: &mut Vec<TyId>) {
+        match self.get(ty_id) {
+            TyKind::Infer(_, _) => tys.push(ty_id),
 
-        match kind {
-            TyKind::Infer(_, _) => ty_ids.push(ty_id),
+            TyKind::Array(inner) => self.unresolved_infer(*inner, tys),
+            TyKind::Slice(inner) => self.unresolved_infer(*inner, tys),
+            TyKind::Tuple(inner_tys) => inner_tys
+                .clone()
+                .iter()
+                .for_each(|ty_id| self.unresolved_infer(*ty_id, tys)),
 
-            TyKind::Array(inner) | TyKind::Slice(inner) => self.unresolved_infer(*inner, ty_ids),
+            TyKind::Ref(inner, _) => self.unresolved_infer(*inner, tys),
 
-            TyKind::Ref(inner, _) => self.unresolved_infer(*inner, ty_ids),
+            TyKind::Fn(fn_ty, args) => {
+                let (params, ret_ty) = (fn_ty.params.clone(), fn_ty.ret_ty);
+                args.clone().iter().for_each(|arg| match &arg {
+                    GenericArg::Ty(ty_id) => self.unresolved_infer(*ty_id, tys),
+                });
 
-            TyKind::Fn(fn_ty, _) => {
-                for param in fn_ty.params.iter() {
-                    self.unresolved_infer(*param, ty_ids);
-                }
+                params
+                    .clone()
+                    .iter()
+                    .for_each(|param| self.unresolved_infer(*param, tys));
 
-                self.unresolved_infer(fn_ty.ret_ty, ty_ids);
+                self.unresolved_infer(ret_ty, tys);
             }
 
-            TyKind::Adt(_, args) => {
-                for arg in args.iter() {
-                    match &arg {
-                        GenericArg::Ty(ty_id) => self.unresolved_infer(*ty_id, ty_ids),
-                    }
-                }
-            }
+            TyKind::Adt(_, args) => args.clone().iter().for_each(|arg| match &arg {
+                GenericArg::Ty(ty_id) => self.unresolved_infer(*ty_id, tys),
+            }),
 
             _ => {}
         }
     }
 
     pub fn is_inferred(&self, ty_id: TyId) -> bool {
-        let kind = self.get(ty_id);
-
-        match kind {
+        match self.get(ty_id) {
             TyKind::Infer(_, InferKind::Any) => true,
 
             TyKind::Array(inner) => self.is_inferred(*inner),
             TyKind::Slice(inner) => self.is_inferred(*inner),
+            TyKind::Tuple(tys) => tys.iter().any(|ty_id| self.is_inferred(*ty_id)),
 
             TyKind::Ref(inner, _) => self.is_inferred(*inner),
 
-            TyKind::Fn(fn_ty, _) => {
-                fn_ty.params.iter().any(|param| self.is_inferred(*param))
+            TyKind::Fn(fn_ty, args) => {
+                args.iter().any(|arg| match &arg {
+                    GenericArg::Ty(ty_id) => self.is_inferred(*ty_id),
+                }) || fn_ty.params.iter().any(|param| self.is_inferred(*param))
                     || self.is_inferred(fn_ty.ret_ty)
             }
+
+            TyKind::Adt(_, args) => args.iter().any(|arg| match &arg {
+                GenericArg::Ty(ty_id) => self.is_inferred(*ty_id),
+            }),
 
             _ => false,
         }

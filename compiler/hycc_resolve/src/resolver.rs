@@ -16,7 +16,7 @@ use hycc_hir::{
     ty::{HirTy, HirTyKind},
 };
 use hycc_symbol::{Symbol, SymbolInterner};
-use hycc_ty::context::TyCtx;
+use hycc_ty::ctx::TyCtx;
 use hycc_util::{bug, ternary};
 
 use crate::{
@@ -326,7 +326,7 @@ impl<'r> Resolver<'r> {
 
         if !item.is_top_level() {
             self.collector
-                .collect_var(item, &mut self.dctx)
+                .collect_var_decl(item, &mut self.dctx)
                 .emit(&mut self.dctx);
         }
 

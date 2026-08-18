@@ -1,7 +1,7 @@
 use hycc_hir::{def::DefSpace, path::HirPath};
 use hycc_resolve::InstantiateIdent;
 use hycc_ty::{
-    context::TyId,
+    ctx::TyId,
     ty::{InferKind, Ty},
 };
 use hycc_util::ternary;
@@ -17,7 +17,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
         let n = path.segments.len();
         let Some(res) = self.definitions.get_res(path.id) else {
-            return Ok(self.tctx.make_inferred_ty(InferKind::Any));
+            return Ok(self.tctx.make_inferred_ty(path.span, InferKind::Any));
         };
 
         let resolved_count = (n - res.unresolved);

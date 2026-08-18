@@ -9,7 +9,7 @@ use hycc_hir::{
 };
 use hycc_symbol::Symbol;
 
-use crate::{context::TyId, ty::TyKind};
+use crate::{ctx::TyId, ty::TyKind};
 
 #[derive(Debug, Clone)]
 pub struct ExtensionTable {

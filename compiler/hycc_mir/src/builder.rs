@@ -7,7 +7,7 @@ use hycc_hir::{
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
 };
 use hycc_span::Span;
-use hycc_ty::{context::TyCtx, ty::TyKind};
+use hycc_ty::{ctx::TyCtx, ty::TyKind};
 use hycc_util::{bug, ternary};
 
 use crate::{

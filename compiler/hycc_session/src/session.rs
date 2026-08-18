@@ -3,7 +3,7 @@ use hycc_diagnostic::diagnostic::DiagCtx;
 use hycc_hir::{HirTable, def::DefinitionTable, petal::PetalCtx};
 use hycc_source::{Source, SourceRegistry, source::SourceId};
 use hycc_symbol::SymbolInterner;
-use hycc_ty::context::TyCtx;
+use hycc_ty::ctx::TyCtx;
 
 #[derive(Debug)]
 pub struct Session<'h> {

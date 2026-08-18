@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use hycc_span::Span;
-use hycc_ty::context::TyId;
+use hycc_ty::ctx::TyId;
 
 use crate::{
     basic_block::{MirBasicBlock, MirBasicBlockId},

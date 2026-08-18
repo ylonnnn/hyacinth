@@ -3,7 +3,7 @@ use std::fmt::Display;
 use hycc_const::table::ConstId;
 use hycc_hir::{def::DefId, expr};
 use hycc_span::Span;
-use hycc_ty::context::TyId;
+use hycc_ty::ctx::TyId;
 use hycc_util::ternary;
 
 use crate::{

@@ -97,7 +97,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
             g_targets.push(group);
         }
 
-        g_targets
+        let mut data = g_targets
             .into_iter()
             .map(|mut group| {
                 group.sort_by(|a, b| {
@@ -177,7 +177,11 @@ impl<'d, 's> CLIReporter<'d, 's> {
 
                 EmphasisData { lines, messages }
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        // TODO: fix diagnostic emphasis ordering
+        // data.sort_by(|a, b| a.lines[0].line_no.cmp(&b.lines[0].line_no));
+        data
 
         // // let n = emphasized.len();
         // // let mid = n / 2;
@@ -344,12 +348,9 @@ impl<'d, 's> CLIReporter<'d, 's> {
 }
 
 impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
-    fn format_diagnostic(&self, diag: &Diag, indentation: u8) -> String {
+    fn format_diagnostic(&self, diag: &Diag) -> String {
         let source = self.source_registry.get(diag.span.src_id);
         let (s_kind, code) = diag.kind.data();
-
-        let indentation = 6 * indentation as usize;
-        let indent = " ".repeat(indentation.saturating_sub(2));
 
         let cwd = std::env::current_dir()
             .unwrap_or_else(|_| panic!("failed to retrieve the current directory"));
@@ -358,15 +359,14 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
         let sub_diagnostics = diag
             .sub_diagnostics
             .iter()
-            .map(|sub| self.format_diagnostic(&sub, indentation as u8 + 1))
-            .collect::<Vec<_>>()
-            .join("");
+            .map(|sub| self.format_diagnostic(&sub))
+            .collect::<String>();
 
         let (start, end) = diag.span.to_position_range(&source);
         let sev_color = self.color(&diag.kind);
 
         format!(
-            "{indent}{}{} {reset}{}\n{indent}{} {}:{}\n{indent}{snippet}\n{reset}{sub_diagnostics}",
+            "{}{} {reset}{}\n{} {}:{}\n{snippet}\n{reset}{sub_diagnostics}",
             s_kind.to_string().style(&sev_color).bold(),
             code.map_or_else(|| ":".into(), |code| format!("<E{:04}>", code)),
             self.highlight(&diag.message.0, sev_color),
@@ -379,7 +379,7 @@ impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
 
     fn report(&self) {
         for diagnostic in self.dctx.data() {
-            println!("{}", self.format_diagnostic(diagnostic, 0));
+            println!("{}", self.format_diagnostic(diagnostic));
         }
     }
 }

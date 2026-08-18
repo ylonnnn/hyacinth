@@ -38,13 +38,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(())
     }
 
-    pub(crate) fn infer_fn(&mut self, fn_item: &HirItem) -> InferResult {
-        let HirItemKind::Fn(func) = &fn_item.kind else {
-            unreachable!()
-        };
+    pub(crate) fn infer_fn(&mut self, item: &HirItem) -> InferResult {
+        let func = &item.expect_fn();
 
-        let Some(fn_ty) = self.tctx.get_hir_ty(fn_item.id).cloned() else {
-            bug!("fn hir {:?} does not have an attached ty", fn_item.id)
+        let Some(fn_ty) = self.tctx.get_hir_ty(item.id).cloned() else {
+            bug!("fn hir {:?} does not have an attached ty", item.id)
         };
 
         let fn_ty_id = fn_ty.id;
@@ -64,6 +62,8 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             s.check(&ret_ty, &Ty::new(block_ty_id, func.body.span))
                 .map(|diag| s.dctx.add(diag));
 
+            s.analyze_unresolved();
+
             Ok(())
         })
     }
@@ -80,7 +80,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 let default_ty_id = self
                     .tctx
                     .get_hir_ty_id(var_decl.id)
-                    .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
+                    .unwrap_or_else(|| self.tctx.make_inferred_ty(decl.span, InferKind::Any));
                 Ty::new(default_ty_id, decl.span)
             });
 

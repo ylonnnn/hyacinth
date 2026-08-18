@@ -3,7 +3,7 @@ use hycc_symbol::SymbolInterner;
 use hycc_util::ternary;
 
 use crate::{
-    context::{TyCtx, TyId},
+    ctx::{TyCtx, TyId},
     ty::{GenericArg, InferKind, IntTy, RefMutability, TyKind},
 };
 
@@ -118,7 +118,8 @@ impl<'f> TyFormatter<'f> {
             }
 
             TyKind::Infer(_, kind) => match kind {
-                InferKind::Any => String::from("{unknown}"),
+                // InferKind::Any => String::from("{unknown}"),
+                InferKind::Any => String::from("_"),
                 InferKind::Int => String::from("{int}"),
                 InferKind::Float => String::from("{float}"),
             },

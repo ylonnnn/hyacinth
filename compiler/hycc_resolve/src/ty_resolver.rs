@@ -20,7 +20,7 @@ use hycc_hir::{
     ty::{HirTy, HirTyKind},
 };
 use hycc_ty::{
-    context::{TyCtx, TyId},
+    ctx::{TyCtx, TyId},
     ty::{GenericArg, InferKind, RefMutability, Ty},
 };
 use hycc_util::ternary;
@@ -252,7 +252,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
 
         let n = path.segments.len();
         let Some(res) = self.definitions.get_res(path.id) else {
-            return Ok(self.tctx.make_inferred_ty(InferKind::Any));
+            return Ok(self.tctx.make_inferred_ty(path.span, InferKind::Any));
         };
 
         let mut prev_ty_id = None;
@@ -375,7 +375,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
                     .ty
                     .as_ref()
                     .and_then(|ty| self.resolve_ty(&ty).emit(&mut self.dctx))
-                    .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
+                    .unwrap_or_else(|| self.tctx.make_inferred_ty(param.span, InferKind::Any));
 
                 self.tctx.attach_to_hir(
                     param.id,
@@ -390,7 +390,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .ret_ty
             .as_ref()
             .and_then(|ty| self.resolve_ty(&ty).emit(&mut self.dctx))
-            .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
+            .unwrap_or_else(|| self.tctx.make_inferred_ty(anfn.span, InferKind::Any));
 
         let fn_ty = self
             .tctx
@@ -569,7 +569,7 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
             ))?,
 
             DefKind::Builtin(BuiltinKind::Ty(kind)) => match &kind {
-                BuiltinTyKind::Infer => self.tctx.make_inferred_ty(InferKind::Any),
+                BuiltinTyKind::Infer => self.tctx.make_inferred_ty(span, InferKind::Any),
                 _ => self.tctx.expect_def_ty_id(def_id),
             },
 

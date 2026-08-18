@@ -132,8 +132,8 @@ pub enum ParserDiagErrorKind {
     InvalidStructFieldCount(u8),
     UnsupportedItem {
         item_kind: ItemKind,
-        context: &'static str,
-    }, // TODO: update `context` to
+        ctx: &'static str,
+    }, // TODO: update `ctx` to
        // something more optimal
 }
 
@@ -269,8 +269,8 @@ impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
                         )
                     }
 
-                    UnsupportedItem { item_kind, context } => format!(
-                        "`{}`s are unsupported within `{context}`s.",
+                    UnsupportedItem { item_kind, ctx } => format!(
+                        "`{}`s are unsupported within `{ctx}`s.",
                         item_kind.kind()
                     ),
                 };

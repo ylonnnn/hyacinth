@@ -1,6 +1,6 @@
 use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{block::HirBlock, stmt::HirStmtKind};
-use hycc_ty::{context::TyId, ty::Ty};
+use hycc_ty::{ctx::TyId, ty::Ty};
 
 use crate::{diag::InferResult, inferer::TyInferer};
 

@@ -22,7 +22,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    context::TyCtx,
+    ctx::TyCtx,
     extension::Extension,
     ty::{GenericArg, InferKind, Ty},
 };
@@ -321,7 +321,7 @@ impl<'c> Collector<'c> {
             HirItemKind::Fn(_) => self.collect_fn(&item, dctx),
             HirItemKind::VarDecl(decl) => ternary!(
                 self.level == CollectorLevel::Top,
-                self.collect_var(&item, dctx),
+                self.collect_var_decl(&item, dctx),
                 decl.val
                     .as_ref()
                     .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx))
@@ -710,7 +710,7 @@ impl<'c> Collector<'c> {
                     .push(binding.def_id);
             });
 
-            let fn_ty_id = s.tctx.make_inferred_ty(InferKind::Any);
+            let fn_ty_id = s.tctx.make_inferred_ty(item.span, InferKind::Any);
             s.tctx.attach_to_hir(item.id, Ty::new(fn_ty_id, item.span));
 
             s.scope_ctx.attach_id(func.body.id, scope_id);
@@ -722,7 +722,7 @@ impl<'c> Collector<'c> {
         Ok(())
     }
 
-    pub(crate) fn collect_var(
+    pub(crate) fn collect_var_decl(
         &mut self,
         item: &HirItem,
         dctx: &mut ResolverDiagCtx,
@@ -737,14 +737,15 @@ impl<'c> Collector<'c> {
                 item.id,
                 item.span,
                 item.accessibility,
-            ))?;
-
-            let infer_ty_id = self.tctx.make_inferred_ty(InferKind::Any);
-            self.tctx.attach_to_hir(
-                item.id,
-                Ty::new(infer_ty_id, var.ty.map_or_else(|| item.span, |ty| ty.span)),
-            );
+            ))
+            .emit(dctx);
         }
+
+        let infer_ty_id = self.tctx.make_inferred_ty(item.span, InferKind::Any);
+        self.tctx.attach_to_hir(
+            item.id,
+            Ty::new(infer_ty_id, var.ty.map_or_else(|| item.span, |ty| ty.span)),
+        );
 
         Ok(())
     }

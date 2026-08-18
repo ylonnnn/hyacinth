@@ -13,7 +13,7 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    context::{TyCtx, TyId},
+    ctx::{TyCtx, TyId},
     fmt::TyFormatter,
 };
 use hycc_util::ternary;
@@ -203,13 +203,13 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     }
 
                     InvalidInference => (
-                        format!("cannot infer type in this context"),
+                        format!("cannot infer type in this ctx"),
                         Some("requires known type".into()),
                     ),
 
                     InaccessibleSymbol(symbol) => (
                         format!(
-                            "`{}` is inaccessible in this context",
+                            "`{}` is inaccessible in this ctx",
                             ctx.fmt.interner.get(*symbol)
                         ),
                         None,

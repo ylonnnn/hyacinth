@@ -1,4 +1,4 @@
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::Diagnostics;
 use hycc_hir::{
     HirNode,
     stmt::{HirStmt, HirStmtKind},
@@ -7,9 +7,9 @@ use hycc_span::Span;
 use hycc_ty::ty::{Ty, TyKind};
 use hycc_util::bug;
 
-use crate::inferer::{InferResult, TyInferer};
+use crate::{diag::InferResult, inferer::TyInferer};
 
-impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
+impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         match &stmt.kind {
             HirStmtKind::Ret(ret) => {
@@ -55,10 +55,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             }
 
             HirStmtKind::Item(item) => self.infer_item(&item),
-            HirStmtKind::Expr(expr) => {
-                self.infer_expr(&expr)?;
-                Ok(())
-            }
+            HirStmtKind::Expr(expr) => self.infer_expr(&expr).map(|_| ()),
         }
     }
 }

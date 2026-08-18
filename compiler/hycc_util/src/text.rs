@@ -53,6 +53,8 @@ macro_rules! impl_style {
 use color::*;
 use style::*;
 
+use crate::ternary;
+
 pub trait Style
 where
     Self: ToString,
@@ -109,3 +111,19 @@ where
 
 impl Style for str {}
 impl Style for String {}
+
+pub fn list_enumeration<T: ToString>(list: &[T]) -> String {
+    let (mut series, n) = (String::new(), list.len());
+
+    for (i, entry) in list.iter().enumerate() {
+        let is_last = i == n - 1;
+        series += &format!(
+            "{}{}{}",
+            ternary!(is_last, "and ", ""),
+            entry.to_string(),
+            ternary!(is_last, "", ", ")
+        );
+    }
+
+    series
+}

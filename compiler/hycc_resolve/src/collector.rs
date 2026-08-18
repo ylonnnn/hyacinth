@@ -1,6 +1,7 @@
 use std::{
     cell::{RefCell, RefMut},
     rc::Rc,
+    sync::Arc,
 };
 
 use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
@@ -23,7 +24,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     context::TyCtx,
     extension::Extension,
-    ty::{GenericArg, Ty},
+    ty::{GenericArg, InferKind, Ty},
 };
 use hycc_util::{bug, ternary};
 
@@ -38,7 +39,7 @@ pub enum CollectorLevel {
 #[derive(Debug)]
 pub struct Collector<'c> {
     pub scope_ctx: ScopeCtx,
-    pub petal_ctx: PetalCtx,
+    pub petal_ctx: &'c mut PetalCtx,
     pub tctx: &'c mut TyCtx,
     pub definitions: &'c mut DefinitionTable,
     pub interner: &'c mut SymbolInterner,
@@ -47,13 +48,14 @@ pub struct Collector<'c> {
 
 impl<'c> Collector<'c> {
     pub fn new(
+        petal_ctx: &'c mut PetalCtx,
         interner: &'c mut SymbolInterner,
         tctx: &'c mut TyCtx,
         definitions: &'c mut DefinitionTable,
     ) -> Self {
         Self {
             scope_ctx: ScopeCtx::new(),
-            petal_ctx: PetalCtx::new(),
+            petal_ctx,
             tctx,
             definitions,
             interner,
@@ -637,43 +639,56 @@ impl<'c> Collector<'c> {
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, CollectorLevel::Local, |s| {
             // Define function generic parameters
-            if let Some(generic_params) = &func.sig.generic_params {
-                s.scope_ctx.generic_depth += 1;
+            let generic_param_tys = func
+                .sig
+                .generic_params
+                .as_ref()
+                .map(|generic_params| {
+                    s.scope_ctx.generic_depth += 1;
 
-                for (i, generic_param) in generic_params.list.iter().enumerate() {
-                    let res = s.define(Definition::new(
-                        generic_param.ident.ident,
-                        DefKind::GenericParam(Box::new(GenericParamDef::new(
-                            s.scope_ctx.generic_depth as u32,
-                            i as u32,
-                            generic_param.kind,
-                        ))),
-                        s.petal_ctx.top_id(),
-                        generic_param.id,
-                        generic_param.span,
-                        DefAccessibility::Priv,
-                    ));
+                    generic_params
+                        .list
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, generic_param)| {
+                            let res = s.define(Definition::new(
+                                generic_param.ident.ident,
+                                DefKind::GenericParam(Box::new(GenericParamDef::new(
+                                    s.scope_ctx.generic_depth as u32,
+                                    i as u32,
+                                    generic_param.kind,
+                                ))),
+                                s.petal_ctx.top_id(),
+                                generic_param.id,
+                                generic_param.span,
+                                DefAccessibility::Priv,
+                            ));
 
-                    let Some(binding) = res.emit(dctx) else {
-                        continue;
-                    };
+                            let Some(binding) = res.emit(dctx) else {
+                                return None;
+                            };
 
-                    let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
-                    fn_def.generic_params.push(binding.def_id);
+                            let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
+                            fn_def.generic_params.push(binding.def_id);
 
-                    let ty_id = s.tctx.make_param_ty(
-                        binding.def_id,
-                        s.scope_ctx.generic_depth as u32,
-                        i as u32,
-                    );
+                            let ty_id = s.tctx.make_param_ty(
+                                binding.def_id,
+                                s.scope_ctx.generic_depth as u32,
+                                i as u32,
+                            );
 
-                    s.tctx
-                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
-                }
-            }
+                            s.tctx.attach_to_hir(
+                                generic_param.id,
+                                Ty::new(ty_id, generic_param.span),
+                            );
+                            Some(GenericArg::Ty(ty_id))
+                        })
+                        .collect::<Arc<_>>()
+                })
+                .unwrap_or_else(|| Vec::new().into());
 
             // Define the function parameters
-            for param in &func.sig.params.list {
+            func.sig.params.list.iter().for_each(|param| {
                 let res = s.define(Definition::new(
                     param.ident.ident,
                     DefKind::FnParam,
@@ -684,7 +699,7 @@ impl<'c> Collector<'c> {
                 ));
 
                 let Some(binding) = res.emit(dctx) else {
-                    continue;
+                    return;
                 };
 
                 s.definitions
@@ -693,7 +708,10 @@ impl<'c> Collector<'c> {
                     .expect_mut_fn()
                     .params
                     .push(binding.def_id);
-            }
+            });
+
+            let fn_ty_id = s.tctx.make_inferred_ty(InferKind::Any);
+            s.tctx.attach_to_hir(item.id, Ty::new(fn_ty_id, item.span));
 
             s.scope_ctx.attach_id(func.body.id, scope_id);
             s.collect_block(&func.body, dctx).emit(dctx);
@@ -720,6 +738,12 @@ impl<'c> Collector<'c> {
                 item.span,
                 item.accessibility,
             ))?;
+
+            let infer_ty_id = self.tctx.make_inferred_ty(InferKind::Any);
+            self.tctx.attach_to_hir(
+                item.id,
+                Ty::new(infer_ty_id, var.ty.map_or_else(|| item.span, |ty| ty.span)),
+            );
         }
 
         Ok(())

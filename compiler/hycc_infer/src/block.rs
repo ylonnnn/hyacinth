@@ -1,18 +1,16 @@
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{block::HirBlock, stmt::HirStmtKind};
 use hycc_ty::{context::TyId, ty::Ty};
 
-use crate::inferer::{InferResult, TyInferer};
+use crate::{diag::InferResult, inferer::TyInferer};
 
-impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
+impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_block(&mut self, block: &HirBlock) -> InferResult<TyId> {
         let expected_ty: Option<Ty> = self.tctx.get_hir_ty(block.id).cloned();
         self.tctx.dettach_hir(block.id);
 
         for stmt in &block.stmts {
-            if let Err(Some(diag)) = self.infer_stmt(&stmt) {
-                self.dctx.add(diag);
-            }
+            self.infer_stmt(&stmt).emit(&mut self.dctx);
 
             match &stmt.kind {
                 HirStmtKind::Ret(_) => {

@@ -1,53 +1,40 @@
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
 use hycc_span::Span;
 use hycc_ty::ty::{InferKind, Ty, TyKind};
 use hycc_util::bug;
 
-use crate::{
-    fn_ctx::FnCtx,
-    inferer::{InferResult, TyInferer},
-};
+use crate::{diag::InferResult, fn_ctx::FnCtx, inferer::TyInferer};
 
-impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
+impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_item(&mut self, item: &HirItem) -> InferResult {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
             HirItemKind::Proto(proto) => todo!("infer proto"),
             HirItemKind::Extend(extend) => self.infer_extend(&extend),
-            HirItemKind::Struct(strct) => self.infer_struct(&strct),
+            HirItemKind::Struct(strct) => Ok(()),
             HirItemKind::Fn(_) => self.infer_fn(&item),
             HirItemKind::VarDecl(_) => self.infer_var_decl(&item),
         }
     }
 
     pub(crate) fn infer_petal(&mut self, petal: &HirPetal) -> InferResult {
-        for item in &petal.items {
-            if let Err(Some(diag)) = self.infer_item(&item) {
-                self.dctx.add(diag);
-            }
-        }
+        petal
+            .items
+            .iter()
+            .for_each(|item| self.infer_item(&item).emit_discard(&mut self.dctx));
 
         Ok(())
     }
 
     pub(crate) fn infer_extend(&mut self, extend: &HirExtend) -> InferResult {
-        // Infer target
-        // self.infer_ty(&extend.target)?;
-
         // Infer items of the extension
-        for item in &extend.items {
-            if let Err(Some(diag)) = self.infer_item(&item) {
-                self.dctx.add(diag);
-            }
-        }
+        extend
+            .items
+            .iter()
+            .for_each(|item| self.infer_item(&item).emit_discard(&mut self.dctx));
 
-        Ok(())
-    }
-
-    pub(crate) fn infer_struct(&mut self, strct: &HirStruct) -> InferResult {
-        // TODO
         Ok(())
     }
 
@@ -86,14 +73,16 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             unreachable!()
         };
 
-        let default_ty_id = self
-            .tctx
-            .get_hir_ty_id(var_decl.id)
-            .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
-        let ty = decl.ty.map_or_else(
-            || Ty::new(default_ty_id, decl.span),
-            |ty| self.tctx.expect_hir_ty(ty.id).clone(),
-        );
+        let ty = decl
+            .ty
+            .and_then(|ty| self.tctx.get_hir_ty(ty.id).cloned())
+            .unwrap_or_else(|| {
+                let default_ty_id = self
+                    .tctx
+                    .get_hir_ty_id(var_decl.id)
+                    .unwrap_or_else(|| self.tctx.make_inferred_ty(InferKind::Any));
+                Ty::new(default_ty_id, decl.span)
+            });
 
         if let Some(expr) = decl.val {
             let expr_ty = self.infer_expr(&expr)?;

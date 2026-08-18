@@ -82,8 +82,11 @@ impl<'d, 's> CLIReporter<'d, 's> {
             let mut group = vec![targets.swap_remove(0)];
             let mut j = 0;
 
+            let (b_start, b_end) = group[0].span.to_position_range(&source);
             while j < targets.len() {
-                if group[0].span.overlaps(targets[j].span) {
+                let (start, end) = targets[j].span.to_position_range(&source);
+                if start.line >= b_start.line && end.line <= b_end.line {
+                    // if group[0].span.overlaps(targets[j].span) {
                     group.push(targets.swap_remove(j));
                     continue;
                 }
@@ -98,10 +101,8 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .into_iter()
             .map(|mut group| {
                 group.sort_by(|a, b| {
-                    a.span
-                        .offset
-                        .cmp(&b.span.offset)
-                        .then_with(|| b.span.len.cmp(&a.span.len))
+                    b.span.offset.cmp(&a.span.offset)
+                    // .then_with(|| b.span.len.cmp(&a.span.len))
                 });
 
                 let mut lines = HashMap::<u32, EmphasisLine>::new();
@@ -242,11 +243,13 @@ impl<'d, 's> CLIReporter<'d, 's> {
 
         let max_lno = data
             .iter()
-            .find_map(|data| data.lines.iter().max_by_key(|line| line.line_no))
-            .unwrap()
-            .line_no;
+            .flat_map(|data| &data.lines)
+            .map(|line| line.line_no)
+            .max()
+            .unwrap();
         let pref_fn = |line_no: Option<u32>| {
             let digits = line_no.map_or_else(|| 0, |line| (line as f32).log10() as usize + 1);
+
             format!(
                 "  {}{}  {}{}  ",
                 line_no

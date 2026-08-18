@@ -227,6 +227,7 @@ impl TyCtx {
     }
 
     pub fn instantiate(&mut self, ty_id: TyId, args: &[&[GenericArg]]) -> TyId {
+        let ty_id = self.resolve_ty(ty_id);
         match self.get(ty_id) {
             TyKind::Array(ty_id) => {
                 let ty_id = self.instantiate(*ty_id, args.into());
@@ -382,14 +383,25 @@ impl TyCtx {
                     return false;
                 }
 
-                // TODO: generic arguments
-
+                let (a_params, b_params) = (a_func.params.clone(), b_func.params.clone());
                 let (a_ret, b_ret) = (a_func.ret_ty, b_func.ret_ty);
-                a_func
-                    .params
+
+                if !a_args
                     .clone()
+                    .into_iter()
+                    .zip(b_args.clone().into_iter())
+                    .all(|(a_arg, b_arg)| match (a_arg, b_arg) {
+                        (GenericArg::Ty(a_ty_id), GenericArg::Ty(b_ty_id)) => {
+                            self.unify_ty(*a_ty_id, *b_ty_id)
+                        }
+                    })
+                {
+                    return false;
+                }
+
+                a_params
                     .iter()
-                    .zip(b_func.params.clone().iter())
+                    .zip(b_params.iter())
                     .all(|(ap_ty, bp_ty)| self.unify_ty(*ap_ty, *bp_ty))
                     && self.unify_ty(a_ret, b_ret)
             }

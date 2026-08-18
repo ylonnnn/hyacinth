@@ -36,6 +36,17 @@ impl ExtensionTable {
         !self.native.is_empty()
     }
 
+    pub fn hir_ids(&self) -> Vec<HirId> {
+        self.hir_map.keys().copied().collect()
+    }
+
+    pub fn hir_mapping(&self) -> Vec<(HirId, ExtensionId)> {
+        self.hir_map
+            .iter()
+            .map(|(hir_id, ext_id)| (*hir_id, *ext_id))
+            .collect()
+    }
+
     pub fn insert(&mut self, ext: Extension) -> ExtensionId {
         self.data.push(ext);
         ExtensionId(self.data.len() - 1)

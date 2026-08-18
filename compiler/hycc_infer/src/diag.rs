@@ -1,11 +1,11 @@
-use hycc_diagnostic::{
-    Diagnostic, DiagnosticContext, DiagnosticCtx,
-    diagnostic::{Diag, DiagNoteKind, DiagnosticKind},
+use hycc_diagnostic::diagnostic::{
+    Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics, FromResultEmitter,
 };
 use hycc_hir::{
     def::{AdtKind, DefId, DefKind, DefinitionTable},
     expr::HirFieldAccessFieldKind,
 };
+use hycc_resolve::diag::ResolverDiagDataCtx;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
@@ -15,16 +15,32 @@ use hycc_ty::{
 };
 use hycc_util::{bug, ternary};
 
-#[derive(Debug)]
-pub struct InferDiagDataCtx<'t, 'd, 'i> {
-    fmt: TyFormatter<'t, 'd, 'i>,
+pub type InferResult<T = (), E = InferDiag> = Result<T, E>;
+
+impl<'c, T> FromResultEmitter<InferDiagCtx<'c>, InferDiagDataCtx<'c>, InferDiag, T>
+    for InferResult<T, InferDiag>
+{
+    fn emit(self, dctx: &mut InferDiagCtx<'c>) -> Option<T> {
+        match self {
+            Ok(val) => Some(val),
+            Err(diag) => {
+                dctx.add(diag);
+                None
+            }
+        }
+    }
 }
 
-impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
+#[derive(Debug)]
+pub struct InferDiagDataCtx<'c> {
+    fmt: TyFormatter<'c>,
+}
+
+impl<'c> InferDiagDataCtx<'c> {
     pub fn new(
-        tctx: &'t mut TyCtx,
-        definitions: &'d DefinitionTable,
-        interner: &'i SymbolInterner,
+        tctx: &'c mut TyCtx,
+        definitions: &'c DefinitionTable,
+        interner: &'c SymbolInterner,
     ) -> Self {
         Self {
             fmt: TyFormatter::new(tctx, &definitions, &interner),
@@ -32,25 +48,12 @@ impl<'t, 'd, 'i> InferDiagDataCtx<'t, 'd, 'i> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct InferDiagCtx(Vec<InferDiag>, bool);
+#[derive(Debug)]
+pub struct InferDiagCtx<'c>(Vec<InferDiag>, &'c mut DiagCtx, bool);
 
-impl InferDiagCtx {
-    #[allow(unused)]
-    const RESOLVER_NOTE_OFFSET: u16 = 200;
-    #[allow(unused)]
-    const RESOLVER_WARNING_OFFSET: u16 = 300;
-    const RESOLVER_ERROR_OFFSET: u16 = 450;
-
-    pub fn new() -> Self {
-        Self(Vec::new(), false)
-    }
-
-    pub fn warning(&mut self, span: Span, kind: InferDiagWarningKind) {
-        self.add(InferDiag {
-            span,
-            kind: InferDiagKind::Warning(kind),
-        });
+impl<'c> InferDiagCtx<'c> {
+    pub fn new(dctx: &'c mut DiagCtx) -> Self {
+        Self(Vec::new(), dctx, false)
     }
 
     pub fn error(&mut self, span: Span, kind: InferDiagErrorKind) {
@@ -61,16 +64,10 @@ impl InferDiagCtx {
     }
 }
 
-impl<'t, 'd, 'i> DiagnosticContext<InferDiagDataCtx<'t, 'd, 'i>, InferDiag> for InferDiagCtx {
-    fn add(&mut self, diagnostic: InferDiag) -> Option<&mut InferDiag> {
-        self.1 = self.1 || matches!(&diagnostic.kind, InferDiagKind::Error(_));
-        let data = self.data_mut();
+impl<'c> Diagnostics<InferDiagDataCtx<'c>, InferDiag> for InferDiagCtx<'c> {
+    const ERROR_CODE_OFFSET: u16 = 500;
 
-        data.push(diagnostic);
-        data.last_mut()
-    }
-
-    fn data(&self) -> &Vec<InferDiag> {
+    fn data(&self) -> &[InferDiag] {
         &self.0
     }
 
@@ -78,27 +75,25 @@ impl<'t, 'd, 'i> DiagnosticContext<InferDiagDataCtx<'t, 'd, 'i>, InferDiag> for 
         &mut self.0
     }
 
-    fn error_occurred(&self) -> bool {
-        self.1
+    fn error_flag(&mut self) -> &mut bool {
+        &mut self.2
     }
 
-    fn emit(&self, target: &mut DiagnosticCtx, mut ctx: InferDiagDataCtx<'t, 'd, 'i>) {
-        for diag in self.data() {
-            target.add(diag.emit(&mut ctx));
+    fn emit(&mut self, mut ctx: InferDiagDataCtx<'c>) {
+        for diag in &self.0 {
+            self.1.add(diag.emit(&mut ctx));
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum InferDiagKind {
-    Note(DiagNoteKind),
-    Warning(InferDiagWarningKind),
+    Info,
+    Warning,
     Error(InferDiagErrorKind),
 }
 
-#[derive(Debug, Clone)]
-pub enum InferDiagWarningKind {}
-
+#[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum InferDiagErrorKind {
     TypeMismatch {
@@ -145,12 +140,17 @@ pub enum InferDiagErrorKind {
 
     MissingElseBranch,
 
+    UnrecognizedMember {
+        name: Symbol,
+        ty_id: TyId,
+    },
+
     InaccessibleMember {
         name: Symbol,
         kind: MemberKind,
     },
 
-    InvalidAssocFnInvocation {
+    IllegalAssocFnInvocation {
         name: Symbol,
         def_id: DefId,
         ty_id: TyId,
@@ -177,13 +177,6 @@ pub struct InferDiag {
 }
 
 impl InferDiag {
-    pub fn warning(span: Span, kind: InferDiagWarningKind) -> Self {
-        Self {
-            span,
-            kind: InferDiagKind::Warning(kind),
-        }
-    }
-
     pub fn error(span: Span, kind: InferDiagErrorKind) -> Self {
         Self {
             span,
@@ -192,318 +185,353 @@ impl InferDiag {
     }
 }
 
-impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
-    fn emit(&self, ctx: &mut InferDiagDataCtx<'t, 'd, 'i>) -> Diagnostic {
-        use InferDiagErrorKind as Err;
-        use InferDiagKind::*;
+impl DiagLike for InferDiag {
+    fn is_info(&self) -> bool {
+        matches!(&self.kind, InferDiagKind::Info)
+    }
 
-        let InferDiagDataCtx { fmt, .. } = ctx;
+    fn is_warning(&self) -> bool {
+        matches!(&self.kind, InferDiagKind::Warning)
+    }
 
-        let mut diag = Diagnostic::new(
-            self.span,
-            match &self.kind {
-                Note(kind) => DiagnosticKind::Note(match kind {
-                    _ => "".into(),
-                }),
+    fn is_error(&self) -> bool {
+        matches!(&self.kind, InferDiagKind::Error(_))
+    }
+}
 
-                Warning(kind) => DiagnosticKind::Warning(match kind {
-                    _ => "".into(),
-                }),
+impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
+    fn emit(&self, ctx: &mut InferDiagDataCtx<'c>) -> hycc_diagnostic::diagnostic::Diag {
+        use InferDiagErrorKind::*;
 
-                Error(kind) => {
-                    let code = (unsafe { *(&self.kind as *const InferDiagKind as *const u8) })
-                        as u16
-                        + InferDiagCtx::RESOLVER_ERROR_OFFSET;
+        let (kind, message, extra) = match &self.kind {
+            InferDiagKind::Info => (DiagKind::Info, "".into(), None),
+            InferDiagKind::Warning => (DiagKind::Warning, "".into(), None),
 
-                    DiagnosticKind::Error(
-                        code,
-                        match kind {
-                            Err::TypeMismatch {
-                                expected, received, ..
-                            } => {
-                                format!(
-                                    "expected type `{}`, received type `{}`.",
-                                    fmt.fmt_id(*expected),
-                                    fmt.fmt_id(*received)
+            InferDiagKind::Error(kind) => {
+                let (message, extra) = match kind {
+                    TypeMismatch {
+                        expected, received, ..
+                    } => (
+                        "mismatched types".into(),
+                        Some(format!(
+                            "expected `{}`, received `{}`",
+                            ctx.fmt.fmt_id(*expected),
+                            ctx.fmt.fmt_id(*received)
+                        )),
+                    ),
+
+                    InvalidNonStructInstantiation { name, def_id } => {
+                        let s_name = ctx.fmt.interner.get(*name);
+                        let def = ctx.fmt.definitions.get(*def_id);
+
+                        (
+                            format!("cannot instantiate non-struct definition `{s_name}`"),
+                            Some(format!(
+                                "`{s_name}` is defined as {} `{}`",
+                                def.kind.article(),
+                                def.kind.kind()
+                            )),
+                        )
+                    }
+
+                    UnrecognizedField { field, ty_id } => {
+                        let s_ty = ctx.fmt.fmt_id(*ty_id);
+                        (
+                            format!(
+                                "unrecognized field `{}` from `{s_ty}`",
+                                match &field {
+                                    HirFieldAccessFieldKind::Ident(ident) =>
+                                        ctx.fmt.interner.get(*ident).into(),
+                                    HirFieldAccessFieldKind::Index(idx) => idx.to_string(),
+                                },
+                            ),
+                            Some(format!("no field from `{s_ty}`")),
+                        )
+                    }
+
+                    UnrecognizedMethod { method, ty_id } => {
+                        let s_ty = ctx.fmt.fmt_id(*ty_id);
+                        (
+                            format!(
+                                "unrecognized method `{}` from `{}`",
+                                ctx.fmt.interner.get(*method),
+                                s_ty,
+                            ),
+                            Some(format!("no method from `{s_ty}`")),
+                        )
+                    }
+
+                    UnrecognizedFieldInitialization { field, struct_def } => {
+                        let def = ctx.fmt.definitions.get(*struct_def);
+                        (
+                            format!(
+                                "unrecognized field `{}` from struct `{}`",
+                                ctx.fmt.interner.get(*field),
+                                ctx.fmt.interner.get(def.name),
+                            ),
+                            Some("cannot initialize unrecognized field".into()),
+                        )
+                    }
+
+                    MissingFields { field_mask, def_id } => {
+                        let def = ctx.fmt.definitions.get(*def_id);
+                        let adt_def = def.kind.expect_adt();
+
+                        let strct = adt_def.expect_struct();
+                        let missing_fields = strct
+                            .fields
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, field)| {
+                                ternary!(
+                                    (field_mask >> i) & 1 != 1,
+                                    None,
+                                    Some(format!("`{}`", ctx.fmt.interner.get(field.name)))
                                 )
-                            }
+                            })
+                            .collect::<Vec<_>>();
 
-                            Err::InvalidNonStructInstantiation { name, .. } => {
-                                format!(
-                                    "cannot instantiate non-struct definition `{}`.",
-                                    fmt.interner.get(*name)
-                                )
-                            }
+                        (
+                            format!(
+                                "missing field{} in initializer of `{}`",
+                                ternary!(missing_fields.len() > 1, "s", ""),
+                                ctx.fmt.interner.get(def.name),
+                            ),
+                            Some(format!(
+                                "missing {}",
+                                hycc_util::text::list_enumeration(&missing_fields)
+                            )),
+                        )
+                    }
 
-                            Err::UnrecognizedField { field, ty_id } => {
-                                format!(
-                                    "cannot recognize field `{}` from type `{}`.",
-                                    match &field {
-                                        HirFieldAccessFieldKind::Ident(ident) =>
-                                            fmt.interner.get(*ident).into(),
-                                        HirFieldAccessFieldKind::Index(idx) => idx.to_string(),
-                                    },
-                                    fmt.fmt_id(*ty_id),
-                                )
-                            }
+                    FieldReinitialization { field, .. } => (
+                        format!(
+                            "field `{}` has already been initialized",
+                            ctx.fmt.interner.get(*field)
+                        ),
+                        None,
+                    ),
 
-                            Err::UnrecognizedMethod { method, ty_id } => {
-                                format!(
-                                    "cannot recognize method `{}` from type `{}`.",
-                                    fmt.interner.get(*method),
-                                    fmt.fmt_id(*ty_id),
-                                )
-                            }
+                    UnresolvedTy(ty) => {
+                        let Ty { id, .. } = ty;
 
-                            Err::UnrecognizedFieldInitialization { field, struct_def } => {
-                                let def = fmt.definitions.get(*struct_def);
-                                format!(
-                                    "cannot recognize field `{}` from struct `{}`.",
-                                    fmt.interner.get(*field),
-                                    fmt.interner.get(def.name),
-                                )
-                            }
+                        (format!("unresolved type `{}`", ctx.fmt.fmt_id(*id)), None)
+                    }
 
-                            Err::MissingFields { field_mask, def_id } => {
-                                let def = fmt.definitions.get(*def_id);
-                                let adt_def = def.kind.expect_adt();
+                    IllegalInvocation(ty_id) => (
+                        "cannot invoke expression".into(),
+                        Some(format!(
+                            "expression is of type `{}`",
+                            ctx.fmt.fmt_id(*ty_id)
+                        )),
+                    ),
 
-                                let strct = adt_def.expect_struct();
-                                let missing_fields = strct
-                                    .fields
-                                    .iter()
-                                    .enumerate()
-                                    .filter_map(|(i, field)| {
-                                        ternary!(
-                                            (field_mask >> i) & 1 != 1,
-                                            None,
-                                            Some(format!("`{}`", fmt.interner.get(field.name)))
-                                        )
-                                    })
-                                    .collect::<Vec<_>>();
+                    ArgumentArityMismatch(data) => {
+                        let (expected, received) =
+                            ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
+                        (
+                            format!(
+                                "expected `{}` argument{}, received `{}` argument{}",
+                                expected,
+                                ternary!(expected == 1, "", "s"),
+                                received,
+                                ternary!(received == 1, "", "s"),
+                            ),
+                            None,
+                        )
+                    }
 
-                                format!(
-                                    "missing field{} in initializer of `{}`: {}",
-                                    ternary!(missing_fields.len() > 1, "s", ""),
-                                    fmt.interner.get(def.name),
-                                    missing_fields.join(", ")
-                                )
-                            }
+                    GenericArgumentArityMismatch(data) => {
+                        let (expected, received) =
+                            ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
+                        (
+                            "generic argument arity mismatch".into(),
+                            Some(format!(
+                                "expected at most `{}` but received `{}`",
+                                expected, received,
+                            )),
+                        )
+                    }
 
-                            Err::FieldReinitialization { field, .. } => {
-                                format!(
-                                    "field `{}` has already been initialized.",
-                                    fmt.interner.get(*field)
-                                )
-                            }
+                    MissingElseBranch => (
+                        format!(
+                            "`if` expression with a non-unit consequent requires an `else` branch"
+                        ),
+                        None,
+                    ),
 
-                            Err::UnresolvedTy(ty) => {
-                                let Ty { id, .. } = ty;
+                    UnrecognizedMember { name, ty_id } => {
+                        let s_ty = ctx.fmt.fmt_id(*ty_id);
+                        (
+                            format!(
+                                "unrecognized associated item `{}` from `{}`",
+                                ctx.fmt.interner.get(*name),
+                                s_ty,
+                            ),
+                            Some(format!("no associated item from `{s_ty}`")),
+                        )
+                    }
 
-                                format!("unresolved type `{}`.", fmt.fmt_id(*id))
-                            }
+                    InaccessibleMember { name, kind } => {
+                        let s_kind = match &kind {
+                            MemberKind::Field => "field",
+                            MemberKind::AssocFn => "associated function",
+                        };
+                        (
+                            format!(
+                                "{s_kind} `{}` is inaccessible in this context",
+                                ctx.fmt.interner.get(*name)
+                            ),
+                            Some(format!("cannot access {s_kind}")),
+                        )
+                    }
 
-                            Err::IllegalInvocation(ty_id) => {
-                                format!(
-                                    "cannot invoke expression of type `{}`.",
-                                    fmt.fmt_id(*ty_id)
-                                )
-                            }
+                    IllegalAssocFnInvocation { name, ty_id, .. } => (
+                        format!(
+                            "cannot invoke associated function `{}::{}`",
+                            ctx.fmt.fmt_id(*ty_id),
+                            ctx.fmt.interner.get(*name)
+                        ),
+                        Some("cannot invoke as method call".into()),
+                    ),
 
-                            Err::ArgumentArityMismatch(data) => {
-                                let (expected, received) =
-                                    ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
-                                format!(
-                                    "expected `{}` argument{}, received `{}` argument{}.",
-                                    expected,
-                                    ternary!(expected == 1, "", "s"),
-                                    received,
-                                    ternary!(received == 1, "", "s"),
-                                )
-                            }
+                    ReceiverAccessMismatch {
+                        access, requested, ..
+                    } => (
+                        format!(
+                            "cannot {} a `{}`",
+                            match &requested {
+                                AccessKind::Owned => "move out of",
+                                AccessKind::Ref(mutability) => match &mutability {
+                                    RefMutability::Immutable => "borrow",
+                                    RefMutability::Mutable => "mutably borrow",
+                                },
+                            },
+                            access
+                        ),
+                        None,
+                    ),
+                };
 
-                            Err::GenericArgumentArityMismatch(data) => {
-                                let (expected, received) =
-                                    ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
-                                format!(
-                                    "expected at most `{}` generic argument{}, received `{}` generic argument{}.",
-                                    expected,
-                                    ternary!(expected == 1, "", "s"),
-                                    received,
-                                    ternary!(received == 1, "", "s"),
-                                )
-                            }
+                (
+                    DiagKind::Error(
+                        hycc_util::enums::tag_of::<u16, InferDiagErrorKind>(&kind)
+                            + InferDiagCtx::ERROR_CODE_OFFSET,
+                    ),
+                    message,
+                    extra,
+                )
+            }
+        };
 
-                            Err::MissingElseBranch => {
-                                format!(
-                                    "`if` expression with a non-unit consequent requires an `else` branch."
-                                )
-                            }
+        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
 
-                            Err::InaccessibleMember { name, kind } => {
-                                format!(
-                                    "{} `{}` is inaccessible in this context.",
-                                    match &kind {
-                                        MemberKind::Field => "field",
-                                        MemberKind::AssocFn => "associated function",
-                                    },
-                                    fmt.interner.get(*name)
-                                )
-                            }
-
-                            Err::InvalidAssocFnInvocation { name, ty_id, .. } => {
-                                format!(
-                                    "cannot invoke associated function `{}::{}` through method calls.",
-                                    fmt.fmt_id(*ty_id),
-                                    fmt.interner.get(*name)
-                                )
-                            }
-
-                            Err::ReceiverAccessMismatch {
-                                access, requested, ..
-                            } => {
-                                format!(
-                                    "cannot {} a `{}`.",
-                                    match &requested {
-                                        AccessKind::Owned => "move out of",
-                                        AccessKind::Ref(mutability) => match &mutability {
-                                            RefMutability::Immutable => "borrow",
-                                            RefMutability::Mutable => "mutably borrow",
-                                        },
-                                    },
-                                    access
-                                )
-                            }
-                        },
-                    )
-                }
-            },
-        );
-
-        // Optionally add details
         match &self.kind {
-            Note(kind) => match kind {
-                _ => {}
-            },
-
-            Warning(kind) => match kind {
-                _ => {}
-            },
-
-            Error(kind) => match kind {
-                Err::TypeMismatch {
+            InferDiagKind::Error(kind) => match kind {
+                TypeMismatch {
                     expectation_span: ann_span,
                     ..
                 } => {
-                    diag.detail(
-                        *ann_span,
-                        DiagnosticKind::Note(format!("expected due to this.")),
-                    );
+                    diag.note(*ann_span, format!("expected due to this"));
                 }
 
-                Err::InvalidNonStructInstantiation { name, def_id } => {
-                    let def = fmt.definitions.get(*def_id);
+                InvalidNonStructInstantiation { name, def_id } => {
+                    let def = ctx.fmt.definitions.get(*def_id);
 
-                    diag.detail(
+                    diag.note(
                         def.span,
-                        DiagnosticKind::Note(format!(
+                        format!(
                             "`{}` is defined here as {} `{}`",
-                            fmt.interner.get(*name),
+                            ctx.fmt.interner.get(*name),
                             def.kind.article(),
                             def.kind.kind()
-                        )),
+                        ),
                     );
                 }
 
-                Err::UnrecognizedFieldInitialization { struct_def, .. } => {
-                    let def = fmt.definitions.get(*struct_def);
+                UnrecognizedFieldInitialization { struct_def, .. } => {
+                    let def = ctx.fmt.definitions.get(*struct_def);
                     let adt_def = def.kind.expect_adt();
 
                     let struct_def = adt_def.expect_struct();
-                    diag.detail(
+                    diag.note(
                         def.span,
-                        DiagnosticKind::Note(format!(
+                        format!(
                             "struct `{}` has the following fields: {}",
-                            fmt.interner.get(def.name),
-                            struct_def
-                                .fields
-                                .iter()
-                                .map(|field| format!("`{}`", fmt.interner.get(field.name)))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )),
+                            ctx.fmt.interner.get(def.name),
+                            hycc_util::text::list_enumeration(
+                                &struct_def
+                                    .fields
+                                    .iter()
+                                    .map(|field| format!("`{}`", ctx.fmt.interner.get(field.name)))
+                                    .collect::<Vec<_>>()
+                            )
+                        ),
                     );
                 }
 
-                Err::FieldReinitialization {
+                FieldReinitialization {
                     field,
                     earlier_span,
                 } => {
-                    diag.detail(
+                    diag.note(
                         *earlier_span,
-                        DiagnosticKind::Note(format!(
-                            "earlier initialization of `{}`.",
-                            fmt.interner.get(*field)
-                        )),
+                        format!(
+                            "earlier initialization of `{}`",
+                            ctx.fmt.interner.get(*field)
+                        ),
                     );
                 }
 
-                Err::UnresolvedTy(ty) => {
-                    diag.detail(
+                UnresolvedTy(ty) => {
+                    diag.note(
                         ty.span,
-                        DiagnosticKind::Note(String::from(
-                            "requires `type annotation` or be used in a context with `known type`.",
-                        )),
+                        "requires `type annotation` or be used in a context with `known type`",
                     );
                 }
 
-                Err::MissingElseBranch => {
-                    diag.detail(
-                        diag.span,
-                        DiagnosticKind::Note(String::from(
-                            "`if` may be missing its `else` branch.",
-                        )),
-                    );
+                MissingElseBranch => {
+                    diag.note(diag.span, "`if` may be missing its `else` branch");
                 }
 
-                Err::InvalidAssocFnInvocation { name, def_id, .. } => {
-                    let def = fmt.definitions.get(*def_id);
+                IllegalAssocFnInvocation { name, def_id, .. } => {
+                    let def = ctx.fmt.definitions.get(*def_id);
                     let fn_def = def.kind.expect_fn();
 
                     if fn_def.params.len() < 1 {
-                        diag.detail(
+                        diag.note(
                         def.span,
-                        DiagnosticKind::Note(format!(
-                            "associated function `{}` does not have a receiving parameter compatible to type `Self`.",
-                            fmt.interner.get(*name)
-                        )),
+                        format!(
+                            "associated function `{}` does not have a receiving parameter compatible to type `Self`",
+                            ctx.fmt.interner.get(*name)
+                        ),
                     );
                     } else {
-                        let rec_param_def = fmt.definitions.get(fn_def.params[0]);
-                        diag.detail(
+                        let rec_param_def = ctx.fmt.definitions.get(fn_def.params[0]);
+                        diag.note(
                             rec_param_def.span,
-                            DiagnosticKind::Note(format!(
-                                    "receiving parameter `{}` of `{}` does not have a compatible type to `Self`.",
-                                    fmt.interner.get(rec_param_def.name),
-                                    fmt.interner.get(*name)
-                            )),
+                            format!(
+                                "receiving parameter `{}` of `{}` does not have a compatible type to `Self`",
+                                ctx.fmt.interner.get(rec_param_def.name),
+                                ctx.fmt.interner.get(*name)
+                            ),
                         );
                     }
                 }
 
-                Err::ReceiverAccessMismatch {
+                ReceiverAccessMismatch {
                     requested,
                     def_id,
                     call: method,
                     ..
                 } => {
-                    let def = fmt.definitions.get(*def_id);
+                    let def = ctx.fmt.definitions.get(*def_id);
                     let fn_def = def.kind.expect_fn();
 
-                    diag.detail(
+                    diag.note(
                         method.1,
-                        DiagnosticKind::Note(format!(
-                            "{} occurs due to call to `{}`.",
+                        format!(
+                            "{} occurs due to call to `{}`",
                             match &requested {
                                 AccessKind::Owned => "move",
                                 AccessKind::Ref(mutability) => match &mutability {
@@ -511,28 +539,30 @@ impl<'t, 'd, 'i> Diag<InferDiagDataCtx<'t, 'd, 'i>> for InferDiag {
                                     RefMutability::Mutable => "mutable borrow",
                                 },
                             },
-                            fmt.interner.get(method.0)
-                        )),
+                            ctx.fmt.interner.get(method.0)
+                        ),
                     );
 
-                    let param_def = fmt.definitions.get(fn_def.params[0]);
-                    diag.detail(
+                    let param_def = ctx.fmt.definitions.get(fn_def.params[0]);
+                    diag.note(
                         def.span,
-                        DiagnosticKind::Note(format!(
-                            "`{}` is defined where the receiver `{}` must be {}.",
-                            fmt.interner.get(method.0),
-                            fmt.interner.get(param_def.name),
+                        format!(
+                            "`{}` is defined where the receiver `{}` must be {}",
+                            ctx.fmt.interner.get(method.0),
+                            ctx.fmt.interner.get(param_def.name),
                             format!(
                                 "{}`{}`",
                                 ternary!(matches!(requested, AccessKind::Owned), "", "a "),
                                 requested.to_string()
                             )
-                        )),
+                        ),
                     );
                 }
 
                 _ => {}
             },
+
+            _ => {}
         };
 
         diag

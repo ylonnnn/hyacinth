@@ -8,7 +8,7 @@ hycc_ast = { path = "../hycc_ast" }
 hycc_const = { path = "../hycc_const" }
 hycc_diagnostic = { path = "../hycc_diagnostic" }
 hycc_hir = { path = "../hycc_hir" }
-# hycc_infer = { path = "../hycc_infer" }
+hycc_infer = { path = "../hycc_infer" }
 # hycc_mir = { path = "../hycc_mir" }
 hycc_parser = { path = "../hycc_parser" }
 hycc_resolve = { path = "../hycc_resolve" }

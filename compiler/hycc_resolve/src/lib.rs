@@ -8,7 +8,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     context::{TyCtx, TyId},
-    ty::{GenericArg, InferKind, Ty},
+    ty::{GenericArg, InferKind, Ty, TyKind},
 };
 
 pub mod diag;
@@ -57,26 +57,29 @@ pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
             .definitions()
             .get(def_id)
             .generic_params()
-            .map(|params| params.iter().cloned().collect::<Vec<_>>())
-            .unwrap_or_default();
+            .map_or_else(Vec::new, |params| {
+                params.iter().cloned().collect::<Vec<_>>()
+            });
+
         let generic_param_count = generic_params.len();
 
-        let mut g_args = if let Some(arguments) = &ident.arguments {
-            let g_args = self.resolve_ident_args(&arguments)?;
-            let n = g_args.len();
+        let mut g_args = ident.arguments.as_ref().map_or_else(
+            || Ok(Vec::new()),
+            |arguments| -> Result<Vec<GenericArg>, E> {
+                let g_args = self.resolve_ident_args(&arguments)?;
+                let n = g_args.len();
 
-            if n > generic_param_count {
-                return Err(self.generic_arg_arity_mismatch_error(
-                    arguments.span,
-                    generic_param_count as u8,
-                    n as u8,
-                ));
-            }
+                if n > generic_param_count {
+                    return Err(self.generic_arg_arity_mismatch_error(
+                        arguments.span,
+                        generic_param_count as u8,
+                        n as u8,
+                    ));
+                }
 
-            g_args
-        } else {
-            Vec::new()
-        };
+                Ok(g_args)
+            },
+        )?;
 
         for i in g_args.len()..generic_param_count {
             let gp_def_id = generic_params[i];

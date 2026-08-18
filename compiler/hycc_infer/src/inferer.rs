@@ -1,16 +1,14 @@
 use std::collections::HashSet;
 
 use hycc_const::table::ConstTable;
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
 use hycc_hir::{
     HirTable,
     def::DefinitionTable,
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
-use hycc_resolve::resolver_traits::{
-    InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy,
-};
+use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy};
 use hycc_span::Span;
 use hycc_ty::{
     context::{TyCtx, TyId, TyVarId},
@@ -24,38 +22,35 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct TyInferer<'t, 'd, 'c, 'h, 'p> {
-    pub dctx: InferDiagCtx,
-    pub tctx: &'t mut TyCtx,
-
-    pub definitions: &'d mut DefinitionTable,
-    pub(crate) const_table: &'c ConstTable,
-    pub(crate) hir_table: &'h HirTable<'h>,
-    pub(crate) petal_ctx: &'p PetalCtx,
-
+pub struct TyInferer<'i, 'h> {
+    pub dctx: InferDiagCtx<'i>,
     pub(crate) fn_ctx: Option<FnCtx>,
+
+    pub tctx: &'i mut TyCtx,
+    pub definitions: &'i mut DefinitionTable,
+    pub(crate) const_table: &'i ConstTable,
+    pub(crate) hir_table: &'i HirTable<'h>,
+    pub(crate) petal_ctx: &'i PetalCtx,
 }
 
-pub type InferResult<T = (), E = Option<InferDiag>> = Result<T, E>;
-
-impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
+impl<'i, 'h> TyInferer<'i, 'h> {
     pub fn new(
-        tctx: &'t mut TyCtx,
-        definitions: &'d mut DefinitionTable,
-        const_table: &'c ConstTable,
-        hir_table: &'h HirTable<'h>,
-        petal_ctx: &'p PetalCtx,
+        dctx: &'i mut DiagCtx,
+        tctx: &'i mut TyCtx,
+        definitions: &'i mut DefinitionTable,
+        const_table: &'i ConstTable,
+        hir_table: &'i HirTable<'h>,
+        petal_ctx: &'i PetalCtx,
     ) -> Self {
         Self {
-            dctx: InferDiagCtx::new(),
-            tctx,
+            dctx: InferDiagCtx::new(dctx),
+            fn_ctx: None,
 
+            tctx,
             definitions,
             const_table,
             hir_table,
             petal_ctx,
-
-            fn_ctx: None,
         }
     }
 
@@ -92,17 +87,11 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     }
 
     pub fn infer(&mut self, tree: &HirItem) {
-        let HirItemKind::Petal(tree) = &tree.kind else {
-            bug!("invalid type inference! type inference must start at the tree (a petal)")
-        };
+        let petal = tree.expect_petal();
+        self.infer_petal(&petal);
 
-        for item in &tree.items {
-            if let Err(Some(diag)) = self.infer_item(&item) {
-                self.dctx.add(diag);
-            }
-        }
-
-        self.analyze_unresolved(!self.dctx.error_occurred());
+        let err = *self.dctx.error_flag();
+        self.analyze_unresolved(!err);
     }
 
     fn analyze_unresolved(&mut self, emit_err: bool) {
@@ -133,10 +122,6 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             let mut unresolved_infer_tys = Vec::new();
             self.tctx.unresolved_infer(ty_id, &mut unresolved_infer_tys);
 
-            if unresolved_infer_tys.is_empty() {
-                continue;
-            }
-
             for infer_ty in unresolved_infer_tys {
                 let TyKind::Infer(var_id, kind) = self.tctx.get(infer_ty) else {
                     continue;
@@ -147,10 +132,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                     InferKind::Float => self.tctx.unify_ty(ty_id, default_float_ty_id),
                     _ => {
                         if checked.insert(*var_id) && emit_err {
-                            self.dctx.add(InferDiag::error(
+                            self.dctx.error(
                                 span,
                                 InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
-                            ));
+                            );
                         }
 
                         continue;
@@ -161,26 +146,15 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     }
 }
 
-impl<'t, 'd, 'c, 'h, 'p> ResolveTy<Option<InferDiag>> for TyInferer<'t, 'd, 'c, 'h, 'p> {
-    fn resolve_ty(&mut self, ty: &hycc_hir::ty::HirTy) -> Result<TyId, Option<InferDiag>> {
+impl<'i, 'h> ResolveTy<InferDiag> for TyInferer<'i, 'h> {
+    fn resolve_ty(&mut self, ty: &hycc_hir::ty::HirTy) -> Result<TyId, InferDiag> {
         Ok(self.tctx.expect_hir_ty_id(ty.id))
     }
 }
 
-impl<'t, 'd, 'c, 'h, 'p> ResolveExpr<TyId, Option<InferDiag>> for TyInferer<'t, 'd, 'c, 'h, 'p> {
-    fn resolve_expr(&mut self, expr: &hycc_hir::expr::HirExpr) -> Result<TyId, Option<InferDiag>> {
-        self.infer_expr(&expr)
-    }
-}
+impl<'i, 'h> ResolveIdentArgs<TyId, InferDiag> for TyInferer<'i, 'h> {}
 
-impl<'t, 'd, 'c, 'h, 'p> ResolveIdentArgs<TyId, Option<InferDiag>>
-    for TyInferer<'t, 'd, 'c, 'h, 'p>
-{
-}
-
-impl<'t, 'd, 'c, 'h, 'p> InstantiateIdent<TyId, Option<InferDiag>>
-    for TyInferer<'t, 'd, 'c, 'h, 'p>
-{
+impl<'i, 'h> InstantiateIdent<TyId, InferDiag> for TyInferer<'i, 'h> {
     fn definitions(&self) -> &DefinitionTable {
         &self.definitions
     }
@@ -193,8 +167,9 @@ impl<'t, 'd, 'c, 'h, 'p> InstantiateIdent<TyId, Option<InferDiag>>
         &mut self,
         def_id: hycc_hir::def::DefId,
         _span: hycc_span::Span,
-    ) -> Result<TyId, Option<InferDiag>> {
-        Ok(self.tctx.get_ty_of_def(def_id).unwrap().id)
+    ) -> Result<TyId, InferDiag> {
+        let def = self.definitions.get(def_id);
+        Ok(self.tctx.expect_hir_ty_id(def.hir_id))
     }
 
     fn generic_arg_arity_mismatch_error(
@@ -202,12 +177,12 @@ impl<'t, 'd, 'c, 'h, 'p> InstantiateIdent<TyId, Option<InferDiag>>
         span: Span,
         expected: u8,
         received: u8,
-    ) -> Option<InferDiag> {
-        Some(InferDiag::error(
+    ) -> InferDiag {
+        InferDiag::error(
             span,
             InferDiagErrorKind::GenericArgumentArityMismatch(
                 ((expected as u16) << u8::BITS) | received as u16,
             ),
-        ))
+        )
     }
 }

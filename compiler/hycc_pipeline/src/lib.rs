@@ -8,6 +8,7 @@ use hycc_diagnostic::{
     reporter::{cli_reporter::CLIReporter, reporter::DiagnosticReporter},
 };
 use hycc_hir::{HirTable, builder::HirBuilder, item::HirItem};
+use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
 // use hycc_infer::{diag::InferDiagDataCtx, inferer::TyInferer};
 // use hycc_mir::{body::MirBodyId, builder::MirBuilder};
 use hycc_parser::{
@@ -39,6 +40,11 @@ impl Driver {
         for source_id in driver.registry.sources() {
             let mut session = Session::new(driver.registry.root().0);
             driver.compile(&mut session);
+
+            // fs::write(
+            //     "syms.txt",
+            //     session.interner.get_all().join("\n")
+            // );
 
             let reporter = CLIReporter::new(&session.dctx, &driver.registry);
             reporter.report();
@@ -108,14 +114,15 @@ impl Driver {
         'h: 's,
     {
         let collector = Collector::new(
+            &mut session.petal_ctx,
             &mut session.interner,
             &mut session.tctx,
             &mut session.definitions,
         );
 
         let mut resolver = Resolver::new(&mut session.dctx, collector);
-        resolver.resolve(&tree);
 
+        resolver.resolve(&tree);
         resolver.dctx.emit(ResolverDiagDataCtx::new(
             resolver.collector.tctx,
             &resolver.collector.interner,
@@ -132,14 +139,37 @@ impl Driver {
             &mut session.definitions,
             &session.hir_table,
         );
-        ty_resolver.resolve(&tree);
 
+        ty_resolver.resolve(&tree);
         ty_resolver.dctx.emit(ResolverDiagDataCtx::new(
             ty_resolver.tctx,
             &session.interner,
             &session.hir_table,
             &ty_resolver.definitions,
             &scope_ctx,
+        ));
+
+        Ok(())
+    }
+
+    fn ty_check<'s, 'h>(&mut self, session: &'s mut Session<'h>, tree: &HirItem) -> Result<(), ()>
+    where
+        'h: 's,
+    {
+        let mut ty_inferer = TyInferer::new(
+            &mut session.dctx,
+            &mut session.tctx,
+            &mut session.definitions,
+            &session.const_table,
+            &session.hir_table,
+            &session.petal_ctx,
+        );
+
+        ty_inferer.infer(&tree);
+        ty_inferer.dctx.emit(InferDiagDataCtx::new(
+            &mut ty_inferer.tctx,
+            &ty_inferer.definitions,
+            &session.interner,
         ));
 
         Ok(())
@@ -158,7 +188,8 @@ impl Driver {
         );
         let hir = hir_builder.lower(tree);
 
-        self.resolve(session, hir);
+        self.resolve(session, &hir);
+        self.ty_check(session, &hir);
 
         Ok(())
 

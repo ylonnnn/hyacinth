@@ -20,11 +20,10 @@ use hycc_util::ternary;
 
 pub type ResolveResult<T = (), E = ResolverDiag> = Result<T, E>;
 
-impl<'c, 'h, RT>
-    FromResultEmitter<ResolverDiagCtx<'c>, ResolverDiagDataCtx<'c, 'h>, ResolverDiag, RT>
-    for ResolveResult<RT, ResolverDiag>
+impl<'c, 'h, T> FromResultEmitter<ResolverDiagCtx<'c>, ResolverDiagDataCtx<'c, 'h>, ResolverDiag, T>
+    for ResolveResult<T, ResolverDiag>
 {
-    fn emit(self, dctx: &mut ResolverDiagCtx<'c>) -> Option<RT> {
+    fn emit(self, dctx: &mut ResolverDiagCtx<'c>) -> Option<T> {
         match self {
             Ok(val) => Some(val),
             Err(diag) => {
@@ -164,7 +163,7 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         let s_ident = ctx.fmt.interner.get(*ident);
                         (
                             format!(
-                                "definition with the identifier `{}` already exists.",
+                                "definition with the identifier `{}` already exists",
                                 s_ident
                             ),
                             Some(format!("redefinition of `{}`", s_ident)),
@@ -184,7 +183,7 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         let s_ty = ctx.fmt.fmt_id(*ty_id);
                         (
                             format!(
-                                "unrecognized associated item `{}` from `{}`.",
+                                "unrecognized associated item `{}` from `{}`",
                                 ctx.fmt.interner.get(*name),
                                 s_ty,
                             ),
@@ -196,7 +195,7 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         let def = ctx.fmt.definitions.get(*def_id);
                         (
                             format!(
-                                "cannot use petal `{}` as a type.",
+                                "cannot use petal `{}` as a type",
                                 ctx.fmt.interner.get(def.name)
                             ),
                             None,
@@ -204,13 +203,13 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     }
 
                     InvalidInference => (
-                        format!("cannot infer type in this context."),
+                        format!("cannot infer type in this context"),
                         Some("requires known type".into()),
                     ),
 
                     InaccessibleSymbol(symbol) => (
                         format!(
-                            "`{}` is inaccessible in this context.",
+                            "`{}` is inaccessible in this context",
                             ctx.fmt.interner.get(*symbol)
                         ),
                         None,
@@ -220,9 +219,9 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         let (expected, received) =
                             ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
                         (
-                            "generic argument arity mismatch.".into(),
+                            "generic argument arity mismatch".into(),
                             Some(format!(
-                                "expected at most `{}` but received `{}`.",
+                                "expected at most `{}` but received `{}`",
                                 expected, received,
                             )),
                         )

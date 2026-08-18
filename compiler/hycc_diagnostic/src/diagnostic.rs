@@ -64,40 +64,40 @@ pub struct Diag {
 }
 
 impl Diag {
-    pub fn new(kind: DiagKind, span: Span, message: String) -> Self {
+    pub fn new<T: Into<String>>(kind: DiagKind, span: Span, message: T) -> Self {
         Self {
             sub_diagnostics: Vec::new(),
-            message: (message, None),
+            message: (message.into(), None),
             details: Vec::new(),
             span,
             kind,
         }
     }
 
-    pub fn new_with_extra(
+    pub fn new_with_extra<T: Into<String>>(
         kind: DiagKind,
         span: Span,
-        message: String,
-        extra: Option<String>,
+        message: T,
+        extra: Option<T>,
     ) -> Self {
         Self {
             sub_diagnostics: Vec::new(),
-            message: (message, extra),
+            message: (message.into(), extra.map(|extra| extra.into())),
             details: Vec::new(),
             span,
             kind,
         }
     }
 
-    pub fn info(span: Span, message: String) -> Self {
+    pub fn info<T: Into<String>>(span: Span, message: T) -> Self {
         Self::new(DiagKind::Info, span, message)
     }
 
-    pub fn warning(span: Span, message: String) -> Self {
+    pub fn warning<T: Into<String>>(span: Span, message: T) -> Self {
         Self::new(DiagKind::Warning, span, message)
     }
 
-    pub fn error(code: u16, span: Span, message: String) -> Self {
+    pub fn error<T: Into<String>>(code: u16, span: Span, message: T) -> Self {
         Self::new(DiagKind::Error(code), span, message)
     }
 
@@ -109,17 +109,17 @@ impl Diag {
         self
     }
 
-    pub fn note(&mut self, span: Span, message: String) -> &mut Self {
+    pub fn note<T: Into<String>>(&mut self, span: Span, message: T) -> &mut Self {
         if span.src_id.is_valid() {
-            self.details.push(DiagDetail::note(span, message))
+            self.details.push(DiagDetail::note(span, message.into()))
         }
 
         self
     }
 
-    pub fn help(&mut self, span: Span, message: String) -> &mut Self {
+    pub fn help<T: Into<String>>(&mut self, span: Span, message: T) -> &mut Self {
         if span.src_id.is_valid() {
-            self.details.push(DiagDetail::help(span, message))
+            self.details.push(DiagDetail::help(span, message.into()))
         }
 
         self

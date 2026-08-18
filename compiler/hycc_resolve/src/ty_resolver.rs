@@ -93,17 +93,8 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     }
 
     fn resolve_native_exts(&mut self) {
-        let exts = self
-            .tctx
-            .ext_table
-            .native_exts()
-            .values()
-            .flat_map(|exts| exts.iter().cloned())
-            .collect::<Vec<_>>();
-
-        for ext_id in exts {
-            let HirNode::Item(item) = self.hir_table.get(self.tctx.ext_table.get(ext_id).hir_id)
-            else {
+        for hir_id in self.tctx.ext_table.hir_ids() {
+            let HirNode::Item(item) = self.hir_table.get(hir_id) else {
                 unreachable!()
             };
 
@@ -151,10 +142,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
                     .list
                     .iter()
                     .map(|generic_param| {
-                        let def_id = self.definitions.expect_def_id(generic_param.id);
-                        let def = self.definitions.get(def_id).kind.expect_generic_param();
-
-                        GenericArg::Ty(self.tctx.make_param_ty(def_id, def.depth(), def.idx()))
+                        GenericArg::Ty(self.tctx.expect_hir_ty_id(generic_param.id))
                     })
                     .collect::<Vec<_>>()
             },
@@ -184,17 +172,28 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .ret_ty
             .as_ref()
             .and_then(|ret_ty| {
-                self.resolve_as_non_inferable_ty(&ret_ty)
+                let Some(ty_id) = self
+                    .resolve_as_non_inferable_ty(&ret_ty)
                     .emit(&mut self.dctx)
+                else {
+                    return None;
+                };
+
+                self.tctx
+                    .attach_to_hir(ret_ty.id, Ty::new(ty_id, ret_ty.span));
+                Some(ty_id)
             })
             .unwrap_or_else(|| self.tctx.make_unit_ty());
 
-        let fn_ty_id =
+        let n_fn_ty_id =
             self.tctx
                 .make_fn_ty(generic_args.into(), Some(def_id), params.into(), ret_ty);
-        let fn_ty = Ty::new(fn_ty_id, item.span);
 
-        self.tctx.attach_to_hir(item.id, fn_ty.clone());
+        let fn_ty_id = self.tctx.expect_hir_ty_id(item.id);
+        self.tctx.unify_ty(fn_ty_id, n_fn_ty_id);
+
+        self.tctx
+            .attach_to_hir(item.id, Ty::new(n_fn_ty_id, item.span));
         // self.tctx.attach_to_def(def_id, fn_ty);
 
         self.resolve_block(&func.body).emit(&mut self.dctx);
@@ -204,10 +203,13 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     fn resolve_var_decl(&mut self, item: &HirItem) -> ResolveResult {
         let decl = item.expect_var();
 
-        let (ty_id, span) = match &decl.ty {
-            Some(ty) => (self.resolve_ty(&ty)?, ty.span),
-            None => (self.tctx.make_inferred_ty(InferKind::Any), decl.span),
-        };
+        let var_ty_id = self.tctx.expect_hir_ty_id(item.id);
+        let (ty_id, span) = decl.ty.as_ref().map_or_else(
+            || Ok((var_ty_id.clone(), item.span)),
+            |ty| self.resolve_ty(ty).map(|ty_id| (ty_id, ty.span)),
+        )?;
+
+        self.tctx.unify_ty(var_ty_id, ty_id);
 
         if self.definitions.get_def_id(item.id).is_some() {
             self.tctx.attach_to_hir(item.id, Ty::new(ty_id, span));
@@ -442,7 +444,20 @@ impl<'t, 'h> TyResolver<'t, 'h> {
 impl<'t, 'h> ResolveExpr<(), ResolverDiag> for TyResolver<'t, 'h> {
     fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
-            HirExprKind::Path(path) => s.resolve_path(&path).map(|_| ()),
+            HirExprKind::Path(path) => {
+                // Resolve the arguments of each segment only
+                path.segments
+                    .iter()
+                    .filter_map(|segment| {
+                        segment
+                            .arguments
+                            .as_ref()
+                            .map(|arguments| s.resolve_ident_args(&arguments))
+                    })
+                    .collect::<Result<Vec<_>, _>>();
+
+                Ok(())
+            }
 
             HirExprKind::RefExpr(reference) => s.resolve_expr(&reference.expr),
             HirExprKind::Literal(_) => Ok(()),
@@ -558,6 +573,15 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
                 _ => self.tctx.expect_def_ty_id(def_id),
             },
 
+            // DefKind::Fn(..) => {
+            //     let HirNode::Item(item) = self.hir_table.get(def.hir_id) else {
+            //         unreachable!()
+            //     };
+
+            //     dbg!(self.tctx.expect_hir_ty_id(item.id));
+            //     self.resolve_fn(&item)?;
+            //     dbg!(self.tctx.expect_hir_ty_id(item.id))
+            // }
             _ => self.tctx.expect_hir_ty_id(def.hir_id),
         };
 

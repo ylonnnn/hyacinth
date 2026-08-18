@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use hycc_const::constant::ConstKind;
-use hycc_diagnostic::DiagnosticContext;
+use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{
     HirMutability, HirNode,
     def::{AdtKind, Binding, DefKind, DefSpace},
@@ -14,7 +14,7 @@ use hycc_hir::{
     item::HirItemKind,
     path::HirIdentArgument,
 };
-use hycc_resolve::resolver_traits::{InstantiateIdent, ResolveIdentArgs};
+use hycc_resolve::{InstantiateIdent, ResolveExpr};
 use hycc_span::Span;
 use hycc_ty::{
     context::TyId,
@@ -24,12 +24,18 @@ use hycc_ty::{
 use hycc_util::{bug, ternary};
 
 use crate::{
-    diag::{InferDiag, InferDiagErrorKind, MemberKind},
+    diag::{InferDiag, InferDiagErrorKind, InferResult, MemberKind},
     fn_ctx::FnCtx,
-    inferer::{InferResult, TyInferer},
+    inferer::TyInferer,
 };
 
-impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
+impl<'i, 'h> ResolveExpr<TyId, InferDiag> for TyInferer<'i, 'h> {
+    fn resolve_expr(&mut self, expr: &HirExpr) -> Result<TyId, InferDiag> {
+        Ok(self.tctx.expect_hir_ty_id(expr.id))
+    }
+}
+
+impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
         let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.infer_path(&path),
@@ -84,23 +90,19 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         );
 
         if !array.elements.is_empty() {
-            for expr in &array.elements[1..] {
-                let curr_el_ty_id = match self.infer_expr(&expr) {
-                    Ok(ty_id) => ty_id,
-                    Err(diag) => {
-                        diag.map(|diag| self.dctx.add(diag));
-                        continue;
-                    }
+            array.elements[1..].iter().for_each(|el| {
+                let Some(curr_el_ty_id) = self.infer_expr(&el).emit(&mut self.dctx) else {
+                    return;
                 };
 
                 self.check(
                     &Ty::new(el_ty_id, Span::default()),
-                    &Ty::new(curr_el_ty_id, expr.span),
+                    &Ty::new(curr_el_ty_id, el.span),
                 )
                 .map(|diag| self.dctx.add(diag));
 
                 self.tctx.resolve_ty(curr_el_ty_id);
-            }
+            });
         }
 
         Ok(self.tctx.make_array_ty(el_ty_id))
@@ -110,13 +112,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         let tys = tup
             .elements
             .iter()
-            .filter_map(|el| match self.infer_expr(&el) {
-                Ok(ty_id) => Some(ty_id),
-                Err(diag) => {
-                    diag.map(|diag| self.dctx.add(diag));
-                    None
-                }
-            })
+            .filter_map(|el| self.infer_expr(&el).emit(&mut self.dctx))
             .collect::<Arc<_>>();
 
         Ok(self.tctx.make_tuple_ty(tys))
@@ -128,10 +124,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         };
 
         let err = |name, def_id| {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 strct.path.span,
                 InferDiagErrorKind::InvalidNonStructInstantiation { name, def_id },
-            )))
+            ))
         };
 
         let Some(TyKind::Adt(def_id, args)) = self
@@ -196,12 +192,8 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             let raw_field_ty_id = self.tctx.expect_hir_ty_id(field_tys[*idx]);
             let field_ty_id = self.tctx.instantiate(raw_field_ty_id, &[&args]);
 
-            let expr_field_ty_id = match self.infer_expr(&field.val) {
-                Ok(ty_id) => ty_id,
-                Err(diag) => {
-                    diag.map(|diag| self.dctx.add(diag));
-                    continue;
-                }
+            let Some(expr_field_ty_id) = self.infer_expr(&field.val).emit(&mut self.dctx) else {
+                continue;
             };
 
             self.check(
@@ -284,43 +276,40 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
     pub(crate) fn infer_fn_call_expr(&mut self, call: &HirFnCall) -> InferResult<TyId> {
         let callee_ty_id = self.infer_expr(&call.callee)?;
         let TyKind::Fn(fn_ty, args) = self.tctx.get(callee_ty_id) else {
-            return Err(Some(InferDiag::error(
+            return Err(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::IllegalInvocation(callee_ty_id),
-            )));
+            ));
         };
 
         let (a_len, p_len) = (call.arguments.data.len(), fn_ty.params.len());
         if a_len != p_len {
-            return Err(Some(InferDiag::error(
+            return Err(InferDiag::error(
                 call.arguments.span,
                 InferDiagErrorKind::ArgumentArityMismatch(
                     ((p_len as u16) << u8::BITS) | a_len as u16,
                 ),
-            )));
+            ));
         }
 
         let ret_ty = fn_ty.ret_ty;
         let params = fn_ty.params.clone();
 
-        for (arg, param_ty_id) in call.arguments.data.iter().zip(params.iter()) {
-            let arg_ty_id = match self.infer_expr(&arg) {
-                Ok(ty_id) => ty_id,
-                Err(diag) => {
-                    if let Some(diag) = diag {
-                        self.dctx.add(diag);
-                    }
+        call.arguments
+            .data
+            .iter()
+            .zip(params.iter())
+            .for_each(|(arg, param_ty_id)| {
+                let Some(arg_ty_id) = self.infer_expr(&arg).emit(&mut self.dctx) else {
+                    return;
+                };
 
-                    continue;
-                }
-            };
-
-            self.check(
-                &Ty::new(*param_ty_id, Span::default()),
-                &Ty::new(arg_ty_id, arg.span),
-            )
-            .map(|diag| self.dctx.add(diag));
-        }
+                self.check(
+                    &Ty::new(*param_ty_id, Span::default()),
+                    &Ty::new(arg_ty_id, arg.span),
+                )
+                .map(|diag| self.dctx.add(diag));
+            });
 
         Ok(self.tctx.resolve_ty(ret_ty))
     }
@@ -331,13 +320,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         loop {
             let err = || {
-                Err(Some(InferDiag::error(
+                Err(InferDiag::error(
                     access.field.span,
                     InferDiagErrorKind::UnrecognizedField {
                         field: access.field.kind,
                         ty_id: lead_ty_id,
                     },
-                )))
+                ))
             };
 
             match self.tctx.get(lead_ty_id) {
@@ -389,13 +378,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         loop {
             let target = self.tctx.ext_target_kind_of(rec_ty_id);
             let err = || {
-                Err(Some(InferDiag::error(
+                Err(InferDiag::error(
                     call.callee.span,
                     InferDiagErrorKind::UnrecognizedMethod {
                         method: call.callee.ident.ident,
                         ty_id: rec_ty_id,
                     },
-                )))
+                ))
             };
 
             if let Some((ext_id, assoc_item)) =
@@ -452,13 +441,13 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             accessibility,
         }) = candidate
         else {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::UnrecognizedMethod {
                     method: call.callee.ident.ident,
                     ty_id: rec_ty_id,
                 },
-            )))?
+            ))?
         };
 
         self.definitions.define_id_hir(call.callee.id, def_id);
@@ -473,10 +462,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         // Illegal invocation error for non-function bindings
         let Some(fn_def) = def.kind.get_fn() else {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::IllegalInvocation(fn_ty_id),
-            )))?
+            ))?
         };
 
         let fn_def_params = fn_def.params.clone();
@@ -493,26 +482,26 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
         // Accessibility guard
         if !self.petal_ctx.accessible(&def) {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 call.callee.span,
                 InferDiagErrorKind::InaccessibleMember {
                     name: call.callee.ident.ident,
                     kind: MemberKind::AssocFn,
                 },
-            )))?
+            ))?
         }
 
         // Associated function attempted to be called through method calling
         let p_len = params.len();
         if p_len < 1 {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 call.callee.span,
-                InferDiagErrorKind::InvalidAssocFnInvocation {
+                InferDiagErrorKind::IllegalAssocFnInvocation {
                     name: call.callee.ident.ident,
                     def_id,
                     ty_id: rec_ty_id,
                 },
-            )))?;
+            ))?;
         }
 
         // Check the valid type candidate for the method
@@ -539,7 +528,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
 
             // TODO: check if the receiver type has proto Copy
             if !access.allows(req_access) {
-                Err(Some(InferDiag::error(
+                Err(InferDiag::error(
                     call.receiver.span,
                     InferDiagErrorKind::ReceiverAccessMismatch {
                         access,
@@ -550,7 +539,7 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
                         ),
                         def_id,
                     },
-                )))?;
+                ))?;
             }
 
             receiver_ty_id = Some(recv_ty_id);
@@ -560,25 +549,25 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
         // No method found for the three (3) candidate receiver types.
         // Therefore, the associated function found is not a method.
         let Some(rec_ty_id) = receiver_ty_id else {
-            return Err(Some(InferDiag::error(
+            return Err(InferDiag::error(
                 call.callee.span,
-                InferDiagErrorKind::InvalidAssocFnInvocation {
+                InferDiagErrorKind::IllegalAssocFnInvocation {
                     name: call.callee.ident.ident,
                     def_id,
                     ty_id: rec_ty_id,
                 },
-            )))?;
+            ))?;
         };
 
         // Argument arity guard
         let a_len = call.arguments.data.len();
         if (a_len + 1) != p_len {
-            Err(Some(InferDiag::error(
+            Err(InferDiag::error(
                 call.arguments.span,
                 InferDiagErrorKind::ArgumentArityMismatch(
                     ((p_len.saturating_sub(1) as u16) << u8::BITS) | a_len as u16,
                 ),
-            )))?;
+            ))?;
         };
 
         for (i, (arg, param_ty_id)) in std::iter::once(&call.receiver)
@@ -589,13 +578,9 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             let arg_ty_id = ternary!(
                 i == 0,
                 rec_ty_id,
-                match self.infer_expr(&arg) {
-                    Ok(ty_id) => ty_id,
-                    Err(diag) => {
-                        diag.map(|diag| self.dctx.add(diag));
-                        continue;
-                    }
-                }
+                self.infer_expr(&arg)
+                    .emit(&mut self.dctx)
+                    .unwrap_or(continue)
             );
 
             self.check(
@@ -630,10 +615,10 @@ impl<'t, 'd, 'c, 'h, 'p> TyInferer<'t, 'd, 'c, 'h, 'p> {
             &Ty::new(alt_ty, alt_span),
         ) {
             if ite.alternate.is_none() {
-                Err(Some(InferDiag::error(
+                Err(InferDiag::error(
                     ite.span,
                     InferDiagErrorKind::MissingElseBranch,
-                )))?
+                ))?
             }
 
             self.dctx.add(diag);

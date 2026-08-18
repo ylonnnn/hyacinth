@@ -15,3 +15,4 @@
 - [ ] improve diagnostic reporting
 - [ ] remodel the phases to improve experience and be more intuitive
 - [ ] check behavior of having an error in the `collection` phase and in the `resolution` phase at the same time.
+- [ ] proceed with attaching types regardless of the path argument invalidity

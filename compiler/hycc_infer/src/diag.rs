@@ -311,7 +311,7 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                             "field `{}` has already been initialized",
                             ctx.fmt.interner.get(*field)
                         ),
-                        None,
+                        Some("field already initialized".into()),
                     ),
 
                     UnresolvedTy(ty) => (
@@ -345,14 +345,11 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         let (expected, received) =
                             ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
                         (
-                            format!(
-                                "expected `{}` argument{}, received `{}` argument{}",
-                                expected,
-                                ternary!(expected == 1, "", "s"),
-                                received,
-                                ternary!(received == 1, "", "s"),
-                            ),
-                            None,
+                            "argument arity mismatch".into(),
+                            Some(format!(
+                                "expected `{}` but received `{}`",
+                                expected, received,
+                            )),
                         )
                     }
 
@@ -372,7 +369,7 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         format!(
                             "`if` expression with a non-unit consequent requires an `else` branch"
                         ),
-                        None,
+                        Some("missing `else` branch".into()),
                     ),
 
                     UnrecognizedMember { name, ty_id } => {
@@ -447,7 +444,7 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                     expectation_span: ann_span,
                     ..
                 } => {
-                    diag.note(*ann_span, format!("expected due to this"));
+                    diag.note(*ann_span, "expected due to this");
                 }
 
                 InvalidNonStructInstantiation { name, def_id } => {

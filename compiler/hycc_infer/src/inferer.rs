@@ -30,7 +30,7 @@ pub struct TyInferer<'i, 'h> {
     pub definitions: &'i mut DefinitionTable,
     pub(crate) const_table: &'i ConstTable,
     pub(crate) hir_table: &'i HirTable<'h>,
-    pub(crate) petal_ctx: &'i PetalCtx,
+    pub(crate) petal_ctx: &'i mut PetalCtx,
 }
 
 impl<'i, 'h> TyInferer<'i, 'h> {
@@ -40,7 +40,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         definitions: &'i mut DefinitionTable,
         const_table: &'i ConstTable,
         hir_table: &'i HirTable<'h>,
-        petal_ctx: &'i PetalCtx,
+        petal_ctx: &'i mut PetalCtx,
     ) -> Self {
         Self {
             dctx: InferDiagCtx::new(dctx),
@@ -116,8 +116,15 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 };
 
                 match &kind {
-                    InferKind::Int => self.tctx.bind_var(var_id, default_int_ty_id),
-                    InferKind::Float => self.tctx.bind_var(var_id, default_float_ty_id),
+                    // InferKind::Int => self.tctx.bind_var(var_id, default_int_ty_id),
+                    // InferKind::Float => self.tctx.bind_var(var_id, default_float_ty_id),
+                    InferKind::Int => {
+                        self.tctx.unify_ty(unresolved_ty_id, default_int_ty_id);
+                    }
+
+                    InferKind::Float => {
+                        self.tctx.unify_ty(unresolved_ty_id, default_float_ty_id);
+                    }
 
                     _ => {
                         let var_id = self.tctx.resolve_var(var_id);
@@ -130,7 +137,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                             );
                         }
 
-                        break;
+                        continue;
                     }
                 }
             }
@@ -139,6 +146,8 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
     pub fn infer(&mut self, tree: &HirItem) {
         let petal = tree.expect_petal();
+        let root_id = self.petal_ctx.root_petal_id();
+        self.petal_ctx.push(root_id);
 
         // Check the type resolution states of each item
         self.check_petal(&petal).emit(&mut self.dctx);

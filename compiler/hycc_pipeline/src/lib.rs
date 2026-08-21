@@ -162,7 +162,7 @@ impl Driver {
             &mut session.definitions,
             &session.const_table,
             &session.hir_table,
-            &session.petal_ctx,
+            &mut session.petal_ctx,
         );
 
         ty_inferer.infer(&tree);

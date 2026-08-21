@@ -319,9 +319,13 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         Some("type annotation required".into()),
                     ),
 
-                    InvalidInference(_) => (
+                    InvalidInference(ty_id) => (
                         "cannot infer type at this position".into(),
-                        Some("correct concrete type is required".into()),
+                        Some(ternary!(
+                            ctx.fmt.tctx.is_inferred(*ty_id),
+                            "inferred types are not allowed here".into(),
+                            "correct concrete type is required".into()
+                        )),
                     ),
 
                     TyComputationCycle(_) => (
@@ -504,13 +508,15 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                 }
 
                 InvalidInference(ty_id) => {
-                    diag.help(
-                        diag.span,
-                        format!(
-                            "replace with the correct type: `{}`",
-                            ctx.fmt.fmt_id(*ty_id)
-                        ),
-                    );
+                    if !ctx.fmt.tctx.is_inferred(*ty_id) {
+                        diag.help(
+                            diag.span,
+                            format!(
+                                "replace with the correct type: `{}`",
+                                ctx.fmt.fmt_id(*ty_id)
+                            ),
+                        );
+                    }
                 }
 
                 TyComputationCycle(span) => {

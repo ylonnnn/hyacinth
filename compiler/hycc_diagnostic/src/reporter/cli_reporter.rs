@@ -330,9 +330,22 @@ impl<'d, 's> CLIReporter<'d, 's> {
                         let mut line = " ".repeat(n);
                         data.messages.iter().enumerate().skip(i).for_each(
                             |(j, (offset, (color, message)))| {
-                                line.insert_str(
-                                    *offset as usize - 1,
-                                    &ternary!(i == j, &message, "|").style(color).bold(),
+                                let offset = *offset as usize - 1;
+                                let idx = line
+                                    .char_indices()
+                                    .nth(n)
+                                    .map(|(idx, _)| idx)
+                                    .unwrap_or(line.len());
+
+                                ternary!(
+                                    i == j,
+                                    line.insert_str(idx, &message.style(color).bold(),),
+                                    {
+                                        if line.chars().nth(idx).is_some_and(char::is_whitespace) {
+                                            let bar = "|".style(color).bold();
+                                            line.replace_range(idx..(idx + 1), &bar);
+                                        }
+                                    }
                                 )
                             },
                         );

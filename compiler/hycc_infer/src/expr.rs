@@ -247,7 +247,13 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             field_mask |= 1 << idx;
             initialized[*idx] = Some(&field);
 
-            let raw_field_ty_id = self.tctx.expect_hir_ty_id(field_tys[*idx]);
+            let field_ty_hir_id = field_tys[*idx];
+            let HirNode::Ty(field_ty) = self.hir_table.get(field_ty_hir_id) else {
+                unreachable!()
+            };
+
+            let (raw_field_ty_id, field_ty_span) =
+                (self.tctx.expect_hir_ty_id(field_ty_hir_id), field_ty.span);
             let field_ty_id = self.tctx.instantiate(raw_field_ty_id, &[&args]);
 
             let Some(expr_field_ty_id) = self.infer_expr(&field.val).emit(&mut self.dctx) else {
@@ -255,7 +261,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             };
 
             self.check(
-                &Ty::new(field_ty_id, Span::default()),
+                &Ty::new(field_ty_id, field_ty_span),
                 &Ty::new(expr_field_ty_id, field.val.span),
             )
             .map(|diag| self.dctx.add(diag));
@@ -386,17 +392,30 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         let ret_ty = fn_ty.ret_ty;
         let params = fn_ty.params.clone();
 
+        let def_params = fn_ty
+            .def_id
+            .map(|def_id| self.definitions.get(def_id).kind.expect_fn().params.clone());
+
         call.arguments
             .data
             .iter()
             .zip(params.iter())
-            .for_each(|(arg, param_ty_id)| {
+            .enumerate()
+            .for_each(|(i, (arg, param_ty_id))| {
+                let def_param = def_params
+                    .as_ref()
+                    .and_then(|params| params.get(i).cloned());
                 let Some(arg_ty_id) = self.infer_expr(&arg).emit(&mut self.dctx) else {
                     return;
                 };
 
+                let param_def = def_param.map(|def_id| self.definitions.get(def_id));
+
                 self.check(
-                    &Ty::new(*param_ty_id, Span::default()),
+                    &Ty::new(
+                        *param_ty_id,
+                        param_def.map_or_else(|| Span::default(), |def| def.span),
+                    ),
                     &Ty::new(arg_ty_id, arg.span),
                 )
                 .map(|diag| self.dctx.add(diag));

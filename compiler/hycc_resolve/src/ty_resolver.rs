@@ -205,7 +205,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         if self.definitions.get_def_id(item.id).is_some() {
             self.tctx.attach_to_hir(item.id, Ty::new(ty_id, span));
 
-            if self.tctx.is_inferred(ty_id) {
+            if item.is_top_level() && self.tctx.is_inferred(ty_id) {
                 self.tctx
                     .update_hir_res_state(item.id, TyResState::Unresolved);
             }

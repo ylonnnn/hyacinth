@@ -467,6 +467,15 @@ impl<'l> Lexer<'l> {
                             // ))
                             None
                         }
+                        Some(b'*') => {
+                            self.skip_until(|s, c| {
+                                self.source.data.as_bytes()[s.offset.saturating_sub(1) as usize]
+                                    == b'*'
+                                    && c == b'/'
+                            });
+                            self.adjust();
+                            None
+                        }
                         Some(b'=') => Some(token!(TokenKind::SlashEq, span.extend(1))),
                         _ => Some(token!(TokenKind::Slash, span)),
                     },

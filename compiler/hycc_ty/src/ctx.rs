@@ -19,10 +19,19 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TyResState {
+    Inferred(TyId),
+    Resolved(TyId),
+    Unresolved,
+    Resolving,
+}
+
 #[derive(Debug)]
 pub struct TyCtx {
     pub ext_table: ExtensionTable,
 
+    res_state: HashMap<HirId, TyResState>,
     hir_ty_map: HashMap<HirId, Ty>,
     def_ty_map: HashMap<DefId, Ty>,
     ty_def_map: HashMap<TyId, DefId>,
@@ -36,16 +45,17 @@ pub struct TyCtx {
 impl TyCtx {
     pub fn new() -> Self {
         Self {
-            storage: Vec::new(),
-            map: HashMap::new(),
+            ext_table: ExtensionTable::new(),
 
-            vars: Vec::new(),
-
+            res_state: HashMap::new(),
             hir_ty_map: HashMap::new(),
             def_ty_map: HashMap::new(),
             ty_def_map: HashMap::new(),
 
-            ext_table: ExtensionTable::new(),
+            storage: Vec::new(),
+            map: HashMap::new(),
+
+            vars: Vec::new(),
         }
     }
 
@@ -443,11 +453,26 @@ impl TyCtx {
     }
 
     pub fn attach_to_hir(&mut self, hir_id: HirId, ty: Ty) {
+        self.res_state.insert(hir_id, TyResState::Resolved(ty.id));
         self.hir_ty_map.insert(hir_id, ty);
     }
 
     pub fn dettach_hir(&mut self, hir_id: HirId) {
         self.hir_ty_map.remove(&hir_id);
+    }
+
+    pub fn update_hir_res_state(&mut self, hir_id: HirId, state: TyResState) {
+        self.res_state.insert(hir_id, state);
+    }
+
+    pub fn get_hir_res_state(&self, hir_id: HirId) -> Option<TyResState> {
+        self.res_state.get(&hir_id).cloned()
+    }
+
+    pub fn expect_hir_res_state(&self, hir_id: HirId) -> TyResState {
+        self.get_hir_res_state(hir_id).unwrap_or_else(|| {
+            panic!("expected a resolution state attached to type of hir {hir_id:?}")
+        })
     }
 
     pub fn get_hir_ty(&self, hir_id: HirId) -> Option<&Ty> {
@@ -627,8 +652,9 @@ impl TyCtx {
     }
 
     pub fn unresolved_infer(&mut self, ty_id: TyId, tys: &mut Vec<TyId>) {
+        let ty_id = self.resolve_ty(ty_id);
         match self.get(ty_id) {
-            TyKind::Infer(_, _) => tys.push(ty_id),
+            TyKind::Infer(var_id, _) => tys.push(ty_id),
 
             TyKind::Array(inner) => self.unresolved_infer(*inner, tys),
             TyKind::Slice(inner) => self.unresolved_infer(*inner, tys),

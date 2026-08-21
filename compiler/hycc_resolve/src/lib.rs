@@ -1,15 +1,17 @@
 use hycc_hir::{
-    def::{DefId, DefinitionTable},
+    def::{DefId, DefSpace, DefinitionTable},
     expr::HirExpr,
     generic::HirGenericParamKind,
-    path::{HirIdent, HirIdentArgument, HirIdentArguments},
+    path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath},
     ty::HirTy,
 };
 use hycc_span::Span;
+use hycc_symbol::Symbol;
 use hycc_ty::{
     ctx::{TyCtx, TyId},
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
+use hycc_util::ternary;
 
 pub mod diag;
 
@@ -40,6 +42,7 @@ pub trait ResolveIdentArgs<TEx, E>: ResolveExpr<TEx, E> + ResolveTy<E> {
 
 pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
     fn definitions(&self) -> &DefinitionTable;
+    fn definitions_mut(&mut self) -> &mut DefinitionTable;
     fn tctx(&mut self) -> &mut TyCtx;
 
     fn def_ty(&mut self, def_id: DefId, span: Span) -> Result<TyId, E>;
@@ -87,9 +90,10 @@ pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
             let (gp_span, gp_def) = (def.span, def.kind.expect_generic_param());
 
             g_args.push(match &gp_def.kind {
-                HirGenericParamKind::Ty => {
-                    GenericArg::Ty(self.tctx().make_inferred_ty(gp_span, InferKind::Any))
-                }
+                HirGenericParamKind::Ty => GenericArg::Ty(
+                    self.tctx()
+                        .make_inferred_ty(Span::default(), InferKind::Any),
+                ),
 
                 HirGenericParamKind::Const => todo!("const generic arg"),
             });
@@ -112,5 +116,70 @@ pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
             .attach_to_hir(ident.id, Ty::new(ty_id, ident.span));
 
         Ok(ty_id)
+    }
+}
+
+pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
+    fn expected_space(&self) -> Option<DefSpace>;
+
+    fn unrecognized_member_error(&self, span: Span, name: Symbol, ty_id: TyId) -> E;
+
+    fn preprocessor(&mut self) {}
+
+    fn resolve_path(&mut self, path: &HirPath) -> Result<TyId, E> {
+        let space = self
+            .expected_space()
+            .unwrap_or_else(|| panic!("expected a definition space"));
+
+        let n = path.segments.len();
+        let Some(res) = self.definitions().get_res(path.id) else {
+            return Ok(self.tctx().make_inferred_ty(path.span, InferKind::Any));
+        };
+
+        let mut generic_args = Vec::new();
+
+        let resolved_count = (n - res.unresolved);
+        let mut prev_ty_id = path.segments[..resolved_count]
+            .iter()
+            .fold(Ok(TyId::Invalid), |_, curr| {
+                self.instantiate(&mut generic_args, &curr)
+            })?;
+
+        for (i, ident) in path.segments[resolved_count..].iter().enumerate() {
+            let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
+            if self.definitions().get_def_id(ident.id).is_none() {
+                self.preprocessor();
+
+                let target = self.tctx().ext_target_kind_of(prev_ty_id);
+
+                let Some((_, assoc_item)) =
+                    self.tctx()
+                        .ext_table
+                        .get_assoc_item(target, space, ident.ident.ident)
+                else {
+                    return Err(self.unrecognized_member_error(
+                        ident.span,
+                        ident.ident.ident,
+                        prev_ty_id,
+                    ));
+                };
+
+                self.definitions_mut()
+                    .define_id_hir(ident.id, assoc_item.def_id);
+            };
+
+            prev_ty_id = self.instantiate(&mut generic_args, &ident)?;
+        }
+
+        let definitions = self.definitions_mut();
+        definitions.define_id_hir(
+            path.id,
+            definitions.expect_def_id(path.segments.last().unwrap().id),
+        );
+
+        self.tctx()
+            .attach_to_hir(path.id, Ty::new(prev_ty_id, path.span));
+
+        Ok(prev_ty_id)
     }
 }

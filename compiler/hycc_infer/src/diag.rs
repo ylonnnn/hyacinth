@@ -133,6 +133,8 @@ pub enum InferDiagErrorKind {
     },
 
     UnresolvedTy(Ty),
+    InvalidInference(TyId),
+    TyComputationCycle(Span),
 
     IllegalInvocation(TyId),
     ArgumentArityMismatch(u16), // expected: 8-bits | received: 8-bits
@@ -317,6 +319,16 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         Some("type annotation required".into()),
                     ),
 
+                    InvalidInference(_) => (
+                        "cannot infer type at this position".into(),
+                        Some("correct concrete type is required".into()),
+                    ),
+
+                    TyComputationCycle(_) => (
+                        "type computation cycle detected".into(),
+                        Some("detected a cycle in type dependency".into()),
+                    ),
+
                     IllegalInvocation(ty_id) => (
                         "cannot invoke expression".into(),
                         Some(format!(
@@ -489,6 +501,20 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         "requires context with known type",
                         Some("type annotation or usage in a context with known type is needed"),
                     ));
+                }
+
+                InvalidInference(ty_id) => {
+                    diag.help(
+                        diag.span,
+                        format!(
+                            "replace with the correct type: `{}`",
+                            ctx.fmt.fmt_id(*ty_id)
+                        ),
+                    );
+                }
+
+                TyComputationCycle(span) => {
+                    diag.note(*span, "cycle detected within this definition");
                 }
 
                 MissingElseBranch => {

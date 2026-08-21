@@ -19,14 +19,15 @@ use hycc_hir::{
     stmt::{HirStmt, HirStmtKind},
     ty::{HirTy, HirTyKind},
 };
+use hycc_span::Span;
 use hycc_ty::{
-    ctx::{TyCtx, TyId},
+    ctx::{TyCtx, TyId, TyResState},
     ty::{GenericArg, InferKind, RefMutability, Ty},
 };
 use hycc_util::ternary;
 
 use crate::{
-    InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy,
+    InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolvePath, ResolveTy,
     diag::{ResolveResult, ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind},
 };
 
@@ -123,10 +124,11 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     }
 
     fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {
-        strct.fields.list.iter().for_each(|field| {
-            self.resolve_as_non_inferable_ty(&field.ty)
-                .emit_discard(&mut self.dctx)
-        });
+        strct
+            .fields
+            .list
+            .iter()
+            .for_each(|field| self.resolve_ty(&field.ty).emit_discard(&mut self.dctx));
 
         Ok(())
     }
@@ -154,36 +156,21 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .list
             .iter()
             .filter_map(|param| {
-                let Some(ty_id) = self
-                    .resolve_as_non_inferable_ty(&param.ty)
-                    .emit(&mut self.dctx)
-                else {
-                    return None;
-                };
-
+                let ty_id = self.resolve_ty(&param.ty).emit(&mut self.dctx)?;
                 self.tctx
                     .attach_to_hir(param.id, Ty::new(ty_id, param.span));
                 Some(ty_id)
             })
             .collect::<Arc<_>>();
 
-        let ret_ty = func
-            .sig
-            .ret_ty
-            .as_ref()
-            .and_then(|ret_ty| {
-                let Some(ty_id) = self
-                    .resolve_as_non_inferable_ty(&ret_ty)
-                    .emit(&mut self.dctx)
-                else {
-                    return None;
-                };
+        let unit_ty = self.tctx.make_unit_ty();
+        let ret_ty = func.sig.ret_ty.as_ref().map_or(unit_ty, |ret_ty| {
+            let ty_id = self.resolve_ty(&ret_ty).emit(&mut self.dctx).unwrap();
 
-                self.tctx
-                    .attach_to_hir(ret_ty.id, Ty::new(ty_id, ret_ty.span));
-                Some(ty_id)
-            })
-            .unwrap_or_else(|| self.tctx.make_unit_ty());
+            self.tctx
+                .attach_to_hir(ret_ty.id, Ty::new(ty_id, ret_ty.span));
+            ty_id
+        });
 
         let n_fn_ty_id =
             self.tctx
@@ -196,7 +183,13 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .attach_to_hir(item.id, Ty::new(n_fn_ty_id, item.span));
         // self.tctx.attach_to_def(def_id, fn_ty);
 
+        if self.tctx.is_inferred(n_fn_ty_id) {
+            self.tctx
+                .update_hir_res_state(item.id, TyResState::Unresolved);
+        }
+
         self.resolve_block(&func.body).emit(&mut self.dctx);
+
         Ok(())
     }
 
@@ -209,10 +202,13 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             |ty| self.resolve_ty(ty).map(|ty_id| (ty_id, ty.span)),
         )?;
 
-        self.tctx.unify_ty(var_ty_id, ty_id);
-
         if self.definitions.get_def_id(item.id).is_some() {
             self.tctx.attach_to_hir(item.id, Ty::new(ty_id, span));
+
+            if self.tctx.is_inferred(ty_id) {
+                self.tctx
+                    .update_hir_res_state(item.id, TyResState::Unresolved);
+            }
         }
 
         decl.val
@@ -243,82 +239,6 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             HirStmtKind::Item(item) => self.resolve_item(&item),
             HirStmtKind::Expr(expr) => self.resolve_expr(&expr),
         }
-    }
-
-    fn resolve_path(&mut self, path: &HirPath) -> ResolveResult<TyId> {
-        let space = self
-            .expected_space
-            .unwrap_or_else(|| panic!("expected a definition space"));
-
-        let n = path.segments.len();
-        let Some(res) = self.definitions.get_res(path.id) else {
-            return Ok(self.tctx.make_inferred_ty(path.span, InferKind::Any));
-        };
-
-        let mut prev_ty_id = None;
-        let mut generic_args = Vec::new();
-
-        let resolved_count = (n - res.unresolved);
-        for segment in &path.segments[..resolved_count] {
-            prev_ty_id.replace(self.instantiate(&mut generic_args, &segment)?);
-        }
-
-        for (i, ident) in path.segments[resolved_count..].iter().enumerate() {
-            let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
-            if self.definitions.get_def_id(ident.id).is_none() {
-                if !self.tctx.ext_table.native_exts_resolved() {
-                    self.resolve_native_exts();
-                }
-
-                let ty_id = prev_ty_id.unwrap();
-                let target = self.tctx.ext_target_kind_of(ty_id);
-
-                let Some((_, assoc_item)) =
-                    self.tctx
-                        .ext_table
-                        .get_assoc_item(target, space, ident.ident.ident)
-                else {
-                    return Err(ResolverDiag::error(
-                        ident.span,
-                        ResolverDiagErrorKind::UnrecognizedMember {
-                            name: ident.ident.ident,
-                            ty_id,
-                        },
-                    ));
-                };
-
-                self.definitions.define_id_hir(ident.id, assoc_item.def_id);
-            };
-
-            let definitions = &self.definitions;
-            let tctx = &mut self.tctx;
-
-            prev_ty_id.replace(self.instantiate(&mut generic_args, &ident)?);
-        }
-
-        self.definitions.define_id_hir(
-            path.id,
-            self.definitions
-                .expect_def_id(path.segments.last().unwrap().id),
-        );
-
-        let final_ty_id = prev_ty_id.unwrap();
-        self.tctx
-            .attach_to_hir(path.id, Ty::new(final_ty_id, path.span));
-
-        Ok(final_ty_id)
-    }
-
-    pub fn resolve_as_non_inferable_ty(&mut self, ty: &HirTy) -> ResolveResult<TyId> {
-        let ty_id = self.resolve_ty(&ty)?;
-        ternary!(
-            !self.tctx.is_inferred(ty_id),
-            Ok(ty_id),
-            Err(ResolverDiag::error(
-                ty.span,
-                ResolverDiagErrorKind::InvalidInference,
-            ))
-        )
     }
 
     fn resolve_binary_expr(&mut self, left: &HirExpr, right: &HirExpr) -> ResolveResult {
@@ -390,7 +310,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .ret_ty
             .as_ref()
             .and_then(|ty| self.resolve_ty(&ty).emit(&mut self.dctx))
-            .unwrap_or_else(|| self.tctx.make_inferred_ty(anfn.span, InferKind::Any));
+            .unwrap_or_else(|| self.tctx.make_inferred_ty(anfn.body.span, InferKind::Any));
 
         let fn_ty = self
             .tctx
@@ -552,6 +472,10 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
         &self.definitions
     }
 
+    fn definitions_mut(&mut self) -> &mut DefinitionTable {
+        &mut self.definitions
+    }
+
     fn tctx(&mut self) -> &mut TyCtx {
         &mut self.tctx
     }
@@ -573,15 +497,6 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
                 _ => self.tctx.expect_def_ty_id(def_id),
             },
 
-            // DefKind::Fn(..) => {
-            //     let HirNode::Item(item) = self.hir_table.get(def.hir_id) else {
-            //         unreachable!()
-            //     };
-
-            //     dbg!(self.tctx.expect_hir_ty_id(item.id));
-            //     self.resolve_fn(&item)?;
-            //     dbg!(self.tctx.expect_hir_ty_id(item.id))
-            // }
             _ => self.tctx.expect_hir_ty_id(def.hir_id),
         };
 
@@ -600,5 +515,29 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
                 ((expected as u16) << u8::BITS) | received as u16,
             ),
         )
+    }
+}
+
+impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
+    fn expected_space(&self) -> Option<DefSpace> {
+        self.expected_space
+    }
+
+    fn unrecognized_member_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        ty_id: TyId,
+    ) -> ResolverDiag {
+        ResolverDiag::error(
+            span,
+            ResolverDiagErrorKind::UnrecognizedMember { name, ty_id },
+        )
+    }
+
+    fn preprocessor(&mut self) {
+        if !self.tctx.ext_table.native_exts_resolved() {
+            self.resolve_native_exts();
+        }
     }
 }

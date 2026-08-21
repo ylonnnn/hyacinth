@@ -118,8 +118,7 @@ impl<'f> TyFormatter<'f> {
             }
 
             TyKind::Infer(_, kind) => match kind {
-                // InferKind::Any => String::from("{unknown}"),
-                InferKind::Any => String::from("_"),
+                InferKind::Any => String::from("{unknown}"),
                 InferKind::Int => String::from("{int}"),
                 InferKind::Float => String::from("{float}"),
             },

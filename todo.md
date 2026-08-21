@@ -18,3 +18,8 @@
 - [ ] check behavior of having an error in the `collection` phase and in the `resolution` phase at the same time.
 - [ ] proceed with attaching types regardless of the path argument invalidity
 - [ ] fix an issue with the phases when dealing with definitions of duplicates
+- [ ] fix types of anonymous functions being considered as unresolved types
+- [ ] fix unresolved type analysis issues: non-greedy error finding, inaccurate node pointers
+- [x] move invalid inference errors to the type inference phase for better diagnostics
+- [x] fix invalid inference errors
+- [ ] implement a basic extension resolution guard to avoid double resolution

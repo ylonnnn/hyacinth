@@ -1,18 +1,18 @@
 use std::collections::HashSet;
 
 use hycc_const::table::ConstTable;
-use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
+use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
 use hycc_hir::{
     HirNode, HirTable,
-    def::DefinitionTable,
+    def::{DefSpace, DefinitionTable},
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
-use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolveTy};
+use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolvePath, ResolveTy};
 use hycc_span::Span;
 use hycc_ty::{
-    ctx::{TyCtx, TyId, TyVarId},
-    ty::{InferKind, IntTy, Ty, TyKind},
+    ctx::{TyCtx, TyId, TyResState, TyVarId},
+    ty::{InferKind, IntTy, Ty, TyKind, TyVarKind},
 };
 use hycc_util::{bug, ternary};
 
@@ -111,65 +111,40 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             self.tctx.unresolved_infer(ty_id, &mut unresolved_tys);
 
             for unresolved_ty_id in unresolved_tys {
-                let TyKind::Infer(var_id, kind) = self.tctx.get(unresolved_ty_id) else {
+                let &TyKind::Infer(var_id, kind) = self.tctx.get(unresolved_ty_id) else {
                     continue;
                 };
 
                 match &kind {
-                    InferKind::Int => self.tctx.bind_var(*var_id, default_int_ty_id),
-                    InferKind::Float => self.tctx.bind_var(*var_id, default_float_ty_id),
+                    InferKind::Int => self.tctx.bind_var(var_id, default_int_ty_id),
+                    InferKind::Float => self.tctx.bind_var(var_id, default_float_ty_id),
+
                     _ => {
-                        if seen.insert(*var_id) && emit_err {
-                            let span = self.tctx.get_var(*var_id).span;
+                        let var_id = self.tctx.resolve_var(var_id);
+
+                        if seen.insert(var_id) && emit_err {
+                            let span = self.tctx.get_var(var_id).span;
                             self.dctx.error(
-                                span,
-                                InferDiagErrorKind::UnresolvedTy(Ty::new(
-                                    self.tctx.intern(TyKind::Infer(*var_id, *kind)),
-                                    span,
-                                )),
+                                stmt.span,
+                                InferDiagErrorKind::UnresolvedTy(Ty::new(ty_id, span)),
                             );
                         }
 
-                        continue;
+                        break;
                     }
                 }
             }
         }
-
-        // let mut tys = self.tctx.unresolved_tys();
-        // tys.sort_by(|(a_var_id, _), (b_var_id, _)| {
-        //     let (a_var, b_var) = (self.tctx.get_var(*a_var_id), self.tctx.get_var(*b_var_id));
-        //     a_var.span.offset.cmp(&b_var.span.offset)
-        // });
-
-        // for (var_id, kind) in &tys {
-        //     match &kind {
-        //         InferKind::Int => self.tctx.bind_var(*var_id, default_int_ty_id),
-        //         InferKind::Float => self.tctx.bind_var(*var_id, default_float_ty_id),
-        //         _ => {
-        //             if emit_err {
-        //                 let span = self.tctx.get_var(*var_id).span;
-        //                 self.dctx.error(
-        //                     span,
-        //                     InferDiagErrorKind::UnresolvedTy(Ty::new(
-        //                         self.tctx.intern(TyKind::Infer(*var_id, *kind)),
-        //                         span,
-        //                     )),
-        //                 );
-        //             }
-
-        //             continue;
-        //         }
-        //     };
-        // }
     }
 
     pub fn infer(&mut self, tree: &HirItem) {
         let petal = tree.expect_petal();
-        self.infer_petal(&petal);
 
-        // let err = *self.dctx.error_flag();
-        // self.analyze_unresolved(!err);
+        // Check the type resolution states of each item
+        self.check_petal(&petal).emit(&mut self.dctx);
+
+        // Infer item bodies
+        self.infer_petal(&petal).emit(&mut self.dctx);
     }
 }
 
@@ -186,6 +161,10 @@ impl<'i, 'h> InstantiateIdent<TyId, InferDiag> for TyInferer<'i, 'h> {
         &self.definitions
     }
 
+    fn definitions_mut(&mut self) -> &mut DefinitionTable {
+        &mut self.definitions
+    }
+
     fn tctx(&mut self) -> &mut TyCtx {
         &mut self.tctx
     }
@@ -193,10 +172,25 @@ impl<'i, 'h> InstantiateIdent<TyId, InferDiag> for TyInferer<'i, 'h> {
     fn def_ty(
         &mut self,
         def_id: hycc_hir::def::DefId,
-        _span: hycc_span::Span,
+        span: hycc_span::Span,
     ) -> Result<TyId, InferDiag> {
         let def = self.definitions.get(def_id);
-        Ok(self.tctx.expect_hir_ty_id(def.hir_id))
+        match self.tctx.expect_hir_res_state(def.hir_id) {
+            TyResState::Inferred(ty_id) | TyResState::Resolved(ty_id) => Ok(ty_id),
+            TyResState::Unresolved => {
+                let HirNode::Item(item) = self.hir_table.get(def.hir_id) else {
+                    return Ok(self.tctx.expect_hir_ty_id(def.hir_id));
+                };
+
+                self.check_item(&item)?;
+                Ok(self.tctx.expect_hir_ty_id(item.id))
+            }
+
+            TyResState::Resolving => Err(InferDiag::error(
+                span,
+                InferDiagErrorKind::TyComputationCycle(def.span),
+            )),
+        }
     }
 
     fn generic_arg_arity_mismatch_error(
@@ -211,5 +205,21 @@ impl<'i, 'h> InstantiateIdent<TyId, InferDiag> for TyInferer<'i, 'h> {
                 ((expected as u16) << u8::BITS) | received as u16,
             ),
         )
+    }
+}
+
+impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
+    fn expected_space(&self) -> Option<hycc_hir::def::DefSpace> {
+        // TODO (?)
+        Some(DefSpace::Value)
+    }
+
+    fn unrecognized_member_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        ty_id: TyId,
+    ) -> InferDiag {
+        InferDiag::error(span, InferDiagErrorKind::UnrecognizedMember { name, ty_id })
     }
 }

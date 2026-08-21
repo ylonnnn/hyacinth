@@ -11,12 +11,30 @@ use hycc_util::bug;
 use crate::{diag::InferResult, inferer::TyInferer};
 
 impl<'i, 'h> TyInferer<'i, 'h> {
+    pub(crate) fn check_stmt(&mut self, stmt: &HirStmt) -> InferResult {
+        match &stmt.kind {
+            HirStmtKind::Ret(ret) => ret
+                .value
+                .as_ref()
+                .map_or(Ok(()), |val| self.check_expr(&val)),
+
+            HirStmtKind::Pass(pass) => pass
+                .value
+                .as_ref()
+                .map_or(Ok(()), |val| self.check_expr(&val)),
+
+            HirStmtKind::Item(item) => self.check_item(&item),
+            HirStmtKind::Expr(expr) => self.check_expr(&expr),
+        }
+    }
+
     pub(crate) fn infer_stmt(&mut self, stmt: &HirStmt) -> InferResult {
         let ty_id = match &stmt.kind {
             HirStmtKind::Ret(ret) => {
-                let Some(fn_ctx) = &self.fn_ctx else {
-                    bug!("fn ctx must exist when entering a function")
-                };
+                let fn_ctx = self
+                    .fn_ctx
+                    .as_ref()
+                    .expect("fn ctx must exist when entering a function");
 
                 let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ctx.ty.id) else {
                     bug!("fn ty must be the ty of the function")
@@ -47,6 +65,12 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     Ty::new(self.tctx.make_unit_ty(), ret.span)
                 };
 
+                // dbg!((ret_ty.id, val_ty.id));
+                // let (_ret_ty, _val_ty) = dbg!((
+                //     self.tctx.resolve_ty(ret_ty.id),
+                //     self.tctx.resolve_ty(val_ty.id)
+                // ));
+                // dbg!((self.tctx.get(_ret_ty), self.tctx.get(_val_ty)));
                 self.check(&ret_ty, &val_ty).map(|diag| self.dctx.add(diag));
 
                 let HirNode::Block(fn_body) = self.hir_table.get(fn_body) else {

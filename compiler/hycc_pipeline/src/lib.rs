@@ -51,8 +51,8 @@ impl Driver {
         }
     }
 
-    fn parse(&mut self, session: &mut Session) -> Option<Petal> {
-        let source = self.registry.get(session.root);
+    fn parse(&mut self, session: &mut Session, src_id: SourceId) -> Option<Petal> {
+        let source = self.registry.get(src_id);
 
         let mut lexer = Lexer::new(&source, &mut session.dctx);
         let tok_stream = lexer.tokenize();
@@ -77,8 +77,8 @@ impl Driver {
         Some(petal)
     }
 
-    fn parse_source(&mut self, session: &mut Session) -> Option<Petal> {
-        let Some(mut root_petal) = self.parse(session) else {
+    fn parse_source(&mut self, session: &mut Session, src_id: SourceId) -> Option<Petal> {
+        let Some(mut root_petal) = self.parse(session, src_id) else {
             return None;
         };
 
@@ -95,7 +95,7 @@ impl Driver {
             match &mut petal.kind {
                 PetalKind::File(_, buf) => {
                     let src_id = self.registry.register(Source::new(buf.to_str().unwrap()));
-                    let Some(mut file_petal) = self.parse_source(session) else {
+                    let Some(mut file_petal) = self.parse_source(session, src_id) else {
                         continue;
                     };
 
@@ -179,7 +179,7 @@ impl Driver {
     where
         'h: 's,
     {
-        let tree = self.parse_source(session).ok_or_else(|| ())?;
+        let tree = self.parse_source(session, session.root).ok_or_else(|| ())?;
         let mut hir_builder = HirBuilder::new(
             &mut session.interner,
             &self.registry,

@@ -282,7 +282,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                                 .then_with(|| b_ptr.len.cmp(&a_ptr.len))
                         });
 
-                        let mut ptrs = vec![None; n];
+                        let mut ptrs = vec![None; n + 1];
                         for (i, ptr) in line.ptrs.iter().enumerate() {
                             let &EmphasisPointer { offset, len, .. } = &ptr;
                             let offset = *offset as usize;

@@ -216,98 +216,106 @@ impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
         use ParserDiagErrorKind::*;
 
         let source = ctx.registry.get(self.span.src_id);
-        // let code = (unsafe { *(&self.kind as *const ParserDiagKind as *const u8) }) as u16
-        //     + ParserDiagCtx::PARSER_ERROR_OFFSET;
 
-        let (kind, message) = match &self.kind {
-            ParserDiagKind::Info => (DiagKind::Info, "".into()),
-            ParserDiagKind::Warning => (DiagKind::Warning, "".into()),
+        let (kind, message, extra) = match &self.kind {
+            ParserDiagKind::Info => (DiagKind::Info, "".into(), None),
+            ParserDiagKind::Warning => (DiagKind::Warning, "".into(), None),
 
             ParserDiagKind::Error(kind) => {
-                let message = match kind {
+                let (message, extra) = match kind {
                     UnexpectedToken { token, expected } => {
-                        format!(
-                            "unexpected `{}`{}.",
-                            token.view(&source.data),
-                            ternary!(
-                                expected.is_some(),
-                                format!(", expected `{}`", expected.as_ref().unwrap().to_string()),
-                                "".into()
-                            )
+                        let expected = ternary!(
+                            expected.is_some(),
+                            format!(", expected `{}`", &expected.as_ref().unwrap().to_string()),
+                            "".into()
+                        );
+                        (
+                            format!("unexpected `{}`{}.", token.view(&source.data), &expected),
+                            Some(ternary!(
+                                expected.is_empty(),
+                                "unexpected token".into(),
+                                format!("expected `{}`", &expected)
+                            )),
                         )
                     }
 
-                    InvalidVarDecl { ident, depth } => {
-                        let message = format!(
+                    InvalidVarDecl { ident, depth } => (
+                        format!(
                             "invalid {}variable declaration for `{}`.",
                             ternary!(*depth == 0, "top-level ", ""),
                             ident.view(&source.data)
-                        );
-
-                        message
-                    }
+                        ),
+                        Some("invalid declaration".into()),
+                    ),
 
                     UnrecognizedPetalFile { path } => {
-                        format!(
-                            "cannot find corresponding petal file for petal `{}`.",
-                            path.to_str().unwrap().replace(
-                                path::MAIN_SEPARATOR_STR,
-                                &config::HYC_PATH_SEP_TOK_KIND.to_string()
-                            )
+                        let petal = path.to_str().unwrap().replace(
+                            path::MAIN_SEPARATOR_STR,
+                            &config::HYC_PATH_SEP_TOK_KIND.to_string(),
+                        );
+                        (
+                            format!("cannot find corresponding petal file for petal `{petal}`.",),
+                            Some(format!("petal file for `{petal}` not found")),
                         )
                     }
 
-                    IllegalLocalNonInlinePetalDeclaration => {
-                        format!("cannot declare non-inline petals locally within local blocks.")
-                    }
+                    IllegalLocalNonInlinePetalDeclaration => (
+                        format!("cannot declare non-inline petals locally within local blocks."),
+                        Some("non-inline petals are not allowed inside of local blocks".into()),
+                    ),
 
-                    InvalidStructFieldCount(n) => {
-                        format!(
-                            "structs cannot have more than `{}` fields, found `{}`.",
+                    InvalidStructFieldCount(n) => (
+                        "struct field count limit exceeded".into(),
+                        Some(format!(
+                            "struct field limit `{}` exceeded, found `{}`",
                             config::HYC_STRUCT_FIELD_LIMIT,
                             n
+                        )),
+                    ),
+
+                    UnsupportedItem { item_kind, ctx } => {
+                        let s_kind = item_kind.kind();
+                        (
+                            format!("`{s_kind}`s are unsupported within `{ctx}`s"),
+                            Some(format!("`{s_kind}`s not supported")),
                         )
                     }
-
-                    UnsupportedItem { item_kind, ctx } => format!(
-                        "`{}`s are unsupported within `{ctx}`s.",
-                        item_kind.kind()
-                    ),
                 };
 
                 (
                     DiagKind::Error(
-                        hycc_util::enums::tag_of::<u16, _>(&kind)
+                        hycc_util::enums::tag_of::<u16, ParserDiagErrorKind>(&kind)
                             + ParserDiagCtx::ERROR_CODE_OFFSET,
                     ),
                     message,
+                    extra,
                 )
             }
         };
 
-        let mut diag = Diag::new(kind, self.span, message);
+        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
 
         match &self.kind {
             ParserDiagKind::Error(kind) => match kind {
                 InvalidVarDecl { depth, .. } => {
-                    // diag.detail(diag.span, DiagKind::Note(
-                    //         ternary!(*depth == 0,
-                    //             format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."),
-                    //             format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
-                    // )));
+                    diag.note(diag.span,
+                        ternary!(*depth == 0,
+                            format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."),
+                            format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
+                        ));
                 }
 
                 UnrecognizedPetalFile { path } => {
                     let petal = path.to_str().unwrap();
 
-                    // diag.detail(
-                    //     diag.span,
-                    //     DiagKind::Note(format!(
-                    //         "create petal file `{}` or `{}` relative to the current file.",
-                    //         format_args!("{}.{}", petal, config::HYC_FILE_EXT),
-                    //         format_args!("{}/{}", petal, config::HYC_DIR_PETAL_FILE)
-                    //     )),
-                    // );
+                    diag.note(
+                        diag.span,
+                        format!(
+                            "create petal file `{}` or `{}` relative to the current file.",
+                            format_args!("{}.{}", petal, config::HYC_FILE_EXT),
+                            format_args!("{}/{}", petal, config::HYC_DIR_PETAL_FILE)
+                        ),
+                    );
                 }
 
                 _ => {}

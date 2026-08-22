@@ -224,17 +224,21 @@ impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
             ParserDiagKind::Error(kind) => {
                 let (message, extra) = match kind {
                     UnexpectedToken { token, expected } => {
-                        let expected = ternary!(
-                            expected.is_some(),
-                            format!(", expected `{}`", &expected.as_ref().unwrap().to_string()),
-                            "".into()
-                        );
+                        let expected_tok = expected.as_ref().map(|exp| exp.to_string());
                         (
-                            format!("unexpected `{}`{}.", token.view(&source.data), &expected),
+                            format!(
+                                "unexpected `{}`{}.",
+                                token.view(&source.data),
+                                ternary!(
+                                    expected.is_some(),
+                                    format!(", expected `{}`", expected_tok.as_ref().unwrap()),
+                                    "".into()
+                                )
+                            ),
                             Some(ternary!(
-                                expected.is_empty(),
-                                "unexpected token".into(),
-                                format!("expected `{}`", &expected)
+                                expected_tok.is_some(),
+                                format!("expected {}", expected_tok.unwrap()),
+                                "unexpected token".into()
                             )),
                         )
                     }

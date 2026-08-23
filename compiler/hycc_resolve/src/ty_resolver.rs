@@ -16,6 +16,7 @@ use hycc_hir::{
         HirExtend, HirFn, HirItem, HirItemKind, HirPetal, HirReferTarget, HirStruct, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirPath},
+    petal::PetalCtx,
     stmt::{HirStmt, HirStmtKind},
     ty::{HirTy, HirTyKind},
 };
@@ -37,6 +38,7 @@ pub struct TyResolver<'t, 'h> {
     pub tctx: &'t mut TyCtx,
     pub definitions: &'t mut DefinitionTable,
     pub hir_table: &'t HirTable<'h>,
+    pub petal_ctx: &'t mut PetalCtx,
 
     expected_space: Option<DefSpace>,
 }
@@ -47,12 +49,14 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         tctx: &'t mut TyCtx,
         definitions: &'t mut DefinitionTable,
         hir_table: &'t HirTable<'h>,
+        petal_ctx: &'t mut PetalCtx,
     ) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(dctx),
             tctx,
             definitions,
             hir_table,
+            petal_ctx,
 
             expected_space: None,
         }
@@ -77,7 +81,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
             HirItemKind::Proto(_) => todo!("resolve proto"),
-            HirItemKind::Extend(_) => self.resolve_extend(&item),
+            HirItemKind::Extend(_) => Ok(()),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
             HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
@@ -85,10 +89,29 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     }
 
     fn resolve_petal(&mut self, petal: &HirPetal) -> ResolveResult {
+        let petals = petal
+            .path()
+            .map(|path| {
+                path.segments
+                    .iter()
+                    .map(|segment| {
+                        self.petal_ctx
+                            .expect_def_petal_id(self.definitions.expect_def_id(segment.id))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| vec![self.petal_ctx.root_petal_id()]);
+
+        petals
+            .iter()
+            .for_each(|petal_id| self.petal_ctx.push(*petal_id));
+
         petal
             .items
             .iter()
             .for_each(|item| self.resolve_item(&item).emit_discard(&mut self.dctx));
+
+        (0..petals.len()).for_each(|_| self.petal_ctx.pop());
 
         Ok(())
     }
@@ -101,19 +124,90 @@ impl<'t, 'h> TyResolver<'t, 'h> {
 
             self.resolve_extend(&item).emit(&mut self.dctx);
         }
+
+        // TODO: check for colliding definitions between the implementations within
+        // let exts = self
+        //     .tctx
+        //     .ext_table
+        //     .get_all_native_exts()
+        //     .iter()
+        //     .flat_map(|(_, exts)| exts.clone())
+        //     .collect::<Vec<_>>();
+
+        // exts.iter().enumerate().for_each(|(i, base)| {
+        //     let base_ext = self.tctx.ext_table.get(*base);
+        //     let base_raw_ty_id = base_ext.expect_target();
+
+        //     let generic_args = (0..base_ext.generic_param_count)
+        //         .map(|_| {
+        //             GenericArg::Ty(self.tctx.make_inferred_ty(Span::default(), InferKind::Any))
+        //         })
+        //         .collect::<Vec<_>>();
+        //     let base_ty_id = self.tctx.instantiate(base_raw_ty_id, &[&generic_args]);
+
+        //     &exts[(i + 1)..].iter().for_each(|target| {
+        //         let target_ext = self.tctx.ext_table.get(*target);
+        //         let target_raw_ty_id = target_ext.expect_target();
+
+        //         let generic_args = (0..target_ext.generic_param_count)
+        //             .map(|_| {
+        //                 GenericArg::Ty(self.tctx.make_inferred_ty(Span::default(), InferKind::Any))
+        //             })
+        //             .collect::<Vec<_>>();
+        //         let target_ty_id = self.tctx.instantiate(target_raw_ty_id, &[&generic_args]);
+
+        //         if !self.tctx.unify_ty(base_ty_id, target_ty_id) {
+        //             return;
+        //         }
+
+        //         self.tctx
+        //             .ext_table
+        //             .get(*base)
+        //             .collisions(self.tctx.ext_table.get(*target))
+        //             .iter()
+        //             .for_each(|((_, name), prev_def, redef)| {
+        //                 let def = self.definitions.get(redef.def_id);
+        //                 self.dctx.error(
+        //                     def.span,
+        //                     ResolverDiagErrorKind::Duplication {
+        //                         ident: *name,
+        //                         earlier_def: prev_def.def_id,
+        //                     },
+        //                 )
+        //             });
+        //     });
+        // });
     }
 
     fn resolve_extend(&mut self, item: &HirItem) -> ResolveResult {
         let extend = item.expect_extend();
 
         let target_ty_id = self.resolve_ty(&extend.target)?;
-        let target_kind = self.tctx.ext_target_kind_of(target_ty_id);
-
         let ext_id = self.tctx.ext_table.expect_hir_ext_id(item.id);
-        let ext = self.tctx.ext_table.get_mut(ext_id);
+        self.tctx
+            .ext_table
+            .get_mut(ext_id)
+            .attach_target(target_ty_id);
 
-        ext.target.replace(target_ty_id);
-        self.tctx.ext_table.attach_id(target_kind, ext_id);
+        if !self.tctx.is_error_ty(target_ty_id) {
+            let target_petal = self
+                .tctx
+                .get_ty_def_id(target_ty_id)
+                .and_then(|def_id| self.definitions.get(def_id).petal);
+
+            let target_kind = self.tctx.ext_target_kind_of(target_ty_id);
+            self.tctx.ext_table.attach_id(target_kind, ext_id);
+
+            self.tctx
+                .ext_table
+                .get_mut(ext_id)
+                .items
+                .iter()
+                .for_each(|(_, binding)| {
+                    let def = self.definitions.get_mut(binding.def_id);
+                    def.petal = target_petal;
+                });
+        }
 
         extend
             .items
@@ -135,7 +229,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
 
     fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
         let func = item.expect_fn();
-        let def_id = self.definitions.expect_def_id(item.id);
+        // let def_id = self.definitions.expect_def_id(item.id);
 
         let generic_args = func.sig.generic_params.as_ref().map_or_else(
             || Vec::new(),
@@ -172,9 +266,12 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             ty_id
         });
 
-        let n_fn_ty_id =
-            self.tctx
-                .make_fn_ty(generic_args.into(), Some(def_id), params.into(), ret_ty);
+        let n_fn_ty_id = self.tctx.make_fn_ty(
+            generic_args.into(),
+            self.definitions.get_def_id(item.id),
+            params.into(),
+            ret_ty,
+        );
 
         let fn_ty_id = self.tctx.expect_hir_ty_id(item.id);
         self.tctx.unify_ty(fn_ty_id, n_fn_ty_id);
@@ -365,6 +462,12 @@ impl<'t, 'h> ResolveExpr<(), ResolverDiag> for TyResolver<'t, 'h> {
     fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
             HirExprKind::Path(path) => {
+                // Check the resolution state of the path if there are any
+                // unresolved segments, and if so, resolve extensions
+                if s.definitions.expect_res(path.id).unresolved > 0 {
+                    s.preprocessor();
+                }
+
                 // Resolve the arguments of each segment only
                 path.segments
                     .iter()
@@ -523,6 +626,10 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
         self.expected_space
     }
 
+    fn petal_ctx(&self) -> &hycc_hir::petal::PetalCtx {
+        &self.petal_ctx
+    }
+
     fn unrecognized_member_error(
         &self,
         span: Span,
@@ -533,6 +640,15 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
             span,
             ResolverDiagErrorKind::UnrecognizedMember { name, ty_id },
         )
+    }
+
+    fn inaccessible_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        kind: Option<crate::diag::SymbolKind>,
+    ) -> ResolverDiag {
+        ResolverDiag::error(span, ResolverDiagErrorKind::Inaccessible(name, kind))
     }
 
     fn preprocessor(&mut self) {

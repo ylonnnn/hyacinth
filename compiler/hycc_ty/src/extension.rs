@@ -141,8 +141,12 @@ impl ExtensionTable {
     //     }
     // }
 
-    pub fn get_ty_native_exts(&self, target: ExtTargetKind) -> Option<&[ExtensionId]> {
+    pub fn get_native_exts(&self, target: ExtTargetKind) -> Option<&[ExtensionId]> {
         self.native.get(&target).map(|exts| exts.as_slice())
+    }
+
+    pub fn get_all_native_exts(&self) -> &HashMap<ExtTargetKind, Vec<ExtensionId>> {
+        &self.native
     }
 
     pub fn get_assoc_item(
@@ -159,8 +163,8 @@ impl ExtensionTable {
         };
 
         let find = |exts: Option<&[ExtensionId]>| exts?.iter().find_map(f);
-        find(self.get_ty_native_exts(target)).or_else(|| {
-            find(self.get_ty_native_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket)))
+        find(self.get_native_exts(target)).or_else(|| {
+            find(self.get_native_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket)))
         })
     }
 }
@@ -183,14 +187,16 @@ pub enum ExtNominalTargetKind {
 
 #[derive(Debug, Clone)]
 pub struct Extension {
-    items: HashMap<(DefSpace, Symbol), Binding>,
-    pub target: Option<TyId>,
+    pub items: HashMap<(DefSpace, Symbol), Binding>,
+    pub(crate) target: Option<TyId>,
     pub hir_id: HirId,
+    pub generic_param_count: u8,
 }
 
 impl Extension {
     pub fn new(
         hir_id: HirId,
+        generic_param_count: u8,
         target: Option<TyId>,
         items: HashMap<(DefSpace, Symbol), Binding>,
     ) -> Self {
@@ -198,6 +204,7 @@ impl Extension {
             items,
             target,
             hir_id,
+            generic_param_count,
         }
     }
 
@@ -222,9 +229,9 @@ impl Extension {
         self.items.get_mut(&(space, name))
     }
 
-    pub fn collisions<'a>(
-        &'a self,
-        ext: &'a Extension,
+    pub fn collisions<'e>(
+        &'e self,
+        ext: &'e Extension,
     ) -> Vec<(&(DefSpace, Symbol), &Binding, &Binding)> {
         self.items
             .iter()

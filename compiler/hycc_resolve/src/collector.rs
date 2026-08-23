@@ -392,6 +392,10 @@ impl<'c> Collector<'c> {
                 item.id,
                 Extension::new(
                     item.id,
+                    extend
+                        .generic_params
+                        .as_ref()
+                        .map_or(0, |params| params.list.len() as u8),
                     None,
                     std::mem::take(s.scope_ctx.get_mut(scope_id))
                         .all()
@@ -413,8 +417,9 @@ impl<'c> Collector<'c> {
     ) -> ResolveResult {
         let petal = item.expect_petal();
 
-        let petals = match &petal.kind {
-            HirPetalKind::File(path) | HirPetalKind::Inline(path) => {
+        let Some(petals) = petal
+            .path()
+            .map(|path| {
                 // TODO: throw errors if a segment contains generic arguments
                 path.segments
                     .iter()
@@ -446,14 +451,17 @@ impl<'c> Collector<'c> {
                                 self.petal_ctx.try_create_child_petal(def_id)
                             })
                     })
-                    .collect::<Result<Vec<_>, _>>()?
-            }
-            _ => {
+                    .collect::<Result<Vec<_>, _>>()
+                    .emit(dctx)
+            })
+            .unwrap_or_else(|| {
                 let root_scope_id = self.scope_ctx.root_id();
                 self.scope_ctx.attach_id(item.id, root_scope_id);
 
-                vec![self.petal_ctx.create_root_petal(root_scope_id)]
-            }
+                Some(vec![self.petal_ctx.create_root_petal(root_scope_id)])
+            })
+        else {
+            return Ok(());
         };
 
         for petal_id in &petals {
@@ -634,9 +642,12 @@ impl<'c> Collector<'c> {
                 item.span,
                 item.accessibility,
             ))
-            .map(|binding| binding.def_id)?;
+            .map(|binding| binding.def_id)
+            .emit(dctx);
 
-        let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
+        let scope_id = self.scope_ctx.try_attach(item.id, Scope::new());
+        def_id.map(|def_id| self.scope_ctx.try_attach_id_to_def(def_id, scope_id));
+
         self.enter_scope(scope_id, CollectorLevel::Local, |s| {
             // Define function generic parameters
             let generic_param_tys = func
@@ -668,8 +679,10 @@ impl<'c> Collector<'c> {
                                 return None;
                             };
 
-                            let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
-                            fn_def.generic_params.push(binding.def_id);
+                            def_id.map(|def_id| {
+                                let fn_def = s.definitions.get_mut(def_id).kind.expect_mut_fn();
+                                fn_def.generic_params.push(binding.def_id);
+                            });
 
                             let ty_id = s.tctx.make_param_ty(
                                 binding.def_id,
@@ -702,12 +715,14 @@ impl<'c> Collector<'c> {
                     return;
                 };
 
-                s.definitions
-                    .get_mut(def_id)
-                    .kind
-                    .expect_mut_fn()
-                    .params
-                    .push(binding.def_id);
+                def_id.map(|def_id| {
+                    s.definitions
+                        .get_mut(def_id)
+                        .kind
+                        .expect_mut_fn()
+                        .params
+                        .push(binding.def_id);
+                });
             });
 
             let fn_ty_id = s.tctx.make_inferred_ty(item.span, InferKind::Any);

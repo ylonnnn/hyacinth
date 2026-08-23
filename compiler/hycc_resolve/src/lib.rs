@@ -3,6 +3,7 @@ use hycc_hir::{
     expr::HirExpr,
     generic::HirGenericParamKind,
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath},
+    petal::PetalCtx,
     ty::HirTy,
 };
 use hycc_span::Span;
@@ -12,6 +13,8 @@ use hycc_ty::{
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
 use hycc_util::ternary;
+
+use crate::diag::SymbolKind;
 
 pub mod diag;
 
@@ -121,29 +124,31 @@ pub trait InstantiateIdent<TEx, E>: ResolveIdentArgs<TEx, E> {
 
 pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
     fn expected_space(&self) -> Option<DefSpace>;
+    fn petal_ctx(&self) -> &PetalCtx;
 
     fn unrecognized_member_error(&self, span: Span, name: Symbol, ty_id: TyId) -> E;
+    fn inaccessible_error(&self, span: Span, name: Symbol, kind: Option<SymbolKind>) -> E;
 
     fn preprocessor(&mut self) {}
 
     fn resolve_path(&mut self, path: &HirPath) -> Result<TyId, E> {
         let space = self
             .expected_space()
-            .unwrap_or_else(|| panic!("expected a definition space"));
+            .unwrap_or_else(|| panic!("expected an expected definition space"));
 
         let n = path.segments.len();
         let Some(res) = self.definitions().get_res(path.id) else {
-            return Ok(self.tctx().make_inferred_ty(path.span, InferKind::Any));
+            return Ok(self.tctx().make_error_ty());
+            // return Ok(self.tctx().make_inferred_ty(path.span, InferKind::Any));
         };
 
         let mut generic_args = Vec::new();
 
         let resolved_count = (n - res.unresolved);
-        let mut prev_ty_id = path.segments[..resolved_count]
-            .iter()
-            .fold(Ok(TyId::Invalid), |_, curr| {
-                self.instantiate(&mut generic_args, &curr)
-            })?;
+        let mut prev_ty_id = self.instantiate(
+            &mut generic_args,
+            &path.segments[resolved_count.saturating_sub(1)],
+        )?;
 
         for (i, ident) in path.segments[resolved_count..].iter().enumerate() {
             let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
@@ -163,6 +168,15 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                         prev_ty_id,
                     ));
                 };
+
+                let def = self.definitions().get(assoc_item.def_id);
+                if !self.petal_ctx().accessible(&def) {
+                    return Err(self.inaccessible_error(
+                        ident.span,
+                        def.name,
+                        Some(SymbolKind::AssocItem),
+                    ));
+                }
 
                 self.definitions_mut()
                     .define_id_hir(ident.id, assoc_item.def_id);

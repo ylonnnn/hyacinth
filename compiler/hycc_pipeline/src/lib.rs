@@ -138,6 +138,7 @@ impl Driver {
             &mut session.tctx,
             &mut session.definitions,
             &session.hir_table,
+            &mut session.petal_ctx,
         );
 
         ty_resolver.resolve(&tree);

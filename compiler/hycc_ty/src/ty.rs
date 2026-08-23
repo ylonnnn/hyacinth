@@ -57,7 +57,11 @@ pub enum GenericArg {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TyKind {
     Unit,
+
     Never,
+    // For instances when an error occurred while
+    // computing the specific type.
+    Error,
 
     Int(IntTy),
     Float(u8),

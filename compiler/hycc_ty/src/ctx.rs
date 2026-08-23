@@ -345,7 +345,9 @@ impl TyCtx {
 
                 // TODO: improve?: allow ambiguous inferred types (except `Any`) to be used for
                 // other concrete type extensions
-                TyKind::Infer(_, kind) => ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket),
+                TyKind::Infer(_, _) | TyKind::Param(_) => {
+                    ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket)
+                }
 
                 _ => bug!("other type kinds are expected to be defined/have a definition."),
             },
@@ -434,6 +436,7 @@ impl TyCtx {
             }
 
             (TyKind::Never, _) | (_, TyKind::Never) => true,
+            (TyKind::Error, _) | (_, TyKind::Error) => true,
 
             (TyKind::Adt(a_def, a_args), TyKind::Adt(b_def, b_args)) => {
                 if a_def != b_def || a_args.len() != b_args.len() {
@@ -585,6 +588,10 @@ impl TyCtx {
         self.intern(TyKind::Never)
     }
 
+    pub fn make_error_ty(&mut self) -> TyId {
+        self.intern(TyKind::Error)
+    }
+
     pub fn make_int_ty(&mut self, ty: IntTy) -> TyId {
         self.intern(TyKind::Int(ty))
     }
@@ -684,6 +691,41 @@ impl TyCtx {
             }),
 
             _ => {}
+        }
+    }
+
+    pub fn is_error_ty(&mut self, ty_id: TyId) -> bool {
+        let ty_id = self.resolve_ty(ty_id);
+        matches!(self.get(ty_id), TyKind::Error)
+    }
+
+    pub fn is_errored_ty(&mut self, ty_id: TyId) -> bool {
+        let ty_id = self.resolve_ty(ty_id);
+        match self.get(ty_id) {
+            TyKind::Error => true,
+
+            TyKind::Array(inner) => self.is_errored_ty(*inner),
+            TyKind::Slice(inner) => self.is_errored_ty(*inner),
+            TyKind::Tuple(tys) => tys.clone().iter().any(|ty_id| self.is_errored_ty(*ty_id)),
+
+            TyKind::Ref(inner, _) => self.is_errored_ty(*inner),
+
+            TyKind::Fn(fn_ty, args) => {
+                let (params, ret_ty) = (fn_ty.params.clone(), fn_ty.ret_ty);
+                args.clone().iter().any(|arg| match &arg {
+                    GenericArg::Ty(ty_id) => self.is_errored_ty(*ty_id),
+                }) || params
+                    .clone()
+                    .iter()
+                    .any(|param| self.is_errored_ty(*param))
+                    || self.is_errored_ty(ret_ty)
+            }
+
+            TyKind::Adt(_, args) => args.clone().iter().any(|arg| match &arg {
+                GenericArg::Ty(ty_id) => self.is_errored_ty(*ty_id),
+            }),
+
+            _ => false,
         }
     }
 

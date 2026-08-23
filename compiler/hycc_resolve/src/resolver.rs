@@ -21,7 +21,7 @@ use hycc_util::{bug, ternary};
 
 use crate::{
     collector::Collector,
-    diag::{ResolveResult, ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind},
+    diag::{ResolveResult, ResolverDiag, ResolverDiagCtx, ResolverDiagErrorKind, SymbolKind},
 };
 
 #[derive(Debug)]
@@ -228,43 +228,6 @@ impl<'r> Resolver<'r> {
             }
         });
 
-        // if let HirTyKind::Path(path) = &extend.target.kind {
-        //     let def_id = self.collector.definitions.expect_def_id(path.id);
-        //     let def = self.collector.definitions.get(def_id);
-        //     let def_petal = def.petal;
-        //     let target = ExtTargetKind::Nominal(ternary!(
-        //         matches!(def.kind, DefKind::GenericParam(_)),
-        //         ExtNominalTargetKind::Blanket,
-        //         ExtNominalTargetKind::Def(def_id)
-        //     ));
-
-        //     // let ext_id = self.collector.tctx.ext_table.attach(
-        //     //     target,
-        //     //     Extension::new(
-        //     //         item.id,
-        //     //         None,
-        //     //         std::mem::take(
-        //     //             self.collector
-        //     //                 .scope_ctx
-        //     //                 .expect_hir_mut_scope(extend.target.id),
-        //     //         )
-        //     //         .all()
-        //     //         .into_iter()
-        //     //         .map(|(key, binding)| {
-        //     //             let item_def = self.collector.definitions.get_mut(binding.def_id);
-        //     //             item_def.petal = def_petal;
-        //     //             (key, binding)
-        //     //         })
-        //     //         .collect::<HashMap<_, _>>(),
-        //     //     ),
-        //     // );
-
-        //     self.collector
-        //         .tctx
-        //         .ext_table
-        //         .attach_hir_ext_id(item.id, ext_id);
-        // }
-
         Ok(())
     }
 
@@ -294,8 +257,10 @@ impl<'r> Resolver<'r> {
     pub(crate) fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
         let func = item.expect_fn();
 
-        let def_id = self.collector.definitions.expect_def_id(item.id);
-        let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
+        // let def_id = self.collector.definitions.expect_def_id(item.id);
+        // let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
+
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
 
         self.enter_scope(scope_id, |s| {
             if let Some(generic_params) = &func.sig.generic_params {
@@ -470,10 +435,13 @@ impl<'r> Resolver<'r> {
         let res_kind = def.kind.res_kind();
 
         if !self.collector.petal_ctx.accessible(&def) {
-            Err(ResolverDiag::error(
+            self.dctx.error(
                 ident.span,
-                ResolverDiagErrorKind::InaccessibleSymbol(name),
-            ))?
+                ResolverDiagErrorKind::Inaccessible(
+                    name,
+                    resolution.map(|_| SymbolKind::AssocItem),
+                ),
+            );
         }
 
         Ok(Some(match &res_kind {

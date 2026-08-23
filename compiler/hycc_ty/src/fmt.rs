@@ -32,8 +32,10 @@ impl<'f> TyFormatter<'f> {
         let kind = self.tctx.get(ty_id);
 
         match &kind {
-            TyKind::Unit => String::from("()"),
-            TyKind::Never => String::from("~"),
+            TyKind::Unit => "()".into(),
+
+            TyKind::Never => "!".into(),
+            TyKind::Error => "{unknown}".into(),
 
             TyKind::Int(data) => match data {
                 IntTy::Fixed(width, signed) => format!("{}{width}", ternary!(*signed, "i", "u")),
@@ -41,9 +43,9 @@ impl<'f> TyFormatter<'f> {
             },
 
             TyKind::Float(width) => format!("f{width}"),
-            TyKind::Bool => format!("bool"),
-            TyKind::Char => format!("char"),
-            TyKind::String => format!("str"),
+            TyKind::Bool => "bool".into(),
+            TyKind::Char => "char".into(),
+            TyKind::String => "str".into(),
 
             TyKind::Array(ty_id) => {
                 format!("[<size>]{}", self.fmt_id(*ty_id))

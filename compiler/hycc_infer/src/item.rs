@@ -49,10 +49,29 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub(crate) fn infer_petal(&mut self, petal: &HirPetal) -> InferResult {
+        let petals = petal
+            .path()
+            .map(|path| {
+                path.segments
+                    .iter()
+                    .map(|segment| {
+                        self.petal_ctx
+                            .expect_def_petal_id(self.definitions.expect_def_id(segment.id))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| vec![self.petal_ctx.root_petal_id()]);
+
+        petals
+            .iter()
+            .for_each(|petal_id| self.petal_ctx.push(*petal_id));
+
         petal
             .items
             .iter()
             .for_each(|item| self.infer_item(&item).emit_discard(&mut self.dctx));
+
+        (0..petals.len()).for_each(|_| self.petal_ctx.pop());
 
         Ok(())
     }

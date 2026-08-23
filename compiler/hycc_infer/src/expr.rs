@@ -14,7 +14,7 @@ use hycc_hir::{
     item::HirItemKind,
     path::HirIdentArgument,
 };
-use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolvePath};
+use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolvePath, diag::SymbolKind};
 use hycc_span::Span;
 use hycc_ty::{
     ctx::{TyId, TyResState},
@@ -24,7 +24,7 @@ use hycc_ty::{
 use hycc_util::{bug, ternary};
 
 use crate::{
-    diag::{InferDiag, InferDiagErrorKind, InferResult, MemberKind},
+    diag::{InferDiag, InferDiagErrorKind, InferResult},
     fn_ctx::FnCtx,
     inferer::TyInferer,
 };
@@ -181,6 +181,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             unreachable!()
         };
 
+        let err_ty = self.tctx.make_error_ty();
         let err = |name, def_id| {
             Err(InferDiag::error(
                 strct.path.span,
@@ -188,13 +189,24 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             ))
         };
 
-        let Some(TyKind::Adt(def_id, args)) = self
-            .tctx
-            .get_hir_ty_id(strct.path.id)
-            .map(|ty_id| self.tctx.get(ty_id))
-        else {
-            let def_id = self.definitions.expect_def_id(strct.path.id);
-            return err(self.definitions.expect_def(strct.path.id).name, def_id);
+        let Some(ty_id) = self.tctx.get_hir_ty_id(strct.path.id) else {
+            let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
+                return Ok(err_ty);
+            };
+
+            return err(self.definitions.get(def_id).name, def_id);
+        };
+
+        if self.tctx.is_error_ty(ty_id) {
+            return Ok(err_ty);
+        }
+
+        let TyKind::Adt(def_id, args) = self.tctx.get(ty_id) else {
+            let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
+                return Ok(err_ty);
+            };
+
+            return err(self.definitions.get(def_id).name, def_id);
         };
 
         let def_id = *def_id;
@@ -553,6 +565,18 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     return err();
                 }
 
+                // Accessibility guard
+                let def = self.definitions.get(assoc_item.def_id);
+                if !self.petal_ctx.accessible(&def) {
+                    Err(InferDiag::error(
+                        call.callee.span,
+                        InferDiagErrorKind::Inaccessible {
+                            name: call.callee.ident.ident,
+                            kind: Some(SymbolKind::AssocItem),
+                        },
+                    ))?
+                }
+
                 candidate.replace(assoc_item);
             };
 
@@ -611,17 +635,6 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
         let ret_ty = fn_ty.ret_ty;
         let params = fn_ty.params.clone();
-
-        // Accessibility guard
-        if !self.petal_ctx.accessible(&def) {
-            Err(InferDiag::error(
-                call.callee.span,
-                InferDiagErrorKind::InaccessibleMember {
-                    name: call.callee.ident.ident,
-                    kind: MemberKind::AssocFn,
-                },
-            ))?
-        }
 
         // Associated function attempted to be called through method calling
         let p_len = params.len();

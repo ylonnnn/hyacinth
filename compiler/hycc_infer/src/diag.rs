@@ -5,7 +5,7 @@ use hycc_hir::{
     def::{AdtKind, DefId, DefKind, DefinitionTable},
     expr::HirFieldAccessFieldKind,
 };
-use hycc_resolve::diag::ResolverDiagDataCtx;
+use hycc_resolve::diag::{ResolverDiagDataCtx, SymbolKind};
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
@@ -147,9 +147,9 @@ pub enum InferDiagErrorKind {
         ty_id: TyId,
     },
 
-    InaccessibleMember {
+    Inaccessible {
         name: Symbol,
-        kind: MemberKind,
+        kind: Option<SymbolKind>,
     },
 
     IllegalAssocFnInvocation {
@@ -164,12 +164,6 @@ pub enum InferDiagErrorKind {
         call: (Symbol, Span),
         def_id: DefId,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MemberKind {
-    AssocFn,
-    Field,
 }
 
 #[derive(Debug, Clone)]
@@ -384,19 +378,14 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         )
                     }
 
-                    InaccessibleMember { name, kind } => {
-                        let s_kind = match &kind {
-                            MemberKind::Field => "field",
-                            MemberKind::AssocFn => "associated function",
-                        };
-                        (
-                            format!(
-                                "{s_kind} `{}` is inaccessible in this ctx",
-                                ctx.fmt.interner.get(*name)
-                            ),
-                            Some(format!("cannot access {s_kind}")),
-                        )
-                    }
+                    Inaccessible { name, kind } => (
+                        format!(
+                            "{} `{}` is inaccessible in this context",
+                            kind.map_or_else(|| "symbol".into(), |kind| kind.to_string()),
+                            ctx.fmt.interner.get(*name)
+                        ),
+                        Some("cannot be accessed from this petal".into()),
+                    ),
 
                     IllegalAssocFnInvocation { name, ty_id, .. } => (
                         format!(

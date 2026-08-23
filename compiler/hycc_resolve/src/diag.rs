@@ -1,4 +1,7 @@
-use std::path::{self, PathBuf};
+use std::{
+    fmt::Display,
+    path::{self, PathBuf},
+};
 
 use hycc_diagnostic::diagnostic::{
     Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics, FromResultEmitter,
@@ -115,9 +118,30 @@ pub enum ResolverDiagErrorKind {
 
     IllegalPetalTyUsage(DefId),
     InvalidInference,
-    InaccessibleSymbol(Symbol),
+    Inaccessible(Symbol, Option<SymbolKind>),
 
     GenericArgumentArityMismatch(u16),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SymbolKind {
+    Item,
+    AssocItem,
+    Field,
+}
+
+impl Display for SymbolKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Self::Item => "item",
+                Self::AssocItem => "associated item",
+                Self::Field => "field",
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -207,12 +231,13 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         Some("requires known type".into()),
                     ),
 
-                    InaccessibleSymbol(symbol) => (
+                    Inaccessible(symbol, kind) => (
                         format!(
-                            "`{}` is inaccessible in this ctx",
+                            "{}`{}` is inaccessible in this context",
+                            kind.map_or_else(|| "".into(), |kind| format!("{} ", kind)),
                             ctx.fmt.interner.get(*symbol)
                         ),
-                        None,
+                        Some("cannot be accessed from this petal".into()),
                     ),
 
                     GenericArgumentArityMismatch(data) => {

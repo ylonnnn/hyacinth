@@ -146,8 +146,6 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
     pub fn infer(&mut self, tree: &HirItem) {
         let petal = tree.expect_petal();
-        let root_id = self.petal_ctx.root_petal_id();
-        self.petal_ctx.push(root_id);
 
         // Check the type resolution states of each item
         self.check_petal(&petal).emit(&mut self.dctx);
@@ -223,6 +221,10 @@ impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
         Some(DefSpace::Value)
     }
 
+    fn petal_ctx(&self) -> &PetalCtx {
+        &self.petal_ctx
+    }
+
     fn unrecognized_member_error(
         &self,
         span: Span,
@@ -230,5 +232,14 @@ impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
         ty_id: TyId,
     ) -> InferDiag {
         InferDiag::error(span, InferDiagErrorKind::UnrecognizedMember { name, ty_id })
+    }
+
+    fn inaccessible_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        kind: Option<hycc_resolve::diag::SymbolKind>,
+    ) -> InferDiag {
+        InferDiag::error(span, InferDiagErrorKind::Inaccessible { name, kind })
     }
 }

@@ -80,7 +80,7 @@ impl<'t, 'd> MirBuilder<'t, 'd> {
         match &item.kind {
             HirItemKind::Refer(_) => {}
             HirItemKind::Petal(petal) => self.lower_petal(&petal),
-            HirItemKind::Proto(proto) => todo!("(mir) lower proto"),
+            HirItemKind::intf(intf) => todo!("(mir) lower intf"),
             HirItemKind::Extend(extend) => self.lower_extend(&extend),
             HirItemKind::Struct(_) => {}
             HirItemKind::Fn(_) => self.lower_fn(&item),

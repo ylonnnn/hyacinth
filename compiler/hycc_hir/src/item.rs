@@ -17,7 +17,7 @@ use crate::{
 pub enum HirItemKind<'h> {
     Refer(Box<HirRefer<'h>>),
     Petal(Box<HirPetal<'h>>),
-    Proto(Box<HirProto<'h>>),
+    Intf(Box<HirIntf<'h>>),
     Extend(Box<HirExtend<'h>>),
     Struct(Box<HirStruct<'h>>),
     Fn(Box<HirFn<'h>>),
@@ -74,15 +74,15 @@ impl<'h> HirItem<'h> {
         self.get_petal().expect("expected to be Petal")
     }
 
-    pub fn get_proto(&self) -> Option<&HirProto> {
+    pub fn get_intf(&self) -> Option<&HirIntf> {
         match &self.kind {
-            HirItemKind::Proto(proto) => Some(&proto),
+            HirItemKind::Intf(intf) => Some(&intf),
             _ => None,
         }
     }
 
-    pub fn expect_proto(&self) -> &HirProto {
-        self.get_proto().expect("expected to be Proto")
+    pub fn expect_intf(&self) -> &HirIntf {
+        self.get_intf().expect("expected to be intf")
     }
 
     pub fn get_extend(&self) -> Option<&HirExtend> {
@@ -177,23 +177,23 @@ impl<'h> HirPetal<'h> {
 }
 
 #[derive(Debug, Clone)]
-pub enum HirProtoItemAssocFnKind<'h> {
+pub enum HirIntfItemAssocFnKind<'h> {
     Sig(HirFnSig<'h>),
     Impl(&'h HirItem<'h>),
 }
 
 #[derive(Debug, Clone)]
-pub enum HirProtoItem<'h> {
+pub enum HirIntfItem<'h> {
     // AssocTy(&'h HirTy<'h>),
     AssocConst(&'h HirItem<'h>),
-    AssocFn(HirProtoItemAssocFnKind<'h>),
+    AssocFn(HirIntfItemAssocFnKind<'h>),
 }
 
 #[derive(Debug, Clone)]
-pub struct HirProto<'h> {
+pub struct HirIntf<'h> {
     pub ident: &'h HirRawIdent,
     // TODO: generic_params
-    pub items: Vec<HirProtoItem<'h>>,
+    pub items: Vec<HirIntfItem<'h>>,
     pub span: Span,
 }
 
@@ -201,7 +201,7 @@ pub struct HirProto<'h> {
 pub struct HirExtend<'h> {
     pub target: &'h HirTy<'h>,
     pub generic_params: Option<HirGenericParamList<'h>>,
-    // TODO: with: Option<[PROTO]>
+    // TODO: with: Option<[intf]>
     pub items: Vec<&'h HirItem<'h>>,
     pub span: Span,
 }

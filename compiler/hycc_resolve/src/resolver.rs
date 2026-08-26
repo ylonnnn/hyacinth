@@ -105,7 +105,7 @@ impl<'r> Resolver<'r> {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
-            HirItemKind::Proto(_) => todo!("resolve proto"),
+            HirItemKind::Intf(_) => todo!("resolve intf"),
             HirItemKind::Extend(_) => self.resolve_extend(&item),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
@@ -212,8 +212,8 @@ impl<'r> Resolver<'r> {
         self.enter_scope(scope_id, |s| {
             if let Some(generic_params) = &extend.generic_params {
                 for generic_param in &generic_params.list {
-                    for proto_req in &generic_param.proto_reqs {
-                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                    for intf_req in &generic_param.intf_reqs {
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
                             .emit(&mut s.dctx);
                     }
                 }
@@ -239,8 +239,8 @@ impl<'r> Resolver<'r> {
         self.enter_scope(scope_id, |s| {
             if let Some(generic_params) = &strct.generic_params {
                 for generic_param in &generic_params.list {
-                    for proto_req in &generic_param.proto_reqs {
-                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                    for intf_req in &generic_param.intf_reqs {
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
                             .emit(&mut s.dctx);
                     }
                 }
@@ -265,8 +265,8 @@ impl<'r> Resolver<'r> {
         self.enter_scope(scope_id, |s| {
             if let Some(generic_params) = &func.sig.generic_params {
                 for generic_param in &generic_params.list {
-                    for proto_req in &generic_param.proto_reqs {
-                        s.expect_space(DefSpace::Type, |s| s.resolve_path(proto_req))
+                    for intf_req in &generic_param.intf_reqs {
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
                             .emit(&mut s.dctx);
                     }
                 }

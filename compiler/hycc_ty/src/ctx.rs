@@ -759,7 +759,7 @@ impl TyCtx {
         match &self.get(ty_id) {
             TyKind::Ref(ty_id, _) => *ty_id,
 
-            // TODO: check protocols of the type if it has a deref proto
+            // TODO: check interfaces of the type if it has a deref intf
             TyKind::Adt(_, _) => ty_id,
 
             _ => ty_id,

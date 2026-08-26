@@ -2,11 +2,11 @@ use hycc_ast::{
     Mutability,
     expr::Expr,
     item::{
-        Extend, Fn, FnParam, FnParamList, FnSig, ItemAccessibility, ItemLevel, Petal, PetalKind,
-        Proto, ProtoItem, ProtoItemAssocFnKind, PubAccessibilityKind, Refer, ReferTarget,
-        ReferTargetKind, Struct, StructField, StructFieldAccessibility, StructFieldList, VarDecl,
+        Extend, Fn, FnParam, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Item,
+        ItemAccessibility, ItemKind, ItemLevel, Petal, PetalKind, PubAccessibilityKind, Refer,
+        ReferTarget, ReferTargetKind, Struct, StructField, StructFieldAccessibility,
+        StructFieldList, VarDecl,
     },
-    item::{Item, ItemKind},
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
     ty::Ty,
@@ -77,8 +77,8 @@ impl<'s> Parser<'s> {
                 ItemKind::Petal(Box::new(self.parse_petal_with_recovery()?))
             }
 
-            TokenKind::Ident(TokenIdentKind::Proto) => {
-                ItemKind::Proto(Box::new(self.parse_proto_with_recovery()?))
+            TokenKind::Ident(TokenIdentKind::Intf) => {
+                ItemKind::Intf(Box::new(self.parse_intf_with_recovery()?))
             }
 
             TokenKind::Ident(TokenIdentKind::Extend) => {
@@ -359,22 +359,22 @@ impl<'s> Parser<'s> {
         Ok(petal)
     }
 
-    pub fn parse_proto_with_recovery(&mut self) -> ParseResult<Proto> {
-        let data = self.parse_proto();
+    pub fn parse_intf_with_recovery(&mut self) -> ParseResult<Intf> {
+        let data = self.parse_intf();
         self.try_sync(&[TokenKind::RightBrace]);
 
         data
     }
 
-    // proto IDENT (GENERIC_PARAMS)? { PROTO_ITEM* }
-    // proto IDENT (< GENERIC_PARAM (, GENERIC_PARAM)* >)? { PROTO_ITEM* }
-    pub fn parse_proto(&mut self) -> ParseResult<Proto> {
+    // intf IDENT (GENERIC_PARAMS)? { intf_ITEM* }
+    // intf IDENT (< GENERIC_PARAM (, GENERIC_PARAM)* >)? { intf_ITEM* }
+    pub fn parse_intf(&mut self) -> ParseResult<Intf> {
         // IDENT
         let ident = self.parse_raw_ident()?;
 
         // TODO: generic params
 
-        // { PROTO_ITEM* }
+        // { intf_ITEM* }
         let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
             TokenGraph::Collection { data, .. } => data,
             _ => Err(None)?,
@@ -383,14 +383,14 @@ impl<'s> Parser<'s> {
         let n = data.len();
         let items = self.use_stream(
             TokenStream::new(data.into_iter().skip(1).take(n - 2).collect()),
-            |s| -> Vec<ProtoItem> {
+            |s| -> Vec<IntfItem> {
                 let mut items = Vec::new();
                 if s.stream.is_empty() {
                     return items;
                 }
 
                 while !s.eos() {
-                    match s.parse_proto_item() {
+                    match s.parse_intf_item() {
                         Ok(item) => items.push(item),
                         Err(diag) => {
                             diag.map(|diag| s.dctx.add(diag));
@@ -402,15 +402,15 @@ impl<'s> Parser<'s> {
             },
         );
 
-        // todo!("parse proto")
-        Ok(Proto {
+        // todo!("parse intf")
+        Ok(Intf {
             span: ident.span,
             ident,
             items,
         })
     }
 
-    pub fn parse_proto_item(&mut self) -> ParseResult<ProtoItem> {
+    pub fn parse_intf_item(&mut self) -> ParseResult<IntfItem> {
         let Some(tok) = self.next_nonlf_token() else {
             return Err(None);
         };
@@ -419,7 +419,7 @@ impl<'s> Parser<'s> {
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 let sig = self.parse_fn_sig(false)?;
                 let kind = if self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0 {
-                    ProtoItemAssocFnKind::Impl(Box::new(Item::new(
+                    IntfItemAssocFnKind::Impl(Box::new(Item::new(
                         ItemKind::Fn(Box::new(Fn {
                             sig,
                             body: self.parse_block()?,
@@ -432,13 +432,13 @@ impl<'s> Parser<'s> {
                     )))
                 } else {
                     self.require_terminator(ParserTerminatorKind::Both)?;
-                    ProtoItemAssocFnKind::Sig(Box::new(sig))
+                    IntfItemAssocFnKind::Sig(Box::new(sig))
                 };
 
-                ProtoItem::AssocFn(kind)
+                IntfItem::AssocFn(kind)
             }
 
-            TokenKind::Ident(TokenIdentKind::Let) => ProtoItem::AssocConst(Box::new(Item::new(
+            TokenKind::Ident(TokenIdentKind::Let) => IntfItem::AssocConst(Box::new(Item::new(
                 ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?)),
                 ternary!(
                     self.depth == 0,

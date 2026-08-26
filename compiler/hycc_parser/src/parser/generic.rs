@@ -38,14 +38,14 @@ impl<'s> Parser<'s> {
     }
 
     // GENERIC_PARAM
-    // ( RAW_IDENT (: PROTO_REQS)? ) | ( const RAW_IDENT : TYPE )
-    // ( RAW_IDENT (: PROTO_REQ (, PROTO_REQ)* ) ) | ( const RAW_IDENT : TYPE )
+    // ( RAW_IDENT (: intf_REQS)? ) | ( const RAW_IDENT : TYPE )
+    // ( RAW_IDENT (: intf_REQ (, intf_REQ)* ) ) | ( const RAW_IDENT : TYPE )
     pub fn parse_generic_param(&mut self) -> ParseResult<GenericParam> {
         // RAW_IDENT
         let param = self.parse_raw_ident()?;
 
         // :
-        let mut proto_reqs = Vec::new();
+        let mut intf_reqs = Vec::new();
         if self.expect_exact_nonlf(TokenKind::Colon).0 {
             let mut expect = true;
             while !self.expect_preserved_exact_nonlf(TokenKind::SemiColon).0
@@ -56,9 +56,9 @@ impl<'s> Parser<'s> {
                 }
 
                 if expect {
-                    // TODO: use (and make) parse_proto_ident or allow associated
+                    // TODO: use (and make) parse_intf_ident or allow associated
                     // types to be parsed in the identifier arguments
-                    proto_reqs.push(self.parse_path(PathKind::Ty)?);
+                    intf_reqs.push(self.parse_path(PathKind::Ty)?);
                     expect = false;
                 }
 
@@ -71,7 +71,7 @@ impl<'s> Parser<'s> {
 
         Ok(GenericParam {
             ident: param,
-            proto_reqs,
+            intf_reqs,
             kind: GenericParamKind::Ty, // TODO
         })
     }

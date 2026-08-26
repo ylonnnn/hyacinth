@@ -18,7 +18,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.check_petal(&petal),
-            HirItemKind::Proto(proto) => todo!("infer proto"),
+            HirItemKind::Intf(intf) => todo!("infer intf"),
             HirItemKind::Extend(extend) => self.check_extend(&extend),
             HirItemKind::Struct(strct) => Ok(()),
             HirItemKind::Fn(_) => self.check_fn(&item),
@@ -30,7 +30,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
-            HirItemKind::Proto(proto) => todo!("infer proto"),
+            HirItemKind::Intf(intf) => todo!("infer intf"),
             HirItemKind::Extend(extend) => self.infer_extend(&extend),
             HirItemKind::Struct(strct) => Ok(()),
             HirItemKind::Fn(_) => self.infer_fn(&item),

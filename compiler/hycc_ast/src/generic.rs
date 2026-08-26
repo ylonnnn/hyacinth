@@ -17,13 +17,13 @@ pub enum GenericParamKind {
 #[derive(Debug, Clone)]
 pub struct GenericParam {
     pub ident: Token,
-    pub proto_reqs: Vec<Path>,
+    pub intf_reqs: Vec<Path>,
     pub kind: GenericParamKind,
 }
 
 impl GenericParam {
     pub fn span(&self) -> Span {
-        self.proto_reqs
+        self.intf_reqs
             .last()
             .map_or(self.ident.span, |ident| self.ident.span.merge(ident.span))
     }

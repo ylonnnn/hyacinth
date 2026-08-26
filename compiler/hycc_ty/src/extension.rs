@@ -15,7 +15,7 @@ use crate::{ctx::TyId, ty::TyKind};
 pub struct ExtensionTable {
     data: Vec<Extension>,
     native: HashMap<ExtTargetKind, Vec<ExtensionId>>,
-    // TODO: protocol: HashMap<ExtTargetKind, Vec<ExtensionId>>
+    // TODO: interface: HashMap<ExtTargetKind, Vec<ExtensionId>>
     hir_map: HashMap<HirId, ExtensionId>,
 }
 
@@ -98,7 +98,7 @@ impl ExtensionTable {
     }
 
     pub fn attach(&mut self, target: ExtTargetKind, ext: Extension) -> ExtensionId {
-        // TODO: identify whether the extension is native or protocol-based
+        // TODO: identify whether the extension is native or interface-based
         let ext_id = self.insert(ext);
         self.attach_id(target, ext_id);
 

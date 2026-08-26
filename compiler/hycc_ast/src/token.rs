@@ -131,7 +131,7 @@ pub enum TokenIdentKind {
     Refer,
     As,
 
-    Proto,
+    Intf,
     Extend,
     With,
 
@@ -242,7 +242,7 @@ impl Display for TokenIdentKind {
                 TokenIdentKind::Refer => "refer",
                 TokenIdentKind::As => "as",
 
-                TokenIdentKind::Proto => "proto",
+                TokenIdentKind::Intf => "intf",
                 TokenIdentKind::Extend => "extend",
                 TokenIdentKind::With => "with",
 

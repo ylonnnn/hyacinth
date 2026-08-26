@@ -18,7 +18,7 @@ pub type HirGenericParamKind = GenericParamKind;
 pub struct HirGenericParam<'h> {
     pub id: HirId,
     pub ident: &'h HirRawIdent,
-    pub proto_reqs: Vec<&'h HirPath<'h>>,
+    pub intf_reqs: Vec<&'h HirPath<'h>>,
     pub kind: HirGenericParamKind,
     pub span: Span,
 }
@@ -26,14 +26,14 @@ pub struct HirGenericParam<'h> {
 impl<'h> HirGenericParam<'h> {
     pub fn new(
         ident: &'h HirRawIdent,
-        proto_reqs: Vec<&'h HirPath<'h>>,
+        intf_reqs: Vec<&'h HirPath<'h>>,
         kind: HirGenericParamKind,
         span: Span,
     ) -> Self {
         Self {
             id: HirId::Invalid,
             ident,
-            proto_reqs,
+            intf_reqs,
             kind,
             span,
         }

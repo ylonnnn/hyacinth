@@ -135,7 +135,7 @@ pub enum DefKind {
     Builtin(BuiltinKind),
 
     Petal,
-    Proto,
+    intf,
 
     Alias(Box<DefKind>),
 
@@ -154,7 +154,7 @@ impl DefKind {
         match self {
             Self::Builtin(_)
             | Self::Petal
-            | Self::Proto
+            | Self::intf
             | Self::Alias(_)
             | Self::GenericParam(_)
             | Self::Fn(_)
@@ -170,7 +170,7 @@ impl DefKind {
             Self::Builtin(_) => String::from("built-in"),
 
             Self::Petal => String::from("petal"),
-            Self::Proto => String::from("protocol"),
+            Self::intf => String::from("interface"),
 
             Self::Alias(_) => String::from("alias"),
 
@@ -202,7 +202,7 @@ impl DefKind {
             Self::Builtin(_) => unreachable!(),
             Self::Alias(data) => data.space(),
 
-            Self::Petal | Self::Proto | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
+            Self::Petal | Self::intf | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
         }
@@ -212,7 +212,7 @@ impl DefKind {
         match &self {
             DefKind::Petal => DefResKind::Petal,
 
-            DefKind::Proto
+            DefKind::intf
             | DefKind::Builtin(BuiltinKind::SelfTy)
             | DefKind::Builtin(BuiltinKind::Ty(_))
             | DefKind::Adt(_) => DefResKind::Ty,
@@ -340,10 +340,10 @@ pub enum BuiltinIntTy {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProtoDef {}
+pub struct intfDef {}
 
 #[derive(Debug, Clone)]
-pub enum ProtoDefItem {}
+pub enum intfDefItem {}
 
 #[derive(Debug, Clone)]
 pub enum AdtKind {

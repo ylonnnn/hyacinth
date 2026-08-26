@@ -38,7 +38,7 @@ impl<'l> Lexer<'l> {
                     TokenIdentKind::Spathe,
                     TokenIdentKind::Refer,
                     TokenIdentKind::As,
-                    TokenIdentKind::Proto,
+                    TokenIdentKind::Intf,
                     TokenIdentKind::Extend,
                     TokenIdentKind::With,
                     TokenIdentKind::Petal,

@@ -18,7 +18,7 @@ use hycc_util::ternary;
 pub enum ItemKind {
     Refer(Box<Refer>),
     Petal(Box<Petal>),
-    Proto(Box<Proto>),
+    Intf(Box<Intf>),
     Extend(Box<Extend>),
     Struct(Box<Struct>),
     Fn(Box<Fn>),
@@ -30,7 +30,7 @@ impl ItemKind {
         match &self {
             Self::Refer(refer) => refer.span,
             Self::Petal(petal) => petal.span,
-            Self::Proto(proto) => proto.span,
+            Self::Intf(intf) => intf.span,
             Self::Extend(extend) => extend.span(),
             Self::Struct(strct) => strct.ident.span,
             Self::VarDecl(var) => var.span(),
@@ -42,7 +42,7 @@ impl ItemKind {
         match &self {
             Self::Refer(_) => "reference/alias delcaration",
             Self::Petal(_) => "petal",
-            Self::Proto(_) => "proto",
+            Self::Intf(_) => "intf",
             Self::Extend(_) => "extend",
             Self::Struct(_) => "struct",
             Self::VarDecl(_) => "variable declaration",
@@ -130,24 +130,24 @@ impl Petal {
 }
 
 #[derive(Debug, Clone)]
-pub enum ProtoItemAssocFnKind {
+pub enum IntfItemAssocFnKind {
     Sig(Box<FnSig>),
     Impl(Box<Item>),
 }
 
 #[derive(Debug, Clone)]
-pub enum ProtoItem {
+pub enum IntfItem {
     // AssocTy(Box<Ty>),
     AssocConst(Box<Item>), // VarDecl Item
-    AssocFn(ProtoItemAssocFnKind),
+    AssocFn(IntfItemAssocFnKind),
 }
 
-/// Protocol Node
+/// interface Node
 #[derive(Debug, Clone)]
-pub struct Proto {
+pub struct Intf {
     pub ident: Token,
     // TODO: generic_params
-    pub items: Vec<ProtoItem>,
+    pub items: Vec<IntfItem>,
     pub span: Span,
 }
 
@@ -155,7 +155,7 @@ pub struct Proto {
 pub struct Extend {
     pub target: Ty,
     pub generic_params: Option<GenericParamList>,
-    // TODO: with: Option<[PROTO]> // optional protocol implementation
+    // TODO: with: Option<[intf]> // optional interface implementation
     // TODO: if: Option<...> // conditional extension clause
     pub items: Vec<Item>,
 }

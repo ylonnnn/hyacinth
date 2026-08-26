@@ -9,7 +9,7 @@ use hycc_ast::{
     expr::{Expr, ExprKind},
     generic::{GenericParam, GenericParamList},
     item::{
-        Extend, Fn, FnParamList, FnSig, Petal, PetalKind, Proto, ProtoItem, ProtoItemAssocFnKind,
+        Extend, Fn, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Petal, PetalKind,
         Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
     },
     item::{Item, ItemKind},
@@ -37,10 +37,10 @@ use crate::{
     },
     generic::{HirGenericParam, HirGenericParamList},
     item::{
-        HirExtend, HirFn, HirFnParam, HirFnParamList, HirFnSig, HirItem, HirItemKind, HirItemLevel,
-        HirPetal, HirPetalKind, HirProto, HirProtoItem, HirProtoItemAssocFnKind, HirRefer,
-        HirReferTarget, HirReferTargetKind, HirStruct, HirStructField, HirStructFieldList,
-        HirVarDecl,
+        HirExtend, HirFn, HirFnParam, HirFnParamList, HirFnSig, HirIntf, HirIntfItem,
+        HirIntfItemAssocFnKind, HirItem, HirItemKind, HirItemLevel, HirPetal, HirPetalKind,
+        HirRefer, HirReferTarget, HirReferTargetKind, HirStruct, HirStructField,
+        HirStructFieldList, HirVarDecl,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -110,7 +110,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         let kind = match &item.kind {
             ItemKind::Refer(refer) => HirItemKind::Refer(Box::new(self.lower_refer(&refer))),
             ItemKind::Petal(petal) => HirItemKind::Petal(Box::new(self.lower_petal(&petal))),
-            ItemKind::Proto(proto) => HirItemKind::Proto(Box::new(self.lower_proto(&proto))),
+            ItemKind::Intf(intf) => HirItemKind::Intf(Box::new(self.lower_intf(&intf))),
             ItemKind::Extend(extend) => HirItemKind::Extend(Box::new(self.lower_extend(&extend))),
             ItemKind::Struct(strct) => HirItemKind::Struct(Box::new(self.lower_struct(&strct))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
@@ -172,29 +172,29 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         }
     }
 
-    fn lower_proto(&mut self, proto: &Proto) -> HirProto<'h> {
-        HirProto {
-            ident: self.lower_raw_ident(&proto.ident),
-            items: proto
+    fn lower_intf(&mut self, intf: &Intf) -> HirIntf<'h> {
+        HirIntf {
+            ident: self.lower_raw_ident(&intf.ident),
+            items: intf
                 .items
                 .iter()
-                .map(|item| self.lower_proto_item(&item))
+                .map(|item| self.lower_intf_item(&item))
                 .collect::<Vec<_>>(),
-            span: proto.span,
+            span: intf.span,
         }
     }
 
-    fn lower_proto_item(&mut self, item: &ProtoItem) -> HirProtoItem<'h> {
+    fn lower_intf_item(&mut self, item: &IntfItem) -> HirIntfItem<'h> {
         match &item {
-            // ProtoItem::AssocTy(ty) => HirProtoItem::AssocTy(self.lower_ty(&ty)),
-            ProtoItem::AssocConst(decl) => HirProtoItem::AssocConst(self.lower_item(&decl)),
-            ProtoItem::AssocFn(kind) => HirProtoItem::AssocFn(match &kind {
-                ProtoItemAssocFnKind::Sig(sig) => {
-                    HirProtoItemAssocFnKind::Sig(self.lower_fn_sig(&sig))
+            // intfItem::AssocTy(ty) => HirintfItem::AssocTy(self.lower_ty(&ty)),
+            IntfItem::AssocConst(decl) => HirIntfItem::AssocConst(self.lower_item(&decl)),
+            IntfItem::AssocFn(kind) => HirIntfItem::AssocFn(match &kind {
+                IntfItemAssocFnKind::Sig(sig) => {
+                    HirIntfItemAssocFnKind::Sig(self.lower_fn_sig(&sig))
                 }
 
-                ProtoItemAssocFnKind::Impl(func) => {
-                    HirProtoItemAssocFnKind::Impl(self.lower_item(&func))
+                IntfItemAssocFnKind::Impl(func) => {
+                    HirIntfItemAssocFnKind::Impl(self.lower_item(&func))
                 }
             }),
         }
@@ -749,9 +749,9 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
                     .add(HirNode::GenericParam(HirGenericParam::<'h>::new(
                         self.lower_raw_ident(&generic_param.ident),
                         generic_param
-                            .proto_reqs
+                            .intf_reqs
                             .iter()
-                            .map(|proto_req| self.lower_path(&proto_req))
+                            .map(|intf_req| self.lower_path(&intf_req))
                             .collect::<Vec<_>>(),
                         generic_param.kind,
                         generic_param.span(),

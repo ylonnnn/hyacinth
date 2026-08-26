@@ -81,7 +81,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
-            HirItemKind::Proto(_) => todo!("resolve proto"),
+            HirItemKind::Intf(_) => todo!("resolve intf"),
             HirItemKind::Extend(_) => Ok(()),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
             HirItemKind::Fn(_) => self.resolve_fn(&item),

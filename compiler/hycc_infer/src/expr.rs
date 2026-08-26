@@ -691,7 +691,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 continue;
             }
 
-            // TODO: check if the receiver type has proto Copy
+            // TODO: check if the receiver type has intf Copy
             if !access.allows(req_access) {
                 Err(InferDiag::error(
                     call.receiver.span,

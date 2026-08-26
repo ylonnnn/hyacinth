@@ -312,8 +312,8 @@ impl<'c> Collector<'c> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item, dctx),
-            HirItemKind::Proto(_) => {
-                // self.collect_proto(&item)
+            HirItemKind::Intf(_) => {
+                // self.collect_intf(&item)
                 todo!()
             }
             HirItemKind::Extend(_) => self.collect_extend(&item, dctx),
@@ -485,30 +485,30 @@ impl<'c> Collector<'c> {
         Ok(())
     }
 
-    // pub fn collect_proto(&mut self, proto_item: &HirItem) -> CollectResult {
-    //     if self.definitions.get_def_id(proto_item.id).is_some() {
+    // pub fn collect_intf(&mut self, intf_item: &HirItem) -> CollectResult {
+    //     if self.definitions.get_def_id(intf_item.id).is_some() {
     //         return Ok(());
     //     }
 
-    //     let HirItemKind::Proto(proto) = &proto_item.kind else {
+    //     let HirItemKind::intf(intf) = &intf_item.kind else {
     //         unreachable!()
     //     };
 
     //     let def_id = self
     //         .define(Definition::new(
-    //             proto.ident.ident,
-    //             DefKind::Proto,
+    //             intf.ident.ident,
+    //             DefKind::intf,
     //             Some(self.petal_ctx.top_id()),
-    //             proto_item.id,
-    //             proto_item.span,
-    //             proto_item.accessibility,
+    //             intf_item.id,
+    //             intf_item.span,
+    //             intf_item.accessibility,
     //         ))?
     //         .def_id;
 
     //     let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
     //     self.scope_ctx.push_id(scope_id);
 
-    //     for item in &proto.items {
+    //     for item in &intf.items {
     //         }
     //     }
 
@@ -516,17 +516,17 @@ impl<'c> Collector<'c> {
     //     Ok(())
     // }
 
-    // fn collect_proto_item(&mut self, item: &HirProtoItem) -> CollectResult {
+    // fn collect_intf_item(&mut self, item: &HirintfItem) -> CollectResult {
     //     match &item {
-    //         HirProtoItem::AssocConst(decl) => self.collect_var(&decl),
+    //         HirintfItem::AssocConst(decl) => self.collect_var(&decl),
 
-    //         HirProtoItem::AssocFn(kind) => match &kind {
-    //             HirProtoItemAssocFnKind::Sig(sig) => todo!(),
-    //             HirProtoItemAssocFnKind::Impl(func) => self.collect_fn(&func),
+    //         HirintfItem::AssocFn(kind) => match &kind {
+    //             HirintfItemAssocFnKind::Sig(sig) => todo!(),
+    //             HirintfItemAssocFnKind::Impl(func) => self.collect_fn(&func),
     //         },
 
     //         #[allow(unreachable_patterns)]
-    //         _ => todo!("collect proto item"),
+    //         _ => todo!("collect intf item"),
     //     }
     // }
 

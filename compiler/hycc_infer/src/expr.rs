@@ -530,75 +530,57 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 ))
             };
 
-            let assoc_items = self.tctx.ext_table.get_assoc_items(
-                target,
-                DefSpace::Value,
-                call.callee.ident.ident,
-            );
+            let assoc_items = self
+                .tctx
+                .ext_table
+                .get_assoc_items(target, DefSpace::Value, call.callee.ident.ident)
+                .into_iter()
+                .filter(|(ext_id, assoc_item)| {
+                    let ext = self.tctx.ext_table.get(*ext_id);
+                    let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
 
-            // if let Some((ext_id, assoc_item)) = self.tctx.ext_table.get_assoc_items(
-            //     target,
-            //     DefSpace::Value,
-            //     call.callee.ident.ident,
-            // )
+                    let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
+                        unreachable!()
+                    };
 
-            let cand_n = assoc_items.len();
-            if cand_n != 0 {
-                if cand_n > 1 {
-                    // return Err(InferDiag::error(call.callee.span, InferDiagErrorKind::M))
-                    todo!(
-                        "throw error: multiple candidates found, requires specification/narrowing"
-                    )
-                }
+                    let extend = item.expect_extend();
+                    let n = extend
+                        .generic_params
+                        .as_ref()
+                        .map_or(0, |generic_params| generic_params.list.len());
 
-                let (ext_id, assoc_item) = assoc_items[0].clone();
-                let ext = self.tctx.ext_table.get(ext_id);
-                let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
+                    rec_g_args.replace(
+                        (0..n)
+                            .map(|_| {
+                                GenericArg::Ty(
+                                    self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    );
 
-                let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
-                    unreachable!()
-                };
+                    let ext_target_ty_id = self
+                        .tctx
+                        .instantiate(ext_target_ty_id, &[rec_g_args.as_ref().unwrap()]);
+                    self.compatible(ext_target_ty_id, rec_ty_id)
+                })
+                .collect::<Vec<_>>();
 
-                let HirItemKind::Extend(extend) = &item.kind else {
-                    unreachable!()
-                };
+            if assoc_items.is_empty() {
+                return err();
+            }
 
-                let n = extend
-                    .generic_params
-                    .as_ref()
-                    .map_or(0, |generic_params| generic_params.list.len());
+            if assoc_items.len() > 1 {
+                return Err(InferDiag::error(
+                    call.callee.span,
+                    InferDiagErrorKind::MultipleAssocItemsMatched {
+                        name: call.callee.ident.ident,
+                        matches: assoc_items,
+                    },
+                ));
+            }
 
-                rec_g_args.replace(
-                    (0..n)
-                        .map(|_| {
-                            GenericArg::Ty(
-                                self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
-                            )
-                        })
-                        .collect::<Vec<_>>(),
-                );
-
-                let ext_target_ty_id = self
-                    .tctx
-                    .instantiate(ext_target_ty_id, &[rec_g_args.as_ref().unwrap()]);
-                if !self.compatible(ext_target_ty_id, rec_ty_id) {
-                    return err();
-                }
-
-                // Accessibility guard
-                let def = self.definitions.get(assoc_item.def_id);
-                if !self.petal_ctx.accessible(&def) {
-                    Err(InferDiag::error(
-                        call.callee.span,
-                        InferDiagErrorKind::Inaccessible {
-                            name: call.callee.ident.ident,
-                            kind: Some(SymbolKind::AssocItem),
-                        },
-                    ))?
-                }
-
-                candidate.replace(assoc_item);
-            };
+            candidate.replace(assoc_items[0].1.clone());
 
             if rec_ty_id == deref_rec_ty_id {
                 break;
@@ -627,6 +609,18 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         };
 
         self.definitions.define_id_hir(call.callee.id, def_id);
+
+        // Accessibility guard
+        let def = self.definitions.get(def_id);
+        if !self.petal_ctx.accessible(&def) {
+            Err(InferDiag::error(
+                call.callee.span,
+                InferDiagErrorKind::Inaccessible {
+                    name: call.callee.ident.ident,
+                    kind: Some(SymbolKind::AssocItem),
+                },
+            ))?
+        }
 
         let mut arg_frames = [rec_g_args.unwrap()]
             .into_iter()

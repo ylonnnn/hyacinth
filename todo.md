@@ -23,6 +23,7 @@
 - [ ] fix types of anonymous functions being considered as unresolved types
 - [ ] fix unresolved type analysis issues: non-greedy error finding, inaccurate node pointers
 - [x] fix invalid inference errors
+- [x] fix an issue with the method call expression inference failing to distinguish unrelated matches
 
 ### Update/Refactor
 

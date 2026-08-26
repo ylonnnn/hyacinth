@@ -189,8 +189,6 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
 
                 let def = self.definitions().get(assoc_item.def_id);
                 if !self.petal_ctx().accessible(&def) {
-                    // TODO: think of something to be able to still attach definitions
-                    // and types regardless of inaccessibility
                     return Err(self.inaccessible_error(
                         ident.span,
                         def.name,

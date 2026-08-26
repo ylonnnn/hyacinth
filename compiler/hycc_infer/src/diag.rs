@@ -2,7 +2,7 @@ use hycc_diagnostic::diagnostic::{
     Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics, FromResultEmitter,
 };
 use hycc_hir::{
-    def::{AdtKind, DefId, DefKind, DefinitionTable},
+    def::{AdtKind, Binding, DefId, DefKind, DefinitionTable},
     expr::HirFieldAccessFieldKind,
 };
 use hycc_resolve::diag::{ResolverDiagDataCtx, SymbolKind};
@@ -10,6 +10,7 @@ use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     ctx::{TyCtx, TyId},
+    extension::ExtensionId,
     fmt::TyFormatter,
     ty::{AccessKind, RefMutability, Ty},
 };
@@ -150,6 +151,11 @@ pub enum InferDiagErrorKind {
     Inaccessible {
         name: Symbol,
         kind: Option<SymbolKind>,
+    },
+
+    MultipleAssocItemsMatched {
+        name: Symbol,
+        matches: Vec<(ExtensionId, Binding)>,
     },
 
     IllegalAssocFnInvocation {
@@ -387,6 +393,15 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         Some("cannot be accessed from this petal".into()),
                     ),
 
+                    MultipleAssocItemsMatched { name, matches } => (
+                        "multiple associated items matched".into(),
+                        Some(format!(
+                            "found `{}` matches for `{}`",
+                            matches.len(),
+                            ctx.fmt.interner.get(*name)
+                        )),
+                    ),
+
                     IllegalAssocFnInvocation { name, ty_id, .. } => (
                         format!(
                             "cannot invoke associated function `{}::{}`",
@@ -511,6 +526,12 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
 
                 MissingElseBranch => {
                     diag.note(diag.span, "`if` may be missing its `else` branch");
+                }
+
+                MultipleAssocItemsMatched { name, matches } => {
+                    matches.iter().for_each(|m| {
+                        // TODO: add diagnostic note per match
+                    });
                 }
 
                 IllegalAssocFnInvocation { name, def_id, .. } => {

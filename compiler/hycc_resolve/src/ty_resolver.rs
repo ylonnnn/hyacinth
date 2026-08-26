@@ -5,7 +5,7 @@ use hycc_hir::{
     HirMutability, HirNode, HirTable,
     block::HirBlock,
     def::{
-        BuiltinKind, BuiltinTyKind, DefAccessibility, DefKind, DefResolution, DefSpace,
+        Binding, BuiltinKind, BuiltinTyKind, DefAccessibility, DefKind, DefResolution, DefSpace,
         DefinitionTable,
     },
     expr::{
@@ -23,6 +23,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_ty::{
     ctx::{TyCtx, TyId, TyResState},
+    extension::ExtensionId,
     ty::{GenericArg, InferKind, RefMutability, Ty},
 };
 use hycc_util::ternary;
@@ -125,58 +126,61 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             self.resolve_extend(&item).emit(&mut self.dctx);
         }
 
-        // TODO: check for colliding definitions between the implementations within
-        // let exts = self
-        //     .tctx
-        //     .ext_table
-        //     .get_all_native_exts()
-        //     .iter()
-        //     .flat_map(|(_, exts)| exts.clone())
-        //     .collect::<Vec<_>>();
+        let exts = self.tctx.ext_table.ext_ids();
+        exts.iter().enumerate().for_each(|(i, base)| {
+            &exts[(i + 1)..].iter().for_each(|target| {
+                let (base_ext, target_ext) = (
+                    self.tctx.ext_table.get(*base),
+                    self.tctx.ext_table.get(*target),
+                );
+                let (base_raw_ty_id, target_raw_ty_id) =
+                    (base_ext.expect_target(), target_ext.expect_target());
+                let (b_gp_count, t_gp_count) =
+                    (base_ext.generic_param_count, target_ext.generic_param_count);
 
-        // exts.iter().enumerate().for_each(|(i, base)| {
-        //     let base_ext = self.tctx.ext_table.get(*base);
-        //     let base_raw_ty_id = base_ext.expect_target();
+                let (base_generic_args, target_generic_args) = (
+                    (0..b_gp_count)
+                        .map(|_| {
+                            GenericArg::Ty(
+                                self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
+                            )
+                        })
+                        .collect::<Arc<_>>(),
+                    (0..t_gp_count)
+                        .map(|_| {
+                            GenericArg::Ty(
+                                self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
+                            )
+                        })
+                        .collect::<Arc<_>>(),
+                );
+                let (base_ty_id, target_ty_id) = (
+                    self.tctx.instantiate(base_raw_ty_id, &[&base_generic_args]),
+                    self.tctx
+                        .instantiate(target_raw_ty_id, &[&target_generic_args]),
+                );
 
-        //     let generic_args = (0..base_ext.generic_param_count)
-        //         .map(|_| {
-        //             GenericArg::Ty(self.tctx.make_inferred_ty(Span::default(), InferKind::Any))
-        //         })
-        //         .collect::<Vec<_>>();
-        //     let base_ty_id = self.tctx.instantiate(base_raw_ty_id, &[&generic_args]);
+                if !self.tctx.unify_ty(base_ty_id, target_ty_id) {
+                    return;
+                }
 
-        //     &exts[(i + 1)..].iter().for_each(|target| {
-        //         let target_ext = self.tctx.ext_table.get(*target);
-        //         let target_raw_ty_id = target_ext.expect_target();
-
-        //         let generic_args = (0..target_ext.generic_param_count)
-        //             .map(|_| {
-        //                 GenericArg::Ty(self.tctx.make_inferred_ty(Span::default(), InferKind::Any))
-        //             })
-        //             .collect::<Vec<_>>();
-        //         let target_ty_id = self.tctx.instantiate(target_raw_ty_id, &[&generic_args]);
-
-        //         if !self.tctx.unify_ty(base_ty_id, target_ty_id) {
-        //             return;
-        //         }
-
-        //         self.tctx
-        //             .ext_table
-        //             .get(*base)
-        //             .collisions(self.tctx.ext_table.get(*target))
-        //             .iter()
-        //             .for_each(|((_, name), prev_def, redef)| {
-        //                 let def = self.definitions.get(redef.def_id);
-        //                 self.dctx.error(
-        //                     def.span,
-        //                     ResolverDiagErrorKind::Duplication {
-        //                         ident: *name,
-        //                         earlier_def: prev_def.def_id,
-        //                     },
-        //                 )
-        //             });
-        //     });
-        // });
+                self.tctx
+                    .ext_table
+                    .get(*base)
+                    .collisions(self.tctx.ext_table.get(*target))
+                    .iter()
+                    .for_each(|((_, name), prev_def, redef)| {
+                        let def = self.definitions.get(redef.def_id);
+                        self.dctx.error(
+                            def.span,
+                            ResolverDiagErrorKind::Duplication {
+                                ident: *name,
+                                earlier_def: prev_def.def_id,
+                            },
+                        )
+                    });
+            });
+        });
     }
 
     fn resolve_extend(&mut self, item: &HirItem) -> ResolveResult {
@@ -649,6 +653,18 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
         kind: Option<crate::diag::SymbolKind>,
     ) -> ResolverDiag {
         ResolverDiag::error(span, ResolverDiagErrorKind::Inaccessible(name, kind))
+    }
+
+    fn multiple_assoc_item_matched_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        matches: Vec<(ExtensionId, Binding)>,
+    ) -> ResolverDiag {
+        ResolverDiag::error(
+            span,
+            ResolverDiagErrorKind::MultipleAssocItemsMatched(name, matches),
+        )
     }
 
     fn preprocessor(&mut self) {

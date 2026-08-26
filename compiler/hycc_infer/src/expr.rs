@@ -506,6 +506,9 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
     pub(crate) fn infer_method_call_expr(&mut self, call: &HirMethodCall) -> InferResult<TyId> {
         let initial_ty_id = self.infer_expr(&call.receiver)?;
+        if self.tctx.is_error_ty(initial_ty_id) {
+            return Ok(initial_ty_id);
+        }
 
         let mut rec_ty_id = initial_ty_id;
         let mut deref_rec_ty_id = self.tctx.deref(rec_ty_id);
@@ -527,11 +530,28 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 ))
             };
 
-            if let Some((ext_id, assoc_item)) =
-                self.tctx
-                    .ext_table
-                    .get_assoc_item(target, DefSpace::Value, call.callee.ident.ident)
-            {
+            let assoc_items = self.tctx.ext_table.get_assoc_items(
+                target,
+                DefSpace::Value,
+                call.callee.ident.ident,
+            );
+
+            // if let Some((ext_id, assoc_item)) = self.tctx.ext_table.get_assoc_items(
+            //     target,
+            //     DefSpace::Value,
+            //     call.callee.ident.ident,
+            // )
+
+            let cand_n = assoc_items.len();
+            if cand_n != 0 {
+                if cand_n > 1 {
+                    // return Err(InferDiag::error(call.callee.span, InferDiagErrorKind::M))
+                    todo!(
+                        "throw error: multiple candidates found, requires specification/narrowing"
+                    )
+                }
+
+                let (ext_id, assoc_item) = assoc_items[0].clone();
                 let ext = self.tctx.ext_table.get(ext_id);
                 let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
 

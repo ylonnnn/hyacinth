@@ -28,6 +28,14 @@ impl ExtensionTable {
         }
     }
 
+    pub fn exts(&self) -> &[Extension] {
+        &self.data
+    }
+
+    pub fn ext_ids(&self) -> Vec<ExtensionId> {
+        (0..self.data.len()).map(|idx| ExtensionId(idx)).collect()
+    }
+
     pub fn native_exts(&self) -> &HashMap<ExtTargetKind, Vec<ExtensionId>> {
         &self.native
     }
@@ -149,23 +157,34 @@ impl ExtensionTable {
         &self.native
     }
 
-    pub fn get_assoc_item(
+    pub fn get_assoc_items(
         &self,
         target: ExtTargetKind,
         space: DefSpace,
         name: Symbol,
-    ) -> Option<(ExtensionId, Binding)> {
-        let f = |ext_id: &ExtensionId| {
-            self.get(*ext_id)
+    ) -> Vec<(ExtensionId, Binding)> {
+        let f = move |ext_id| {
+            self.get(ext_id)
                 .items
                 .get(&(space, name))
-                .map(|binding| (*ext_id, binding.clone()))
+                .map(|binding| (ext_id, binding.clone()))
         };
 
-        let find = |exts: Option<&[ExtensionId]>| exts?.iter().find_map(f);
-        find(self.get_native_exts(target)).or_else(|| {
-            find(self.get_native_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket)))
-        })
+        let blanket_exts = self
+            .get_native_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket))
+            .map_or_else(
+                || Vec::new(),
+                |exts| exts.iter().cloned().filter_map(f).collect(),
+            );
+        self.get_native_exts(target)
+            .map(|exts| {
+                exts.iter()
+                    .cloned()
+                    .filter_map(f)
+                    .chain(blanket_exts)
+                    .collect()
+            })
+            .unwrap_or_else(|| Vec::new())
     }
 }
 

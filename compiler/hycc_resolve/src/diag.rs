@@ -8,7 +8,7 @@ use hycc_diagnostic::diagnostic::{
 };
 use hycc_hir::{
     HirTable,
-    def::{DefId, DefSpace, DefinitionTable},
+    def::{Binding, DefId, DefSpace, DefinitionTable},
     scope::ScopeCtx,
 };
 use hycc_session::config;
@@ -17,6 +17,7 @@ use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     ctx::{TyCtx, TyId},
+    extension::ExtensionId,
     fmt::TyFormatter,
 };
 use hycc_util::ternary;
@@ -121,6 +122,8 @@ pub enum ResolverDiagErrorKind {
     Inaccessible(Symbol, Option<SymbolKind>),
 
     GenericArgumentArityMismatch(u16),
+
+    MultipleAssocItemsMatched(Symbol, Vec<(ExtensionId, Binding)>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -251,6 +254,15 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                             )),
                         )
                     }
+
+                    MultipleAssocItemsMatched(name, matches) => (
+                        "multiple associated items matched".into(),
+                        Some(format!(
+                            "found `{}` matches for `{}`",
+                            matches.len(),
+                            ctx.fmt.interner.get(*name)
+                        )),
+                    ),
                 };
 
                 (
@@ -281,6 +293,12 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                 IllegalPetalTyUsage(def_id) => {
                     // TODO: add note and/or sub-diagnostic pointing to
                     // the definition of the petal
+                }
+
+                MultipleAssocItemsMatched(name, matches) => {
+                    matches.iter().for_each(|m| {
+                        // TODO: add diagnostic note per match
+                    });
                 }
 
                 _ => {}

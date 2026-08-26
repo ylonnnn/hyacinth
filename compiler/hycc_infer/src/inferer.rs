@@ -4,7 +4,7 @@ use hycc_const::table::ConstTable;
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
 use hycc_hir::{
     HirNode, HirTable,
-    def::{DefSpace, DefinitionTable},
+    def::{Binding, DefSpace, DefinitionTable},
     item::{HirItem, HirItemKind},
     petal::PetalCtx,
 };
@@ -12,6 +12,7 @@ use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolvePath,
 use hycc_span::Span;
 use hycc_ty::{
     ctx::{TyCtx, TyId, TyResState, TyVarId},
+    extension::ExtensionId,
     ty::{InferKind, IntTy, Ty, TyKind, TyVarKind},
 };
 use hycc_util::{bug, ternary};
@@ -241,5 +242,17 @@ impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
         kind: Option<hycc_resolve::diag::SymbolKind>,
     ) -> InferDiag {
         InferDiag::error(span, InferDiagErrorKind::Inaccessible { name, kind })
+    }
+
+    fn multiple_assoc_item_matched_error(
+        &self,
+        span: Span,
+        name: hycc_symbol::Symbol,
+        matches: Vec<(ExtensionId, Binding)>,
+    ) -> InferDiag {
+        InferDiag::error(
+            span,
+            InferDiagErrorKind::MultipleAssocItemsMatched { name, matches },
+        )
     }
 }

@@ -1,5 +1,5 @@
 use hycc_hir::{
-    def::{DefId, DefSpace, DefinitionTable},
+    def::{Binding, DefId, DefSpace, DefinitionTable},
     expr::HirExpr,
     generic::HirGenericParamKind,
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath},
@@ -10,6 +10,7 @@ use hycc_span::Span;
 use hycc_symbol::Symbol;
 use hycc_ty::{
     ctx::{TyCtx, TyId},
+    extension::ExtensionId,
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
 use hycc_util::ternary;
@@ -128,6 +129,12 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
 
     fn unrecognized_member_error(&self, span: Span, name: Symbol, ty_id: TyId) -> E;
     fn inaccessible_error(&self, span: Span, name: Symbol, kind: Option<SymbolKind>) -> E;
+    fn multiple_assoc_item_matched_error(
+        &self,
+        span: Span,
+        name: Symbol,
+        matches: Vec<(ExtensionId, Binding)>,
+    ) -> E;
 
     fn preprocessor(&mut self) {}
 
@@ -139,7 +146,6 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
         let n = path.segments.len();
         let Some(res) = self.definitions().get_res(path.id) else {
             return Ok(self.tctx().make_error_ty());
-            // return Ok(self.tctx().make_inferred_ty(path.span, InferKind::Any));
         };
 
         let mut generic_args = Vec::new();
@@ -156,12 +162,12 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                 self.preprocessor();
 
                 let target = self.tctx().ext_target_kind_of(prev_ty_id);
-
-                let Some((_, assoc_item)) =
+                let assoc_items =
                     self.tctx()
                         .ext_table
-                        .get_assoc_item(target, space, ident.ident.ident)
-                else {
+                        .get_assoc_items(target, space, ident.ident.ident);
+
+                if assoc_items.is_empty() {
                     return Err(self.unrecognized_member_error(
                         ident.span,
                         ident.ident.ident,
@@ -169,17 +175,28 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                     ));
                 };
 
+                let (_, assoc_item) = &assoc_items[0];
+                self.definitions_mut()
+                    .define_id_hir(ident.id, assoc_item.def_id);
+
+                if assoc_items.len() > 1 {
+                    return Err(self.multiple_assoc_item_matched_error(
+                        ident.span,
+                        ident.ident.ident,
+                        assoc_items,
+                    ));
+                }
+
                 let def = self.definitions().get(assoc_item.def_id);
                 if !self.petal_ctx().accessible(&def) {
+                    // TODO: think of something to be able to still attach definitions
+                    // and types regardless of inaccessibility
                     return Err(self.inaccessible_error(
                         ident.span,
                         def.name,
                         Some(SymbolKind::AssocItem),
                     ));
                 }
-
-                self.definitions_mut()
-                    .define_id_hir(ident.id, assoc_item.def_id);
             };
 
             prev_ty_id = self.instantiate(&mut generic_args, &ident)?;

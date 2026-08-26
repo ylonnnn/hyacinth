@@ -231,7 +231,10 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         if let Some(expr) = decl.val {
             self.tctx
                 .update_hir_res_state(item.id, TyResState::Resolving);
-            let expr_ty = self.infer_expr(&expr)?;
+            let expr_ty = self
+                .infer_expr(&expr)
+                .emit(&mut self.dctx)
+                .unwrap_or_else(|| self.tctx.make_error_ty());
 
             self.check(&ty, &Ty::new(expr_ty, expr.span))
                 .map(|diag| self.dctx.add(diag));

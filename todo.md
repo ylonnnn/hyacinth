@@ -5,7 +5,8 @@
 - [x] implement generic functions
 - [x] implement generic structs
 - [ ] protocol (`proto`) declarations
-- [ ] implement some sort of collision-check for separate extensions
+- [x] implement some sort of collision-check for separate extensions
+- [x] implement a guard for multiple associated item match
 - [x] implement a basic extension resolution guard to avoid double resolution
 - [ ] expression mutability
 - [x] define `Self` per impl scope

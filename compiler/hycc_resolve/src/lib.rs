@@ -136,8 +136,6 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
         matches: Vec<(ExtensionId, Binding)>,
     ) -> E;
 
-    fn preprocessor(&mut self) {}
-
     fn resolve_path(&mut self, path: &HirPath) -> Result<TyId, E> {
         let space = self
             .expected_space()
@@ -159,8 +157,6 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
         for (i, ident) in path.segments[resolved_count..].iter().enumerate() {
             let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
             if self.definitions().get_def_id(ident.id).is_none() {
-                self.preprocessor();
-
                 let target = self.tctx().ext_target_kind_of(prev_ty_id);
                 let assoc_items =
                     self.tctx()

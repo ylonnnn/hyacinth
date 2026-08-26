@@ -385,10 +385,14 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn infer_fn_call_expr(&mut self, call: &HirFnCall) -> InferResult<TyId> {
         let callee_ty_id = self.infer_expr(&call.callee)?;
         let TyKind::Fn(fn_ty, args) = self.tctx.get(callee_ty_id) else {
-            return Err(InferDiag::error(
-                call.callee.span,
-                InferDiagErrorKind::IllegalInvocation(callee_ty_id),
-            ));
+            return ternary!(
+                self.tctx.is_error_ty(callee_ty_id),
+                Ok(callee_ty_id),
+                Err(InferDiag::error(
+                    call.callee.span,
+                    InferDiagErrorKind::IllegalInvocation(callee_ty_id),
+                ))
+            );
         };
 
         let (a_len, p_len) = (call.arguments.data.len(), fn_ty.params.len());

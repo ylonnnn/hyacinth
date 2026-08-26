@@ -74,6 +74,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     }
 
     pub fn resolve(&mut self, tree: &HirItem) {
+        self.resolve_native_exts();
         self.resolve_item(&tree);
     }
 
@@ -466,12 +467,6 @@ impl<'t, 'h> ResolveExpr<(), ResolverDiag> for TyResolver<'t, 'h> {
     fn resolve_expr(&mut self, expr: &HirExpr) -> ResolveResult {
         self.expect_space(DefSpace::Value, |s| match &expr.kind {
             HirExprKind::Path(path) => {
-                // Check the resolution state of the path if there are any
-                // unresolved segments, and if so, resolve extensions
-                if s.definitions.expect_res(path.id).unresolved > 0 {
-                    s.preprocessor();
-                }
-
                 // Resolve the arguments of each segment only
                 path.segments
                     .iter()
@@ -665,11 +660,5 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
             span,
             ResolverDiagErrorKind::MultipleAssocItemsMatched(name, matches),
         )
-    }
-
-    fn preprocessor(&mut self) {
-        if !self.tctx.ext_table.native_exts_resolved() {
-            self.resolve_native_exts();
-        }
     }
 }

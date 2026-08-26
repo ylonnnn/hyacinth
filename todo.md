@@ -24,6 +24,8 @@
 - [ ] fix unresolved type analysis issues: non-greedy error finding, inaccurate node pointers
 - [x] fix invalid inference errors
 - [x] fix an issue with the method call expression inference failing to distinguish unrelated matches
+- [ ] fix an issue where unrecognized items/symbols cause cascading function call errors(specifically, illegal invocation error)
+- [x] fix an issue where items within extensions have their own invalid states (e.g. a function being of type Infer(InferKind::Any) if the extensions are not used)
 
 ### Update/Refactor
 

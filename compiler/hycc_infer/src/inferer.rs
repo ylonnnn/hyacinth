@@ -100,8 +100,8 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             );
         }
 
-        // i* <- char | u*, i*, f*
-        // u* <- char | u*, i*, f*
+        // i* <- char | bool | u*, i*, f*
+        // u* <- char | bool | u*, i*, f*
         for signed in [true, false] {
             for width in [8, 16, 32, 64, u8::MAX] {
                 self.cast_map.insert(
@@ -113,6 +113,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     vec![
                         CastConstraint::Any(CastConstraintAnyKind::Int),
                         CastConstraint::Any(CastConstraintAnyKind::Float),
+                        CastConstraint::Exact(self.tctx.make_bool_ty()),
                         CastConstraint::Exact(self.tctx.make_char_ty()),
                     ],
                 );

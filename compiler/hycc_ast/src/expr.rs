@@ -19,6 +19,7 @@ pub enum ExprKind {
     Binary(Token, Box<Expr>, Box<Expr>),
     Unary(Box<Unary>),
 
+    Cast(Box<CastExpr>),
     Assign(Box<Expr>, Box<Expr>),
 
     Block(Box<Block>),
@@ -48,6 +49,7 @@ impl ExprKind {
             Self::Binary(_, left, right) => left.span.merge(right.span),
             Self::Unary(expr) => expr.span(),
 
+            Self::Cast(cast) => cast.span,
             Self::Assign(left, right) => left.span.merge(right.span),
 
             Self::Block(block) => block.span,
@@ -77,6 +79,7 @@ impl ExprKind {
             Self::Binary(_, left, right) => left.eval.infer(&right.eval),
             Self::Unary(expr) => expr.eval(),
 
+            Self::Cast(cast) => cast.expr.eval,
             Self::Assign(..) => ExprEvaluatability::RunTime,
 
             Self::Block(_) => ExprEvaluatability::Unknown,
@@ -177,6 +180,13 @@ impl Unary {
             Self::Pre(_, expr) | Self::Post(_, expr) => expr.eval,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct CastExpr {
+    pub expr: Box<Expr>,
+    pub ty: Box<Ty>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

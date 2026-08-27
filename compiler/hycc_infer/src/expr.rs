@@ -6,9 +6,9 @@ use hycc_hir::{
     HirMutability, HirNode,
     def::{AdtKind, Binding, DefKind, DefSpace},
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind, HirFnCall,
-        HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr, HirStructExprField,
-        HirTupleExpr,
+        HirArrayExpr, HirCastExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessFieldKind,
+        HirFnCall, HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr,
+        HirStructExprField, HirTupleExpr,
     },
     generic::HirGenericParamKind,
     item::HirItemKind,
@@ -43,6 +43,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             HirExprKind::Literal(_) => Ok(()),
             HirExprKind::Binary(op, left, right) => todo!("check binary"),
             HirExprKind::Unary(unary) => todo!("check unary"),
+            HirExprKind::Cast(cast) => self.check_cast_expr(&cast),
             HirExprKind::Assign(assignee, expr) => todo!("check assignment"),
             HirExprKind::Block(block) => self.check_block(&block),
             HirExprKind::Array(array) => self.check_array_expr(&array),
@@ -63,6 +64,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             HirExprKind::Literal(_) => self.infer_literal_expr(&expr),
             HirExprKind::Binary(op, left, right) => todo!("infer binary"),
             HirExprKind::Unary(unary) => todo!("infer unary"),
+            HirExprKind::Cast(cast) => self.infer_cast_expr(&cast),
             HirExprKind::Assign(assignee, expr) => todo!("infer assignment"),
             HirExprKind::Block(block) => self.infer_block(&block),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
@@ -76,7 +78,6 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         }?;
 
         self.tctx.attach_to_hir(expr.id, Ty::new(ty_id, expr.span));
-
         Ok(ty_id)
     }
 
@@ -108,6 +109,21 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         );
 
         Ok(self.tctx.make_ref_ty(inner_ty, mutability))
+    }
+
+    pub(crate) fn check_cast_expr(&mut self, cast: &HirCastExpr) -> InferResult {
+        self.check_expr(&cast.expr)
+    }
+
+    pub(crate) fn infer_cast_expr(&mut self, cast: &HirCastExpr) -> InferResult<TyId> {
+        let ty_id = self.infer_expr(&cast.expr)?;
+        let cast_ty_id = self.tctx.expect_hir_ty_id(cast.ty.id);
+
+        self.cast(
+            &Ty::new(ty_id, cast.expr.span),
+            &Ty::new(cast_ty_id, cast.ty.span),
+        )
+        .and_then(|_| Ok(cast_ty_id))
     }
 
     pub(crate) fn check_array_expr(&mut self, array: &HirArrayExpr) -> InferResult {

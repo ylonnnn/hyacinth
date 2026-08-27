@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
@@ -18,14 +18,43 @@ use hycc_ty::{
 use hycc_util::{bug, ternary};
 
 use crate::{
-    diag::{InferDiag, InferDiagCtx, InferDiagErrorKind},
+    diag::{InferDiag, InferDiagCtx, InferDiagErrorKind, InferResult},
     fn_ctx::FnCtx,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CastConstraintAnyKind {
+    Int,
+    Float,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CastConstraint {
+    Any(CastConstraintAnyKind),
+    Exact(TyId),
+}
+
+impl CastConstraint {
+    pub fn ty_id(&self, tctx: &mut TyCtx) -> TyId {
+        match &self {
+            Self::Exact(ty_id) => *ty_id,
+            Self::Any(kind) => match kind {
+                CastConstraintAnyKind::Int => {
+                    tctx.make_inferred_ty(Span::default(), InferKind::Int)
+                }
+                CastConstraintAnyKind::Float => {
+                    tctx.make_inferred_ty(Span::default(), InferKind::Float)
+                }
+            },
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct TyInferer<'i, 'h> {
     pub dctx: InferDiagCtx<'i>,
     pub(crate) fn_ctx: Option<FnCtx>,
+    pub(crate) cast_map: HashMap<TyId, Vec<CastConstraint>>,
 
     pub tctx: &'i mut TyCtx,
     pub definitions: &'i mut DefinitionTable,
@@ -43,16 +72,60 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         hir_table: &'i HirTable<'h>,
         petal_ctx: &'i mut PetalCtx,
     ) -> Self {
-        Self {
+        let mut inst = Self {
             dctx: InferDiagCtx::new(dctx),
             fn_ctx: None,
+            cast_map: HashMap::new(),
 
             tctx,
             definitions,
             const_table,
             hir_table,
             petal_ctx,
+        };
+
+        inst.init_cast_map();
+        inst
+    }
+
+    fn init_cast_map(&mut self) {
+        // f* <- u*, i*, f*
+        for width in [8, 16, 32, 64] {
+            self.cast_map.insert(
+                self.tctx.make_float_ty(width),
+                vec![
+                    CastConstraint::Any(CastConstraintAnyKind::Int),
+                    CastConstraint::Any(CastConstraintAnyKind::Float),
+                ],
+            );
         }
+
+        // i* <- char | u*, i*, f*
+        // u* <- char | u*, i*, f*
+        for signed in [true, false] {
+            for width in [8, 16, 32, 64, u8::MAX] {
+                self.cast_map.insert(
+                    self.tctx.make_int_ty(ternary!(
+                        width == u8::MAX,
+                        IntTy::Size(signed),
+                        IntTy::Fixed(width, signed)
+                    )),
+                    vec![
+                        CastConstraint::Any(CastConstraintAnyKind::Int),
+                        CastConstraint::Any(CastConstraintAnyKind::Float),
+                        CastConstraint::Exact(self.tctx.make_char_ty()),
+                    ],
+                );
+            }
+        }
+
+        // char <- u8
+        self.cast_map.insert(
+            self.tctx.make_char_ty(),
+            vec![CastConstraint::Exact(
+                self.tctx.make_int_ty(IntTy::Fixed(8, false)),
+            )],
+        );
     }
 
     pub fn compatible(&mut self, expected: TyId, received: TyId) -> bool {
@@ -72,6 +145,35 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 },
             ))
         }
+    }
+
+    pub fn cast(&mut self, from: &Ty, to: &Ty) -> InferResult {
+        let (res_from, res_to) = (self.tctx.resolve_ty(from.id), self.tctx.resolve_ty(to.id));
+        if res_from == res_to {
+            return Ok(());
+        }
+
+        let src = self.tctx.make_inferred_ty(from.span, InferKind::Any);
+        self.tctx.unify_ty(src, res_from);
+        self.cast_map
+            .get(&res_to)
+            .and_then(|cs| {
+                cs.iter()
+                    .any(|cs| {
+                        let cs_ty_id = cs.ty_id(&mut self.tctx);
+                        self.tctx.unify_ty(cs_ty_id, src)
+                    })
+                    .then_some(())
+            })
+            .ok_or_else(|| {
+                InferDiag::error(
+                    from.span.merge(to.span),
+                    InferDiagErrorKind::InvalidTyCast {
+                        from: from.clone(),
+                        to: to.clone(),
+                    },
+                )
+            })
     }
 
     pub fn use_fn_ctx<F, U>(&mut self, ctx: FnCtx, mut handler: F) -> U

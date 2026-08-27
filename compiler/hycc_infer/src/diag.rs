@@ -103,6 +103,11 @@ pub enum InferDiagErrorKind {
         received: TyId,
     },
 
+    InvalidTyCast {
+        from: Ty,
+        to: Ty,
+    },
+
     InvalidNonStructInstantiation {
         name: Symbol,
         def_id: DefId,
@@ -219,6 +224,15 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                             "expected `{}`, received `{}`",
                             ctx.fmt.fmt_id(*expected),
                             ctx.fmt.fmt_id(*received)
+                        )),
+                    ),
+
+                    InvalidTyCast { from, to } => (
+                        "invalid type cast".into(),
+                        Some(format!(
+                            "cannot cast `{}` to `{}`",
+                            ctx.fmt.fmt_id(from.id),
+                            ctx.fmt.fmt_id(to.id)
                         )),
                     ),
 

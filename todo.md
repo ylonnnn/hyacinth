@@ -11,6 +11,8 @@
 - [ ] expression mutability
 - [x] define `Self` per impl scope
 - [ ] implement an automated instantiator which automatically creates generic arguments (inferred) other than the instantiator for identifier nodes
+- [x] implement primitive type casting
+- [ ] implement pointers and corresponding casts and type checking/inference
 
 ### Fix
 

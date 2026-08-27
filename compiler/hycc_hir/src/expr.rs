@@ -21,6 +21,7 @@ pub enum HirExprKind<'h> {
     Binary(BinaryOp, &'h HirExpr<'h>, &'h HirExpr<'h>),
     Unary(Box<HirUnary<'h>>),
 
+    Cast(Box<HirCastExpr<'h>>),
     Assign(&'h HirExpr<'h>, &'h HirExpr<'h>),
 
     Block(&'h HirBlock<'h>),
@@ -144,6 +145,13 @@ pub enum BinaryOp {
     BitwiseXor,
     BitwiseLShift,
     BitwiseRShift,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirCastExpr<'h> {
+    pub expr: &'h HirExpr<'h>,
+    pub ty: &'h HirTy<'h>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

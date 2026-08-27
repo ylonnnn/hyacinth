@@ -6,8 +6,8 @@ use hycc_hir::{
         DefSpace, Definition, DefinitionTable,
     },
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall, HirStructExpr,
-        HirTupleExpr,
+        HirArrayExpr, HirCastExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall,
+        HirStructExpr, HirTupleExpr,
     },
     item::{HirItem, HirItemKind, HirPetal, HirPetalKind, HirReferTarget, HirReferTargetKind},
     path::{HirIdent, HirIdentArgument, HirPath},
@@ -497,6 +497,7 @@ impl<'r> Resolver<'r> {
             HirExprKind::Binary(_, left, right) => s.resolve_binary_expr(&left, &right),
             HirExprKind::Unary(unary) => s.resolve_expr(unary.expr()),
 
+            HirExprKind::Cast(cast) => s.resolve_cast_expr(&cast),
             HirExprKind::Assign(assignee, expr) => s.resolve_assign_expr(&assignee, &expr),
 
             HirExprKind::Block(block) => s.resolve_block(&block),
@@ -517,6 +518,11 @@ impl<'r> Resolver<'r> {
     pub(crate) fn resolve_binary_expr(&mut self, left: &HirExpr, right: &HirExpr) -> ResolveResult {
         self.resolve_expr(&left).emit(&mut self.dctx);
         self.resolve_expr(&right)
+    }
+
+    pub(crate) fn resolve_cast_expr(&mut self, cast: &HirCastExpr) -> ResolveResult {
+        self.resolve_expr(&cast.expr).emit(&mut self.dctx);
+        self.resolve_ty(&cast.ty)
     }
 
     pub(crate) fn resolve_assign_expr(

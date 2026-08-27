@@ -821,6 +821,7 @@ impl<'c> Collector<'c> {
 
             HirExprKind::Unary(unary) => self.collect_expr(&unary.expr(), dctx),
 
+            HirExprKind::Cast(cast) => self.collect_expr(&cast.expr, dctx),
             HirExprKind::Assign(assignee, expr) => {
                 self.collect_expr(&assignee, dctx).emit(dctx);
 

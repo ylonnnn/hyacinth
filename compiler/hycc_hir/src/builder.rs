@@ -3,23 +3,18 @@ use std::rc::Rc;
 use hycc_ast::{
     block::Block,
     expr::{
-        AnonFn, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall, IfExpr, MethodCall,
-        RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
+        AnonFn, AnonFnParamList, ArrayExpr, CallArguments, CastExpr, Expr, ExprKind, FieldAccess,
+        FnCall, IfExpr, MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
     },
-    expr::{Expr, ExprKind},
     generic::{GenericParam, GenericParamList},
     item::{
-        Extend, Fn, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Petal, PetalKind,
-        Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
+        Extend, Fn, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Item, ItemKind, Petal,
+        PetalKind, Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
     },
-    item::{Item, ItemKind},
-    path::{Identifier, Path},
-    path::{IdentifierArgument, IdentifierArguments},
-    stmt::{PassStmt, RetStmt},
-    stmt::{Stmt, StmtKind},
+    path::{Identifier, IdentifierArgument, IdentifierArguments, Path},
+    stmt::{PassStmt, RetStmt, Stmt, StmtKind},
     token::{Token, TokenKind},
-    ty::{Array, FnTy, Ref, Slice, Tuple},
-    ty::{Ty, TyKind},
+    ty::{Array, FnTy, Ref, Slice, Tuple, Ty, TyKind},
 };
 use hycc_const::{constant::ConstKind, table::ConstTable};
 use hycc_source::SourceRegistry;
@@ -31,9 +26,9 @@ use crate::{
     block::HirBlock,
     expr::{
         BinaryOp, HirAnonFn, HirAnonFnParam, HirAnonFnParamList, HirArrayExpr, HirCallArguments,
-        HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField, HirFieldAccessFieldKind,
-        HirFnCall, HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr, HirStructExpr,
-        HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
+        HirCastExpr, HirExpr, HirExprKind, HirFieldAccess, HirFieldAccessField,
+        HirFieldAccessFieldKind, HirFnCall, HirIfExpr, HirLiteral, HirMethodCall, HirRefExpr,
+        HirStructExpr, HirStructExprField, HirTupleExpr, HirUnary, UnaryOp,
     },
     generic::{HirGenericParam, HirGenericParamList},
     item::{
@@ -370,6 +365,8 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             }
 
             ExprKind::Unary(unary) => HirExprKind::Unary(Box::new(self.lower_unary(unary))),
+
+            ExprKind::Cast(cast) => HirExprKind::Cast(Box::new(self.lower_cast_expr(&cast))),
             ExprKind::Assign(assignee, expr) => {
                 HirExprKind::Assign(self.lower_expr(assignee), self.lower_expr(expr))
             }
@@ -524,6 +521,13 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
                 .map(|arg| self.lower_expr(arg))
                 .collect(),
             span: call_args.span,
+        }
+    }
+    fn lower_cast_expr(&mut self, cast: &CastExpr) -> HirCastExpr<'h> {
+        HirCastExpr {
+            expr: self.lower_expr(&cast.expr),
+            ty: self.lower_ty(&cast.ty),
+            span: cast.span,
         }
     }
 

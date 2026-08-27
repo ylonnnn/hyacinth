@@ -9,8 +9,8 @@ use hycc_hir::{
         DefinitionTable,
     },
     expr::{
-        HirArrayExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall, HirStructExpr,
-        HirTupleExpr,
+        HirArrayExpr, HirCastExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall,
+        HirStructExpr, HirTupleExpr,
     },
     item::{
         HirExtend, HirFn, HirItem, HirItemKind, HirPetal, HirReferTarget, HirStruct, HirVarDecl,
@@ -348,6 +348,11 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         self.resolve_expr(&right)
     }
 
+    fn resolve_cast_expr(&mut self, cast: &HirCastExpr) -> ResolveResult {
+        self.resolve_expr(&cast.expr).emit(&mut self.dctx);
+        self.resolve_ty(&cast.ty).map(|_| ())
+    }
+
     fn resolve_assign_expr(&mut self, assignee: &HirExpr, expr: &HirExpr) -> ResolveResult {
         self.resolve_expr(&assignee).emit(&mut self.dctx);
         self.resolve_expr(&expr)
@@ -487,6 +492,7 @@ impl<'t, 'h> ResolveExpr<(), ResolverDiag> for TyResolver<'t, 'h> {
             HirExprKind::Binary(_, left, right) => s.resolve_binary_expr(&left, &right),
             HirExprKind::Unary(unary) => s.resolve_expr(unary.expr()),
 
+            HirExprKind::Cast(cast) => s.resolve_cast_expr(&cast),
             HirExprKind::Assign(assignee, expr) => s.resolve_assign_expr(&assignee, &expr),
 
             HirExprKind::Block(block) => s.resolve_block(&block),

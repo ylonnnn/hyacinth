@@ -2,13 +2,12 @@ use hycc_ast::{
     Mutability,
     block::Block,
     expr::{
-        AnonFn, AnonFnParam, AnonFnParamList, ArrayExpr, CallArguments, FieldAccess, FnCall,
-        IfExpr, MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr, Unary,
+        AnonFn, AnonFnParam, AnonFnParamList, ArrayExpr, CallArguments, CastExpr, Expr, ExprKind,
+        FieldAccess, FnCall, IfExpr, MethodCall, RefExpr, StructExpr, StructExprField, TupleExpr,
+        Unary,
     },
-    expr::{Expr, ExprKind},
     path::{Identifier, Path},
-    stmt::PassStmt,
-    stmt::{Stmt, StmtKind},
+    stmt::{PassStmt, Stmt, StmtKind},
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
     ty::Ty,
@@ -36,6 +35,7 @@ pub enum ExprInfixBindingPower {
     Add,
     Mul,
     Exp,
+    Cast,
     Unary,
     FnCall,
     FieldAccess,
@@ -77,6 +77,8 @@ impl<'s> Parser<'s> {
             TokenKind::Plus | TokenKind::Minus => Some((Add as u8, Add as u8)),
             TokenKind::Star | TokenKind::Slash | TokenKind::Percent => Some((Mul as u8, Mul as u8)),
             TokenKind::CaretCaret => Some((Exp as u8, Exp as u8)),
+
+            TokenKind::Ident(TokenIdentKind::As) => Some((Cast as u8, Cast as u8)),
 
             TokenKind::Bang => Some((Unary as u8, Unary as u8)),
 
@@ -234,8 +236,12 @@ impl<'s> Parser<'s> {
             | TokenKind::Float { .. }
             | TokenKind::Bool
             | TokenKind::Char { .. }
-            | TokenKind::String { .. }
-            | TokenKind::Ident(..) => Err((left, None)),
+            | TokenKind::String { .. } => Err((left, None)),
+
+            TokenKind::Ident(kind) => match kind {
+                TokenIdentKind::As => Ok(Expr::new(self.parse_cast_expr(left)?)),
+                _ => Err((left, None)),
+            },
 
             TokenKind::Plus
             | TokenKind::Minus
@@ -357,6 +363,26 @@ impl<'s> Parser<'s> {
             Box::new(left),
             Box::new(right),
         )))
+    }
+
+    pub fn parse_cast_expr(
+        &mut self,
+        left: Expr,
+    ) -> ParseResult<ExprKind, (Expr, Option<ParserDiag>)> {
+        self.adjust_to_nonlf();
+
+        match self.parse_ty() {
+            Ok(ty) => {
+                let span = left.span.merge(ty.span);
+                Ok(ExprKind::Cast(Box::new(CastExpr {
+                    span,
+                    expr: Box::new(left),
+                    ty: Box::new(ty),
+                })))
+            }
+
+            Err(err) => Err((left, err)),
+        }
     }
 
     pub fn parse_assign(

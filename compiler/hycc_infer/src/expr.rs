@@ -152,7 +152,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     &Ty::new(el_ty_id, Span::default()),
                     &Ty::new(curr_el_ty_id, el.span),
                 )
-                .map(|diag| self.dctx.add(diag));
+                .emit(&mut self.dctx);
 
                 self.tctx.resolve_ty(curr_el_ty_id);
             });
@@ -292,7 +292,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 &Ty::new(field_ty_id, field_ty_span),
                 &Ty::new(expr_field_ty_id, field.val.span),
             )
-            .map(|diag| self.dctx.add(diag));
+            .emit(&mut self.dctx);
         }
 
         let missing_mask = !field_mask & ((1 << n) - 1);
@@ -372,7 +372,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
             let block_ty_id = s.infer_block(&anfn.body)?;
             s.check(&ret_ty, &Ty::new(block_ty_id, anfn.body.span))
-                .map(|diag| s.dctx.add(diag));
+                .emit(&mut s.dctx);
 
             let fn_ty = s
                 .tctx
@@ -450,7 +450,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     ),
                     &Ty::new(arg_ty_id, arg.span),
                 )
-                .map(|diag| self.dctx.add(diag));
+                .emit(&mut self.dctx);
             });
 
         Ok(self.tctx.resolve_ty(ret_ty))
@@ -766,7 +766,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 &Ty::new(*param_ty_id, self.definitions.get(fn_def_params[i]).span),
                 &Ty::new(arg_ty_id, arg.span),
             )
-            .map(|diag| self.dctx.add(diag));
+            .emit(&mut self.dctx);
         }
 
         Ok(self.tctx.resolve_ty(ret_ty))
@@ -790,28 +790,27 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             &Ty::new(bool_ty, Span::default()),
             &Ty::new(cond_ty, ite.cond.span),
         )
-        .map(|diag| self.dctx.add(diag));
+        .emit(&mut self.dctx);
 
         let cons_ty = self.infer_block(&ite.consequent)?;
-        let (alt_ty, alt_span) = if let Some(alt) = &ite.alternate {
-            (self.infer_block(&alt)?, alt.span)
-        } else {
-            (self.tctx.make_unit_ty(), ite.span)
-        };
+        let (alt_ty, alt_span) = ite
+            .alternate
+            .as_ref()
+            .map(|alt| self.infer_block(&alt).map(|ty_id| (ty_id, alt.span)))
+            .unwrap_or_else(|| (Ok((self.tctx.make_unit_ty(), ite.span))))?;
 
-        if let Some(diag) = self.check(
+        self.check(
             &Ty::new(cons_ty, ite.consequent.span),
             &Ty::new(alt_ty, alt_span),
-        ) {
-            if ite.alternate.is_none() {
-                Err(InferDiag::error(
-                    ite.span,
-                    InferDiagErrorKind::MissingElseBranch,
-                ))?
-            }
-
-            self.dctx.add(diag);
-        }
+        )
+        .map_err(|diag| {
+            ternary!(
+                ite.alternate.is_none(),
+                InferDiag::error(ite.span, InferDiagErrorKind::MissingElseBranch),
+                diag
+            )
+        })
+        .emit(&mut self.dctx);
 
         Ok(cons_ty)
     }

@@ -163,7 +163,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
             let block_ty_id = s.infer_block(&func.body)?;
             s.check(&ret_ty, &Ty::new(block_ty_id, func.body.span))
-                .map(|diag| s.dctx.add(diag));
+                .emit(&mut s.dctx);
 
             let resolved_fn_ty_id = s.tctx.resolve_ty(fn_ty_id);
             s.tctx
@@ -237,7 +237,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 .unwrap_or_else(|| self.tctx.make_error_ty());
 
             self.check(&ty, &Ty::new(expr_ty, expr.span))
-                .map(|diag| self.dctx.add(diag));
+                .emit(&mut self.dctx);
 
             if let Some(def) = self.definitions.get_def(item.id) {
                 self.tctx.attach_to_hir(def.hir_id, ty);

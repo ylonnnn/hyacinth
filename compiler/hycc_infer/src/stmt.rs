@@ -71,7 +71,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 //     self.tctx.resolve_ty(val_ty.id)
                 // ));
                 // dbg!((self.tctx.get(_ret_ty), self.tctx.get(_val_ty)));
-                self.check(&ret_ty, &val_ty).map(|diag| self.dctx.add(diag));
+                self.check(&ret_ty, &val_ty).emit(&mut self.dctx);
 
                 let HirNode::Block(fn_body) = self.hir_table.get(fn_body) else {
                     unreachable!()

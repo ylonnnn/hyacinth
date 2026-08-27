@@ -39,10 +39,9 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                         self.tctx.attach_to_hir(block.id, stmt_ty.clone());
                     }
 
-                    expected_ty.as_ref().map(|expected_ty| {
-                        self.check(&expected_ty, &stmt_ty)
-                            .map(|diag| self.dctx.add(diag))
-                    });
+                    expected_ty
+                        .as_ref()
+                        .map(|expected_ty| self.check(&expected_ty, &stmt_ty).emit(&mut self.dctx));
                 }
 
                 _ => {}

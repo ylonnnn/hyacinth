@@ -132,11 +132,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         self.tctx.unify_ty(expected, received)
     }
 
-    pub fn check(&mut self, expected: &Ty, received: &Ty) -> Option<InferDiag> {
-        if self.compatible(expected.id, received.id) {
-            None
-        } else {
-            Some(InferDiag::error(
+    pub fn check(&mut self, expected: &Ty, received: &Ty) -> InferResult {
+        ternary!(
+            self.compatible(expected.id, received.id),
+            Ok(()),
+            Err(InferDiag::error(
                 received.span,
                 InferDiagErrorKind::TypeMismatch {
                     expectation_span: expected.span,
@@ -144,7 +144,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     received: self.tctx.resolve_ty(received.id),
                 },
             ))
-        }
+        )
     }
 
     pub fn cast(&mut self, from: &Ty, to: &Ty) -> InferResult {

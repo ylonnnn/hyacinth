@@ -59,35 +59,15 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                         .unwrap_or_else(|| Span::default()),
                 );
 
-                let val_ty = if let Some(val) = ret.value {
-                    Ty::new(self.infer_expr(&val)?, val.span)
-                } else {
-                    Ty::new(self.tctx.make_unit_ty(), ret.span)
-                };
+                ret.value
+                    .map(|val| self.infer_expr(&val, Some(ret_ty)).emit(&mut self.dctx));
 
-                // dbg!((ret_ty.id, val_ty.id));
-                // let (_ret_ty, _val_ty) = dbg!((
-                //     self.tctx.resolve_ty(ret_ty.id),
-                //     self.tctx.resolve_ty(val_ty.id)
-                // ));
-                // dbg!((self.tctx.get(_ret_ty), self.tctx.get(_val_ty)));
-                self.check(&ret_ty, &val_ty).emit(&mut self.dctx);
-
-                let HirNode::Block(fn_body) = self.hir_table.get(fn_body) else {
-                    unreachable!()
-                };
-
-                let ret_ty_id = ret_ty.id;
-                let ret_ty = Ty::new(ret_ty_id, fn_body.span);
-
-                self.tctx.attach_to_hir(fn_body.id, ret_ty);
-
-                Ok(Some(ret_ty_id))
+                Ok(Some(ret_ty.id))
             }
 
             HirStmtKind::Pass(pass) => {
                 let (ty_id, span) = if let Some(value) = pass.value {
-                    (self.infer_expr(&value)?, value.span)
+                    (self.infer_expr(&value, None)?, value.span)
                 } else {
                     (self.tctx.make_unit_ty(), pass.span)
                 };
@@ -100,7 +80,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 self.infer_item(&item)?;
                 Ok(self.tctx.get_hir_ty_id(item.id))
             }
-            HirStmtKind::Expr(expr) => self.infer_expr(&expr).map(|ty_id| Some(ty_id)),
+            HirStmtKind::Expr(expr) => self.infer_expr(&expr, None).map(|ty_id| Some(ty_id)),
         }?;
 
         ty_id.map(|ty_id| self.tctx.attach_to_hir(stmt.id, Ty::new(ty_id, stmt.span)));

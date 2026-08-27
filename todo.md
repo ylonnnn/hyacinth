@@ -29,6 +29,8 @@
 - [x] fix an issue where unrecognized items/symbols cause cascading function call errors(specifically, illegal invocation error)
 - [x] fix an issue where items within extensions have their own invalid states (e.g. a function being of type Infer(InferKind::Any) if the extensions are not used)
 - [ ] fix an issue where recursion causes type computation cycle errors
+- [x] fix an issue where arguments of method calls are not checked
+- [x] fix an issue where the types of anonymous functions are not properly initially unified
 
 ### Update/Refactor
 
@@ -41,6 +43,7 @@
 - [x] move invalid inference errors to the type inference phase for better diagnostics
 - [ ] update the consequent and alternate blocks of `if` expressions to be expressions rather than blocks
 - [x] improve the return type of `TyInferer::check()`
+- [ ] update the block of an anonymous expression to be just an expression for single-line anonymous functions/closures
 
 ### Test
 

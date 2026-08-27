@@ -57,7 +57,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         }
     }
 
-    pub(crate) fn infer_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
+    pub(crate) fn infer_expr(
+        &mut self,
+        expr: &HirExpr,
+        expected_ty: Option<Ty>,
+    ) -> InferResult<TyId> {
         let ty_id = match &expr.kind {
             HirExprKind::Path(path) => self.resolve_path(&path),
             HirExprKind::RefExpr(reference) => self.infer_ref_expr(&reference),
@@ -69,13 +73,18 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             HirExprKind::Block(block) => self.infer_block(&block),
             HirExprKind::Array(array) => self.infer_array_expr(&array),
             HirExprKind::Tuple(tup) => self.infer_tuple_expr(&tup),
-            HirExprKind::Struct(_) => self.infer_struct_expr(&expr),
-            HirExprKind::AnonFn(_) => self.infer_anon_fn_expr(&expr),
-            HirExprKind::FnCall(call) => self.infer_fn_call_expr(&call),
+            HirExprKind::Struct(_) => self.infer_struct_expr(&expr, expected_ty),
+            HirExprKind::AnonFn(_) => self.infer_anon_fn_expr(&expr, expected_ty),
+            HirExprKind::FnCall(call) => self.infer_fn_call_expr(&call, expected_ty),
             HirExprKind::FieldAccess(access) => self.infer_field_access_expr(&access),
             HirExprKind::MethodCall(call) => self.infer_method_call_expr(&call),
             HirExprKind::If(ite) => self.infer_if_expr(&ite),
         }?;
+
+        expected_ty.map(|ty| {
+            self.check(&ty, &Ty::new(ty_id, expr.span))
+                .emit(&mut self.dctx)
+        });
 
         self.tctx.attach_to_hir(expr.id, Ty::new(ty_id, expr.span));
         Ok(ty_id)
@@ -101,7 +110,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub(crate) fn infer_ref_expr(&mut self, reference: &HirRefExpr) -> InferResult<TyId> {
-        let inner_ty = self.infer_expr(&reference.expr)?;
+        let inner_ty = self.infer_expr(&reference.expr, None)?;
         let mutability = ternary!(
             reference.mutability == HirMutability::Mutable,
             RefMutability::Mutable,
@@ -116,7 +125,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub(crate) fn infer_cast_expr(&mut self, cast: &HirCastExpr) -> InferResult<TyId> {
-        let ty_id = self.infer_expr(&cast.expr)?;
+        let ty_id = self.infer_expr(&cast.expr, None)?;
         let cast_ty_id = self.tctx.expect_hir_ty_id(cast.ty.id);
 
         self.cast(
@@ -139,22 +148,13 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         let el_ty_id = ternary!(
             array.elements.is_empty(),
             self.tctx.make_inferred_ty(array.span, InferKind::Any),
-            self.infer_expr(array.elements[0])?
+            self.infer_expr(array.elements[0], None)?
         );
 
         if !array.elements.is_empty() {
             array.elements[1..].iter().for_each(|el| {
-                let Some(curr_el_ty_id) = self.infer_expr(&el).emit(&mut self.dctx) else {
-                    return;
-                };
-
-                self.check(
-                    &Ty::new(el_ty_id, Span::default()),
-                    &Ty::new(curr_el_ty_id, el.span),
-                )
-                .emit(&mut self.dctx);
-
-                self.tctx.resolve_ty(curr_el_ty_id);
+                self.infer_expr(&el, Some(Ty::new(el_ty_id, array.elements[0].span)))
+                    .emit_discard(&mut self.dctx)
             });
         }
 
@@ -164,7 +164,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     pub(crate) fn check_tuple_expr(&mut self, tup: &HirTupleExpr) -> InferResult {
         tup.elements
             .iter()
-            .for_each(|el| self.infer_expr(&el).emit_discard(&mut self.dctx));
+            .for_each(|el| self.check_expr(&el).emit_discard(&mut self.dctx));
 
         Ok(())
     }
@@ -173,7 +173,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         let tys = tup
             .elements
             .iter()
-            .filter_map(|el| self.infer_expr(&el).emit(&mut self.dctx))
+            .filter_map(|el| self.infer_expr(&el, None).emit(&mut self.dctx))
             .collect::<Arc<_>>();
 
         Ok(self.tctx.make_tuple_ty(tys))
@@ -192,7 +192,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(())
     }
 
-    pub(crate) fn infer_struct_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
+    pub(crate) fn infer_struct_expr(
+        &mut self,
+        expr: &HirExpr,
+        expected_ty: Option<Ty>,
+    ) -> InferResult<TyId> {
         let HirExprKind::Struct(strct) = &expr.kind else {
             unreachable!()
         };
@@ -217,6 +221,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             return Ok(err_ty);
         }
 
+        // TODO: somehow use expected_ty
         let TyKind::Adt(def_id, args) = self.tctx.get(ty_id) else {
             let Some(def_id) = self.definitions.get_def_id(strct.path.id) else {
                 return Ok(err_ty);
@@ -284,7 +289,10 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 (self.tctx.expect_hir_ty_id(field_ty_hir_id), field_ty.span);
             let field_ty_id = self.tctx.instantiate(raw_field_ty_id, &[&args]);
 
-            let Some(expr_field_ty_id) = self.infer_expr(&field.val).emit(&mut self.dctx) else {
+            let Some(expr_field_ty_id) = self
+                .infer_expr(&field.val, Some(Ty::new(field_ty_id, field_ty_span)))
+                .emit(&mut self.dctx)
+            else {
                 continue;
             };
 
@@ -338,7 +346,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         // }
     }
 
-    pub(crate) fn infer_anon_fn_expr(&mut self, expr: &HirExpr) -> InferResult<TyId> {
+    pub(crate) fn infer_anon_fn_expr(
+        &mut self,
+        expr: &HirExpr,
+        expected_ty: Option<Ty>,
+    ) -> InferResult<TyId> {
         let HirExprKind::AnonFn(anfn) = &expr.kind else {
             unreachable!()
         };
@@ -347,9 +359,6 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         let fn_ty_id = fn_ty.id;
 
         self.use_fn_ctx(FnCtx::new(fn_ty, anfn.body.id), |s| -> InferResult {
-            let TyKind::Fn(fn_ty, _) = s.tctx.get(fn_ty_id) else {
-                return Ok(());
-            };
             let TyKind::Fn(fn_ty, _) = s.tctx.get(fn_ty_id) else {
                 unreachable!()
             };
@@ -368,17 +377,18 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             );
             let resolved_ret_ty = s.tctx.resolve_ty(ret_ty.id);
 
+            let fn_ty = s
+                .tctx
+                .make_fn_ty(Arc::new([]), None, resolved_param_tys, resolved_ret_ty);
+            expected_ty.map(|ty| s.tctx.unify_ty(ty.id, fn_ty));
+
+            s.tctx.attach_to_hir(expr.id, Ty::new(fn_ty, expr.span));
+
             s.tctx.attach_to_hir(anfn.body.id, ret_ty.clone());
 
             let block_ty_id = s.infer_block(&anfn.body)?;
             s.check(&ret_ty, &Ty::new(block_ty_id, anfn.body.span))
                 .emit(&mut s.dctx);
-
-            let fn_ty = s
-                .tctx
-                .make_fn_ty(Arc::new([]), None, resolved_param_tys, resolved_ret_ty);
-
-            s.tctx.attach_to_hir(expr.id, Ty::new(fn_ty, expr.span));
 
             s.analyze_unresolved();
 
@@ -398,8 +408,12 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(())
     }
 
-    pub(crate) fn infer_fn_call_expr(&mut self, call: &HirFnCall) -> InferResult<TyId> {
-        let callee_ty_id = self.infer_expr(&call.callee)?;
+    pub(crate) fn infer_fn_call_expr(
+        &mut self,
+        call: &HirFnCall,
+        expected_ty: Option<Ty>,
+    ) -> InferResult<TyId> {
+        let callee_ty_id = self.infer_expr(&call.callee, None)?;
         let TyKind::Fn(fn_ty, args) = self.tctx.get(callee_ty_id) else {
             return ternary!(
                 self.tctx.is_error_ty(callee_ty_id),
@@ -437,18 +451,14 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                 let def_param = def_params
                     .as_ref()
                     .and_then(|params| params.get(i).cloned());
-                let Some(arg_ty_id) = self.infer_expr(&arg).emit(&mut self.dctx) else {
-                    return;
-                };
 
                 let param_def = def_param.map(|def_id| self.definitions.get(def_id));
-
-                self.check(
-                    &Ty::new(
+                self.infer_expr(
+                    &arg,
+                    Some(Ty::new(
                         *param_ty_id,
                         param_def.map_or_else(|| Span::default(), |def| def.span),
-                    ),
-                    &Ty::new(arg_ty_id, arg.span),
+                    )),
                 )
                 .emit(&mut self.dctx);
             });
@@ -462,7 +472,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub(crate) fn infer_field_access_expr(&mut self, access: &HirFieldAccess) -> InferResult<TyId> {
-        let init_lead_ty_id = self.infer_expr(&access.leading)?;
+        let init_lead_ty_id = self.infer_expr(&access.leading, None)?;
         let mut lead_ty_id = init_lead_ty_id;
 
         loop {
@@ -525,7 +535,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub(crate) fn infer_method_call_expr(&mut self, call: &HirMethodCall) -> InferResult<TyId> {
-        let initial_ty_id = self.infer_expr(&call.receiver)?;
+        let initial_ty_id = self.infer_expr(&call.receiver, None)?;
         if self.tctx.is_error_ty(initial_ty_id) {
             return Ok(initial_ty_id);
         }
@@ -647,6 +657,10 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             .filter_map(|frame| ternary!(frame.is_empty(), None, Some(frame)))
             .collect::<Vec<_>>();
         let fn_ty_id = self.instantiate(&mut arg_frames, &call.callee)?;
+        // self.dctx.add(InferDiag::error(
+        //     call.callee.span,
+        //     InferDiagErrorKind::IllegalInvocation(fn_ty_id),
+        // ));
 
         let def = self.definitions.get(def_id);
 
@@ -754,19 +768,16 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             .zip(params.iter())
             .enumerate()
         {
-            let arg_ty_id = ternary!(
-                i == 0,
-                rec_ty_id,
-                self.infer_expr(&arg)
-                    .emit(&mut self.dctx)
-                    .unwrap_or(continue)
-            );
-
-            self.check(
-                &Ty::new(*param_ty_id, self.definitions.get(fn_def_params[i]).span),
-                &Ty::new(arg_ty_id, arg.span),
-            )
-            .emit(&mut self.dctx);
+            if i > 0 {
+                self.infer_expr(
+                    &arg,
+                    Some(Ty::new(
+                        *param_ty_id,
+                        self.definitions.get(fn_def_params[i]).span,
+                    )),
+                )
+                .emit(&mut self.dctx);
+            }
         }
 
         Ok(self.tctx.resolve_ty(ret_ty))
@@ -784,7 +795,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
     pub(crate) fn infer_if_expr(&mut self, ite: &HirIfExpr) -> InferResult<TyId> {
         let bool_ty = self.tctx.make_bool_ty();
-        let cond_ty = self.infer_expr(&ite.cond)?;
+        let cond_ty = self.infer_expr(&ite.cond, Some(Ty::new(bool_ty, Span::default())))?;
 
         self.check(
             &Ty::new(bool_ty, Span::default()),

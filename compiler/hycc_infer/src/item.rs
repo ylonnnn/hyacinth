@@ -231,17 +231,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         if let Some(expr) = decl.val {
             self.tctx
                 .update_hir_res_state(item.id, TyResState::Resolving);
-            let expr_ty = self
-                .infer_expr(&expr)
-                .emit(&mut self.dctx)
-                .unwrap_or_else(|| self.tctx.make_error_ty());
+            self.infer_expr(&expr, Some(ty)).emit(&mut self.dctx);
 
-            self.check(&ty, &Ty::new(expr_ty, expr.span))
-                .emit(&mut self.dctx);
-
-            if let Some(def) = self.definitions.get_def(item.id) {
-                self.tctx.attach_to_hir(def.hir_id, ty);
-            }
+            self.definitions
+                .get_def(item.id)
+                .map(|def| self.tctx.attach_to_hir(def.hir_id, ty));
         }
 
         Ok(())

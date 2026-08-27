@@ -86,7 +86,7 @@ pub enum TyKind {
     Param(ParamTy),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Ty {
     pub id: TyId,
     pub span: Span,

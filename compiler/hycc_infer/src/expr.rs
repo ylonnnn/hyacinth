@@ -132,7 +132,9 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             &Ty::new(ty_id, cast.expr.span),
             &Ty::new(cast_ty_id, cast.ty.span),
         )
-        .and_then(|_| Ok(cast_ty_id))
+        .emit(&mut self.dctx);
+
+        Ok(cast_ty_id)
     }
 
     pub(crate) fn check_array_expr(&mut self, array: &HirArrayExpr) -> InferResult {

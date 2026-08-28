@@ -19,8 +19,8 @@
 - [x] fix MIR lowering issues from lowering anonymous functions
 - [x] fix an issue regarding paths that have tailing segments with generics
 - [x] fix an issue with usage of associated items within local extensions
-- [ ] fix diagnostic CLI reporting emphasis ordering
-- [ ] fix diagnostic CLI reporting emphasis pointer and line alignment
+- [x] fix diagnostic CLI reporting emphasis ordering
+- [x] fix diagnostic CLI reporting emphasis pointer and line alignment
 - [x] fix an issue with the phases when dealing with definitions of duplicates
 - [ ] fix types of anonymous functions being considered as unresolved types
 - [ ] fix unresolved type analysis issues: non-greedy error finding, inaccurate node pointers
@@ -48,3 +48,4 @@
 ### Test
 
 - [ ] check behavior of having an error in the `collection` phase and in the `resolution` phase at the same time.
+- [ ] add unit tests which cover all features

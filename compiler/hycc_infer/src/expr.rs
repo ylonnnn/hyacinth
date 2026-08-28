@@ -392,7 +392,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             s.check(&ret_ty, &Ty::new(block_ty_id, anfn.body.span))
                 .emit(&mut s.dctx);
 
-            s.analyze_unresolved();
+            // s.analyze_unresolved();
 
             Ok(())
         })?;
@@ -695,6 +695,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     name: call.callee.ident.ident,
                     def_id,
                     ty_id: rec_ty_id,
+                    span: call.receiver.span.merge(call.arguments.span),
                 },
             ))?;
         }
@@ -750,6 +751,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     name: call.callee.ident.ident,
                     def_id,
                     ty_id: rec_ty_id,
+                    span: call.receiver.span.merge(call.arguments.span),
                 },
             ))?;
         };
@@ -797,13 +799,8 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
     pub(crate) fn infer_if_expr(&mut self, ite: &HirIfExpr) -> InferResult<TyId> {
         let bool_ty = self.tctx.make_bool_ty();
-        let cond_ty = self.infer_expr(&ite.cond, Some(Ty::new(bool_ty, Span::default())))?;
-
-        self.check(
-            &Ty::new(bool_ty, Span::default()),
-            &Ty::new(cond_ty, ite.cond.span),
-        )
-        .emit(&mut self.dctx);
+        self.infer_expr(&ite.cond, Some(Ty::new(bool_ty, Span::default())))
+            .emit(&mut self.dctx);
 
         let cons_ty = self.infer_block(&ite.consequent)?;
         let (alt_ty, alt_span) = ite

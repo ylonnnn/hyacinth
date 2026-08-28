@@ -114,6 +114,9 @@ impl Style for String {}
 
 pub fn list_enumeration<T: ToString>(list: &[T]) -> String {
     let (mut series, n) = (String::new(), list.len());
+    if list.len() == 1 {
+        return list[0].to_string();
+    }
 
     for (i, entry) in list.iter().enumerate() {
         let is_last = i == n - 1;

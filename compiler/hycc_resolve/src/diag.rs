@@ -276,7 +276,8 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
             }
         };
 
-        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
+        let mut diag = Diag::new(kind, self.span, message);
+        extra.map(|extra| diag.primary(extra));
 
         match &self.kind {
             ResolverDiagKind::Error(kind) => match kind {

@@ -133,12 +133,7 @@ impl<'r> Resolver<'r> {
         match &target.kind {
             HirReferTargetKind::Child(alias) => {
                 let target = target.symbol;
-                let res = self.resolve_ident(&target, resolution)?.unwrap();
-
-                // TODO: improve
-                let DefResolution::Petal(def_id) = res else {
-                    todo!("throw error: cannot `refer` to non-petal definitions")
-                };
+                let def_id = self.resolve_ident(&target, resolution)?.unwrap().def_id();
 
                 let sym = target.ident.ident;
                 let actual = self.collector.definitions.get(def_id);

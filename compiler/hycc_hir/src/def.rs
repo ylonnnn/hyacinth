@@ -17,6 +17,14 @@ pub enum DefResolution {
     Value(DefId),
 }
 
+impl DefResolution {
+    pub fn def_id(&self) -> DefId {
+        match &self {
+            Self::Petal(def_id) | Self::Ty(def_id) | Self::Value(def_id) => *def_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DefNodeResolution {
     pub base: DefResolution,

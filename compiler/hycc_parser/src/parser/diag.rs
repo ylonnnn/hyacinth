@@ -297,12 +297,13 @@ impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
             }
         };
 
-        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
+        let mut diag = Diag::new(kind, self.span, message);
+        extra.map(|extra| diag.primary(extra));
 
         match &self.kind {
             ParserDiagKind::Error(kind) => match kind {
                 InvalidVarDecl { depth, .. } => {
-                    diag.note(diag.span,
+                    diag.note(self.span,
                         ternary!(*depth == 0,
                             format!("top-level variable declarations must have both `explicit type annotation` and a `constant initializer value`."),
                             format!("variable declarations must either have an `explicit type annotation` or an `initializer value`.")
@@ -313,7 +314,7 @@ impl<'c> DiagEmitter<ParserDiagDataCtx<'c>> for ParserDiag {
                     let petal = path.to_str().unwrap();
 
                     diag.note(
-                        diag.span,
+                        self.span,
                         format!(
                             "create petal file `{}` or `{}` relative to the current file.",
                             format_args!("{}.{}", petal, config::HYC_FILE_EXT),

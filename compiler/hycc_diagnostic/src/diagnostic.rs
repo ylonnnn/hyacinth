@@ -2,6 +2,42 @@ use hycc_span::Span;
 use hycc_util::ternary;
 
 #[derive(Debug, Clone)]
+pub enum DiagDetailKind {
+    Primary(DiagKind),
+    Note,
+    Help,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiagDetail {
+    pub message: String,
+    pub span: Span,
+    pub kind: DiagDetailKind,
+}
+
+impl DiagDetail {
+    pub fn new(kind: DiagDetailKind, span: Span, message: String) -> Self {
+        Self {
+            span,
+            message,
+            kind,
+        }
+    }
+
+    pub fn primary<T: Into<String>>(kind: DiagKind, span: Span, message: T) -> Self {
+        Self::new(DiagDetailKind::Primary(kind), span, message.into())
+    }
+
+    pub fn note<T: Into<String>>(span: Span, message: T) -> Self {
+        Self::new(DiagDetailKind::Note, span, message.into())
+    }
+
+    pub fn help<T: Into<String>>(span: Span, message: T) -> Self {
+        Self::new(DiagDetailKind::Help, span, message.into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagKind {
     Info,
     Warning,
@@ -24,42 +60,10 @@ impl DiagKind {
 }
 
 #[derive(Debug, Clone)]
-pub enum DiagDetailKind {
-    Note,
-    Help,
-}
-
-#[derive(Debug, Clone)]
-pub struct DiagDetail {
-    pub message: String,
-    pub span: Span,
-    pub kind: DiagDetailKind,
-}
-
-impl DiagDetail {
-    pub fn new(kind: DiagDetailKind, span: Span, message: String) -> Self {
-        Self {
-            span,
-            message,
-            kind,
-        }
-    }
-
-    pub fn note(span: Span, message: String) -> Self {
-        Self::new(DiagDetailKind::Note, span, message)
-    }
-
-    pub fn help(span: Span, message: String) -> Self {
-        Self::new(DiagDetailKind::Help, span, message)
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Diag {
-    pub sub_diagnostics: Vec<Diag>,
-    pub message: (String, Option<String>),
+    pub message: String,
     pub details: Vec<DiagDetail>,
-    pub span: Span,
+    pub sub_diagnostics: Vec<Diag>,
     pub kind: DiagKind,
 }
 
@@ -67,26 +71,25 @@ impl Diag {
     pub fn new<T: Into<String>>(kind: DiagKind, span: Span, message: T) -> Self {
         Self {
             sub_diagnostics: Vec::new(),
-            message: (message.into(), None),
-            details: Vec::new(),
-            span,
+            message: message.into(),
+            details: vec![DiagDetail::primary(kind, span, "")],
             kind,
         }
     }
 
-    pub fn new_with_extra<T: Into<String>>(
-        kind: DiagKind,
-        span: Span,
-        message: T,
-        extra: Option<T>,
-    ) -> Self {
-        Self {
-            sub_diagnostics: Vec::new(),
-            message: (message.into(), extra.map(|extra| extra.into())),
-            details: Vec::new(),
-            span,
-            kind,
-        }
+    pub fn primary<T: Into<String>>(&mut self, message: T) {
+        self.details
+            .get_mut(0)
+            .expect("expected a diagnostic to have a primary detail")
+            .message = message.into();
+    }
+
+    pub fn note<T: Into<String>>(&mut self, span: Span, message: T) {
+        self.details.push(DiagDetail::note(span, message))
+    }
+
+    pub fn help<T: Into<String>>(&mut self, span: Span, message: T) {
+        self.details.push(DiagDetail::help(span, message))
     }
 
     pub fn info<T: Into<String>>(span: Span, message: T) -> Self {
@@ -102,26 +105,7 @@ impl Diag {
     }
 
     pub fn add_sub_diagnostic(&mut self, sub_diagnostic: Diag) -> &mut Self {
-        if sub_diagnostic.span.src_id.is_valid() {
-            self.sub_diagnostics.push(sub_diagnostic);
-        }
-
-        self
-    }
-
-    pub fn note<T: Into<String>>(&mut self, span: Span, message: T) -> &mut Self {
-        if span.src_id.is_valid() {
-            self.details.push(DiagDetail::note(span, message.into()))
-        }
-
-        self
-    }
-
-    pub fn help<T: Into<String>>(&mut self, span: Span, message: T) -> &mut Self {
-        if span.src_id.is_valid() {
-            self.details.push(DiagDetail::help(span, message.into()))
-        }
-
+        self.sub_diagnostics.push(sub_diagnostic);
         self
     }
 }
@@ -169,10 +153,6 @@ impl DiagCtx {
     }
 
     pub fn add(&mut self, diag: Diag) {
-        if !diag.span.src_id.is_valid() {
-            return;
-        }
-
         self.1 = self.1 || matches!(&diag.kind, DiagKind::Error(_));
         self.0.push(diag);
     }

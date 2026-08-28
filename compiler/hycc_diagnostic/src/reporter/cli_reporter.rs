@@ -1,18 +1,26 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, hash_map::Entry};
 
 use crate::{
     diagnostic::{Diag, DiagCtx, DiagDetail, DiagDetailKind, DiagKind},
     reporter::reporter::DiagnosticReporter,
 };
 
-use hycc_source::{Source, SourceRegistry};
+use hycc_source::{Source, SourceRegistry, source::SourceId};
 use hycc_span::{Position, Span};
 use hycc_util::{Style, color, style, ternary};
 
 #[derive(Debug)]
 struct EmphasisData {
-    pub messages: Vec<(u32, (&'static str, String))>,
+    pub messages: HashMap<u32, Vec<EmphasisMessage>>,
     pub lines: Vec<EmphasisLine>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+struct EmphasisMessage {
+    pub content: String,
+    pub color: &'static str,
+    pub offset: u32,
 }
 
 #[derive(Debug)]
@@ -31,8 +39,8 @@ struct EmphasisPointer {
 
 #[derive(Debug)]
 struct EmphasisTarget {
-    pub display: (&'static str, char),
     pub message: String,
+    pub display: (&'static str, char),
     pub span: Span,
 }
 
@@ -40,20 +48,20 @@ impl EmphasisTarget {
     fn new(message: String, span: Span, display: (&'static str, char)) -> Self {
         Self {
             message,
-            span,
             display,
+            span,
         }
     }
 }
 
 #[derive(Debug)]
-pub struct CLIReporter<'d, 's> {
-    pub dctx: &'d DiagCtx,
-    pub source_registry: &'s SourceRegistry,
+pub struct CLIReporter<'r> {
+    pub dctx: &'r DiagCtx,
+    pub source_registry: &'r SourceRegistry,
 }
 
-impl<'d, 's> CLIReporter<'d, 's> {
-    pub fn new(dctx: &'d DiagCtx, source_registry: &'s SourceRegistry) -> Self {
+impl<'r> CLIReporter<'r> {
+    pub fn new(dctx: &'r DiagCtx, source_registry: &'r SourceRegistry) -> Self {
         Self {
             dctx,
             source_registry,
@@ -70,54 +78,42 @@ impl<'d, 's> CLIReporter<'d, 's> {
 
     pub fn detail_color(&self, kind: &DiagDetailKind) -> &'static str {
         match kind {
+            DiagDetailKind::Primary(kind) => self.color(&kind),
             DiagDetailKind::Note => color::BRIGHT_BLUE,
-            DiagDetailKind::Help => color::BRIGHT_CYAN,
+            DiagDetailKind::Help => color::BRIGHT_GREEN,
         }
     }
 
-    fn emphasize(&self, source: &Source, mut targets: Vec<EmphasisTarget>) -> Vec<EmphasisData> {
-        // Group overlapping targets
-        let mut g_targets = Vec::new();
-        while !targets.is_empty() {
-            let mut group = vec![targets.swap_remove(0)];
-            let mut j = 0;
-
-            let (b_start, b_end) = group[0].span.to_position_range(&source);
-            while j < targets.len() {
-                let (start, end) = targets[j].span.to_position_range(&source);
-                if start.line >= b_start.line && end.line <= b_end.line {
-                    // if group[0].span.overlaps(targets[j].span) {
-                    group.push(targets.swap_remove(j));
-                    continue;
-                }
-
-                j += 1;
-            }
-
-            g_targets.push(group);
-        }
-
-        let mut data = g_targets
+    fn emphasize(&self, targets: Vec<EmphasisTarget>) -> Vec<EmphasisData> {
+        let g_targets = targets
             .into_iter()
-            .map(|mut group| {
-                group.sort_by(|a, b| {
-                    b.span.offset.cmp(&a.span.offset)
-                    // .then_with(|| b.span.len.cmp(&a.span.len))
-                });
+            .fold(HashMap::<_, Vec<_>>::new(), |mut map, target| {
+                map.entry(target.span.src_id).or_default().push(target);
+                map
+            });
+
+        g_targets
+            .into_iter()
+            .map(|(src_id, group)| {
+                let group_span = group[0].span;
 
                 let mut lines = HashMap::<u32, EmphasisLine>::new();
-                let mut messages = Vec::new();
+                let mut messages = HashMap::<u32, Vec<EmphasisMessage>>::new();
 
                 for target in group {
-                    let (color, ptr) = target.display;
-                    let (start, end) = target.span.to_position_range(&source);
-                    let digit_n = ((end.line as f32).log10().floor() as usize) + 1;
-                    let n = end.line - start.line;
+                    let source = self.source_registry.get(src_id);
+                    let ((color, ptr), (start, end)) =
+                        (target.display, target.span.to_position_range(&source));
+                    let (digit_n, n) = (
+                        ((end.line as f32).log10().floor() as usize) + 1,
+                        end.line - start.line,
+                    );
 
-                    messages.push((
-                        end.column - 1, // Inclusion
-                        (color, target.message.clone()),
-                    ));
+                    messages.entry(end.line).or_default().push(EmphasisMessage {
+                        content: target.message,
+                        color,
+                        offset: end.column - 1, // Inclusion
+                    });
 
                     source
                         .data
@@ -136,13 +132,6 @@ impl<'d, 's> CLIReporter<'d, 's> {
                         .for_each(|(line, num)| {
                             let (bb, b, r) = (color::BRIGHT_BLUE, style::BOLD, style::RESET);
                             let dig_n = ((num as f32).log10().floor() as usize) + 1;
-
-                            // let prefix = format!(
-                            //     " {}{}| {r}",
-                            //     num.to_string().style(bb).style(b),
-                            //     " ".repeat((1 + digit_n) - dig_n),
-                            // );
-
                             let (ln_start, ln_end) = (
                                 ternary!(num == start.line, start.column - 1, 0),
                                 ternary!(num == end.line, end.column - 1, line.len() as u32),
@@ -173,32 +162,19 @@ impl<'d, 's> CLIReporter<'d, 's> {
                 }
 
                 let mut lines = lines.into_iter().map(|(_, val)| val).collect::<Vec<_>>();
+
                 lines.sort_by_key(|line| line.line_no);
 
-                EmphasisData { lines, messages }
+                EmphasisData {
+                    span: group_span,
+                    lines,
+                    messages,
+                }
             })
-            .collect::<Vec<_>>();
-
-        // TODO: fix diagnostic emphasis ordering
-        // data.sort_by(|a, b| a.lines[0].line_no.cmp(&b.lines[0].line_no));
-        data
-
-        // // let n = emphasized.len();
-        // // let mid = n / 2;
-        //
-        // ternary!(
-        //     (n / 2) < 3,
-        //     emphasized,
-        //     emphasized
-        //         .into_iter()
-        //         .enumerate()
-        //         .filter(|(i, _)| *i != mid)
-        //         .map(|(i, line)| ternary!(i == mid + 1, "  ...".bright_blue().bold(), line))
-        //         .collect()
-        // )
+            .collect()
     }
 
-    pub fn highlight(&self, message: &String, severity_color: &'static str) -> String {
+    pub fn highlight(&self, message: &str, highlight_color: &'static str) -> String {
         let mut highlight = false;
         message
             .chars()
@@ -208,7 +184,7 @@ impl<'d, 's> CLIReporter<'d, 's> {
                     highlight = !highlight;
                     ternary!(
                         highlight,
-                        cs + &severity_color.bold(),
+                        cs + &highlight_color.bold(),
                         cs.reset().bright_white()
                     )
                 })
@@ -216,39 +192,30 @@ impl<'d, 's> CLIReporter<'d, 's> {
             .collect()
     }
 
-    pub fn annotate_snippet(&self, diag: &Diag) -> Vec<String> {
-        let source = self.source_registry.get(diag.span.src_id);
-        let (start, end) = diag.span.to_position_range(&source);
-
+    pub fn annotate_snippet(&self, diag: &Diag) -> String {
         let mut data = self.emphasize(
-            &source,
-            std::iter::once(EmphasisTarget::new(
-                diag.message
-                    .1
-                    .as_ref()
-                    .map_or_else(|| "".into(), |extra| extra.clone()),
-                diag.span,
-                (self.color(&diag.kind), '^'),
-            ))
-            .chain(diag.details.iter().map(|detail| {
-                let ptr = match &detail.kind {
-                    DiagDetailKind::Note => '-',
-                    DiagDetailKind::Help => '~',
-                };
+            diag.details
+                .iter()
+                .filter(|detail| detail.span.src_id.is_valid())
+                .map(|detail| {
+                    let ptr = match &detail.kind {
+                        DiagDetailKind::Primary(_) => '^',
+                        DiagDetailKind::Note => '-',
+                        DiagDetailKind::Help => '~',
+                    };
 
-                EmphasisTarget::new(
-                    detail.message.clone(),
-                    detail.span,
-                    (self.detail_color(&detail.kind), ptr),
-                )
-            }))
-            .collect(),
+                    EmphasisTarget::new(
+                        detail.message.clone(),
+                        detail.span,
+                        (self.detail_color(&detail.kind), ptr),
+                    )
+                })
+                .collect(),
         );
 
         let max_lno = data
             .iter()
-            .flat_map(|data| &data.lines)
-            .map(|line| line.line_no)
+            .flat_map(|data| data.lines.iter().map(|line| line.line_no))
             .max()
             .unwrap();
         let pref_fn = |line_no: Option<u32>| {
@@ -266,133 +233,160 @@ impl<'d, 's> CLIReporter<'d, 's> {
             )
         };
 
-        data.into_iter()
-            .map(|data| {
-                let n = data.lines.last().unwrap().content.len();
-                let formatted = data
-                    .lines
-                    .into_iter()
-                    .map(move |mut line| {
-                        let n = line.content.len();
-
-                        line.ptrs.sort_by(|a_ptr, b_ptr| {
-                            a_ptr
-                                .offset
-                                .cmp(&b_ptr.offset)
-                                .then_with(|| b_ptr.len.cmp(&a_ptr.len))
-                        });
-
-                        let mut ptrs = vec![None; n + 1];
-                        for (i, ptr) in line.ptrs.iter().enumerate() {
-                            let &EmphasisPointer { offset, len, .. } = &ptr;
-                            let offset = *offset as usize;
-                            let (_, ptr_char) = &ptr.display;
-
-                            (offset..(offset + len)).for_each(|idx| ptrs[idx] = Some(i));
-                        }
-
-                        let mut prev = None;
-                        let mut pointer = ptrs
-                            .into_iter()
-                            .map(|ptr_idx| {
-                                let Some(idx) = ptr_idx else {
-                                    return " ".into();
-                                };
-
-                                let ptr = &line.ptrs[idx];
-                                if let Some(prev_idx) = prev
-                                    && idx == prev_idx
-                                {
-                                    return ptr.display.1.to_string();
-                                }
-
-                                ptr.display.1.to_string().style(ptr.display.0)
-                            })
-                            .chain(std::iter::once(style::RESET.into()))
-                            .collect::<String>();
-
-                        format!(
-                            "{}{}\n{}{}",
-                            pref_fn(Some(line.line_no)),
-                            line.content,
-                            pref_fn(None),
-                            pointer.bold(),
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                let messages = data
-                    .messages
-                    .iter()
-                    .rev()
-                    .enumerate()
-                    .map(|(i, (_, (_, basis)))| {
-                        let mut line = " ".repeat(n);
-                        data.messages.iter().enumerate().skip(i).for_each(
-                            |(j, (offset, (color, message)))| {
-                                let offset = *offset as usize - 1;
-                                let idx = line
-                                    .char_indices()
-                                    .nth(n)
-                                    .map(|(idx, _)| idx)
-                                    .unwrap_or(line.len());
-
-                                ternary!(
-                                    i == j,
-                                    line.insert_str(idx, &message.style(color).bold(),),
-                                    {
-                                        if line.chars().nth(idx).is_some_and(char::is_whitespace) {
-                                            let bar = "|".style(color).bold();
-                                            line.replace_range(idx..(idx + 1), &bar);
-                                        }
-                                    }
-                                )
-                            },
-                        );
-
-                        format!("{}{}", pref_fn(None), line)
-                    })
-                    .collect::<Vec<_>>();
-
-                format!("{}\n{}", formatted.join("\n"), messages.join("\n"))
-            })
-            .collect()
-    }
-}
-
-impl<'d, 's> DiagnosticReporter for CLIReporter<'d, 's> {
-    fn format_diagnostic(&self, diag: &Diag) -> String {
-        let source = self.source_registry.get(diag.span.src_id);
-        let (s_kind, code) = diag.kind.data();
-
         let cwd = std::env::current_dir()
             .unwrap_or_else(|_| panic!("failed to retrieve the current directory"));
 
-        let snippet = self.annotate_snippet(&diag).join("\n");
-        let sub_diagnostics = diag
-            .sub_diagnostics
-            .iter()
-            .map(|sub| self.format_diagnostic(&sub))
-            .collect::<String>();
+        let formatted = data
+            .into_iter()
+            .flat_map(|data| {
+                let lines = data.lines.into_iter().map(move |mut line| {
+                    let n = line.content.len();
 
-        let (start, end) = diag.span.to_position_range(&source);
+                    line.ptrs.sort_by(|a_ptr, b_ptr| {
+                        a_ptr
+                            .offset
+                            .cmp(&b_ptr.offset)
+                            .then_with(|| b_ptr.len.cmp(&a_ptr.len))
+                    });
+
+                    let mut ptrs = vec![None; n + 1];
+                    for (i, ptr) in line.ptrs.iter().enumerate() {
+                        let &EmphasisPointer { offset, len, .. } = &ptr;
+                        let offset = *offset as usize;
+                        let (_, ptr_char) = &ptr.display;
+
+                        (offset..(offset + len)).for_each(|idx| ptrs[idx] = Some(i));
+                    }
+
+                    let mut prev = None;
+                    let mut pointer = ptrs
+                        .into_iter()
+                        .map(|ptr_idx| {
+                            let Some(idx) = ptr_idx else {
+                                return " ".into();
+                            };
+
+                            let ptr = &line.ptrs[idx];
+                            prev.and_then(|prev_idx| {
+                                (idx == prev_idx).then_some(ptr.display.1.to_string())
+                            })
+                            .unwrap_or_else(|| ptr.display.1.to_string().style(ptr.display.0))
+                        })
+                        .chain(std::iter::once(style::RESET.into()))
+                        .collect::<String>();
+
+                    let messages = data
+                        .messages
+                        .get(&line.line_no)
+                        .map(|messages| {
+                            messages
+                                .iter()
+                                .enumerate()
+                                .map(|(i, message)| {
+                                    let mut msg = " ".repeat(n);
+                                    messages
+                                        .iter()
+                                        .enumerate()
+                                        .skip(i)
+                                        .for_each(|(j, message)| {
+                                            let offset = message.offset as usize - 1;
+                                            let idx = line
+                                                .content
+                                                .char_indices()
+                                                .nth(offset)
+                                                .map(|(idx, _)| idx)
+                                                .unwrap_or(n);
+                                            ternary!(
+                                                i == j,
+                                                msg.insert_str(
+                                                    idx,
+                                                    &message.content.style(message.color).bold(),
+                                                ),
+                                                msg.chars()
+                                                    .nth(idx)
+                                                    .is_some_and(char::is_whitespace)
+                                                    .then(|| {
+                                                        msg.replace_range(
+                                                            idx..(idx + 1),
+                                                            &"|".style(message.color).bold(),
+                                                        )
+                                                    })
+                                                    .unwrap_or(())
+                                            )
+                                        });
+                                    msg
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+
+                    let pref = pref_fn(None);
+
+                    format!(
+                        "{lined_pref}{content}\n{pref}{ptr}{message}",
+                        lined_pref = pref_fn(Some(line.line_no)),
+                        content = line.content,
+                        ptr = pointer.bold(),
+                        message = ternary!(
+                            messages.is_empty(),
+                            "".into(),
+                            messages
+                                .iter()
+                                .map(|message| format!("\n{pref}{message}"))
+                                .collect::<Vec<_>>()
+                                .join("")
+                        )
+                    )
+                });
+
+                let source = self.source_registry.get(data.span.src_id);
+                let (start, _) = data.span.to_position_range(source);
+
+                std::iter::once(format!(
+                    " {arrow} {reset}{file}:{pos}{reset}",
+                    arrow = "--->".bright_blue().bold(),
+                    reset = style::RESET,
+                    file =
+                        source.identifier.1.replace(cwd.to_str().unwrap(), "")[1..].bright_black(),
+                    pos = format!("{}:{}", start.line, start.column),
+                ))
+                .chain(lines)
+            })
+            .collect::<Vec<_>>();
+
+        formatted.join("\n")
+    }
+}
+
+impl<'r> DiagnosticReporter for CLIReporter<'r> {
+    fn format_diagnostic(&self, diag: &Diag) -> String {
+        let (s_kind, code) = diag.kind.data();
         let sev_color = self.color(&diag.kind);
 
         format!(
-            "{}{} {reset}{}\n{} {}:{}\n{snippet}\n{reset}{sub_diagnostics}",
-            s_kind.to_string().style(&sev_color).bold(),
-            code.map_or_else(|| ":".into(), |code| format!("<E{:04}>", code)),
-            self.highlight(&diag.message.0, sev_color),
-            "----->".bright_black(),
-            &source.identifier.1.replace(cwd.to_str().unwrap(), "")[1..],
-            start.clone(),
+            "{sev}{code}{reset} {message}\n{snippet}\n{reset}{sub_diags}{reset}",
+            sev = s_kind.style(&sev_color).bold(),
+            code = code.map_or_else(|| ":".into(), |code| format!("<E{code:04}>")),
+            message = self.highlight(&diag.message, sev_color),
+            snippet = self.annotate_snippet(&diag),
+            sub_diags = diag
+                .sub_diagnostics
+                .iter()
+                .map(|sub| self.format_diagnostic(&sub))
+                .collect::<String>(),
             reset = style::RESET
         )
     }
 
     fn report(&self) {
-        for diagnostic in self.dctx.data() {
-            println!("{}", self.format_diagnostic(diagnostic));
-        }
+        println!(
+            "{}",
+            self.dctx
+                .data()
+                .iter()
+                .map(|diag| self.format_diagnostic(&diag))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
 }

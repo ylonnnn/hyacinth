@@ -167,6 +167,7 @@ pub enum InferDiagErrorKind {
         name: Symbol,
         def_id: DefId,
         ty_id: TyId,
+        span: Span,
     },
 
     ReceiverAccessMismatch {
@@ -454,7 +455,8 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
             }
         };
 
-        let mut diag = Diag::new_with_extra(kind, self.span, message, extra);
+        let mut diag = Diag::new(kind, self.span, message);
+        extra.map(|extra| diag.primary(extra));
 
         match &self.kind {
             InferDiagKind::Error(kind) => match kind {
@@ -514,18 +516,18 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                 }
 
                 UnresolvedTy(ty) => {
-                    diag.add_sub_diagnostic(Diag::new_with_extra(
-                        DiagKind::Info,
-                        ty.span,
-                        "requires context with known type",
-                        Some("type annotation or usage in a context with known type is needed"),
-                    ));
+                    let mut sub_diag =
+                        Diag::new(DiagKind::Info, ty.span, "requires context with known type");
+                    sub_diag
+                        .primary("type annotation or usage in a context with known type is needed");
+
+                    diag.add_sub_diagnostic(sub_diag);
                 }
 
                 InvalidInference(ty_id) => {
                     if !ctx.fmt.tctx.is_inferred(*ty_id) {
                         diag.help(
-                            diag.span,
+                            self.span,
                             format!(
                                 "replace with the correct type: `{}`",
                                 ctx.fmt.fmt_id(*ty_id)
@@ -539,38 +541,76 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                 }
 
                 MissingElseBranch => {
-                    diag.note(diag.span, "`if` may be missing its `else` branch");
+                    diag.note(self.span, "`if` may be missing its `else` branch");
                 }
 
                 MultipleAssocItemsMatched { name, matches } => {
-                    matches.iter().for_each(|m| {
-                        // TODO: add diagnostic note per match
-                    });
+                    matches
+                        .iter()
+                        .enumerate()
+                        .for_each(|(i, (ext_id, binding))| {
+                            let ext = ctx.fmt.tctx.ext_table.get(*ext_id);
+                            let def = ctx.fmt.definitions.get(binding.def_id);
+
+                            diag.add_sub_diagnostic(Diag::new(
+                                DiagKind::Info,
+                                def.span,
+                                format!(
+                                    "match `#{}` is defined in an extension of `{}`",
+                                    i + 1,
+                                    ctx.fmt.fmt_id(ext.expect_target()),
+                                ),
+                            ));
+                        });
                 }
 
-                IllegalAssocFnInvocation { name, def_id, .. } => {
+                IllegalAssocFnInvocation {
+                    name,
+                    def_id,
+                    ty_id,
+                    span,
+                } => {
                     let def = ctx.fmt.definitions.get(*def_id);
                     let fn_def = def.kind.expect_fn();
 
                     if fn_def.params.len() < 1 {
                         diag.note(
-                        def.span,
-                        format!(
-                            "associated function `{}` does not have a receiving parameter compatible to type `Self`",
-                            ctx.fmt.interner.get(*name)
-                        ),
-                    );
+                            def.span,
+                            format!(
+                                "no receiving parameter of `{}` found",
+                                ctx.fmt.interner.get(*name)
+                            ),
+                        );
                     } else {
                         let rec_param_def = ctx.fmt.definitions.get(fn_def.params[0]);
                         diag.note(
                             rec_param_def.span,
                             format!(
-                                "receiving parameter `{}` of `{}` does not have a compatible type to `Self`",
+                                "incompatible receiving parameter `{}` of `{}`",
                                 ctx.fmt.interner.get(rec_param_def.name),
-                                ctx.fmt.interner.get(*name)
+                                ctx.fmt.interner.get(*name),
                             ),
                         );
                     }
+
+                    diag.help(
+                        *span,
+                        format!(
+                            "use the associated function call syntax `{}::{}({})`",
+                            ctx.fmt.fmt_id(*ty_id),
+                            ctx.fmt.interner.get(*name),
+                            def.kind
+                                .expect_fn()
+                                .params
+                                .iter()
+                                .map(|param| {
+                                    let def = ctx.fmt.definitions.get(*param);
+                                    format!("/* {} */", ctx.fmt.interner.get(def.name),)
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    )
                 }
 
                 ReceiverAccessMismatch {

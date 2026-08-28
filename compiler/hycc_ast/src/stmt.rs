@@ -47,6 +47,5 @@ pub struct RetStmt {
 #[derive(Debug, Clone)]
 pub struct PassStmt {
     pub value: Option<Box<Expr>>,
-    pub label: Option<Token>,
     pub span: Span,
 }

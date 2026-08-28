@@ -37,6 +37,5 @@ pub struct HirRetStmt<'h> {
 #[derive(Debug, Clone)]
 pub struct HirPassStmt<'h> {
     pub value: Option<&'h HirExpr<'h>>,
-    pub label: Option<&'h HirRawIdent>,
     pub span: Span,
 }

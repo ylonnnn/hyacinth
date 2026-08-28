@@ -7,7 +7,7 @@ use hycc_ast::{
         Unary,
     },
     path::{Identifier, Path},
-    stmt::{PassStmt, Stmt, StmtKind},
+    stmt::{PassStmt, RetStmt, Stmt, StmtKind},
     token::{Token, TokenGraph, TokenIdentKind, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
     ty::Ty,
@@ -561,7 +561,7 @@ impl<'s> Parser<'s> {
         };
 
         let cond = Box::new(self.use_ctx(ParserCtx::IfCond, |s| s.parse_expr(0))?);
-        let consequent = Box::new(self.parse_block()?);
+        let consequent = Box::new(self.parse_if_expr_branch()?);
 
         let alternate = if let (true, Some(_)) =
             self.expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::Else))
@@ -575,11 +575,10 @@ impl<'s> Parser<'s> {
                     stmts: vec![Stmt::new(StmtKind::Pass(Box::new(PassStmt {
                         span: ite.span,
                         value: Some(Box::new(ite)),
-                        label: None,
                     })))],
                 })
             } else {
-                Some(self.parse_block()?)
+                Some(self.parse_if_expr_branch()?)
             }
         } else {
             None
@@ -596,6 +595,25 @@ impl<'s> Parser<'s> {
             consequent,
             alternate: alternate.map(|alt| Box::new(alt)),
         })
+    }
+
+    pub fn parse_if_expr_branch(&mut self) -> ParseResult<Block> {
+        ternary!(
+            self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0,
+            self.parse_block(),
+            {
+                let expr = self.parse_expr(0)?;
+                let span = expr.span;
+
+                Ok(Block {
+                    stmts: vec![Stmt::new(StmtKind::Pass(Box::new(PassStmt {
+                        value: Some(Box::new(expr)),
+                        span,
+                    })))],
+                    span,
+                })
+            }
+        )
     }
 
     // PATH { (FIELD (, FIELD)?)* }
@@ -671,6 +689,7 @@ impl<'s> Parser<'s> {
     }
 
     // fn ( (PARAM (, PARAM)*)? ) (-> RET_TY)? BODY
+    // fn ( (PARAM (, PARAM)*)? ) (-> RET_TY)? (BLOCK | EXPR)
     pub fn parse_anon_fn(&mut self, span: Span) -> ParseResult<AnonFn> {
         // ( (PARAM (, PARAM)*)? )
         let params = self.parse_anon_fn_param_list()?;
@@ -683,7 +702,22 @@ impl<'s> Parser<'s> {
         }
 
         // BODY
-        let body = self.parse_block()?;
+        let body = ternary!(
+            self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0,
+            self.parse_block()?,
+            {
+                let expr = self.parse_expr(0)?;
+                let span = expr.span;
+
+                Block {
+                    stmts: vec![Stmt::new(StmtKind::Ret(Box::new(RetStmt {
+                        value: Some(Box::new(expr)),
+                        span,
+                    })))],
+                    span,
+                }
+            }
+        );
 
         Ok(AnonFn {
             span: span.merge(body.span),

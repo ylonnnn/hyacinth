@@ -83,7 +83,6 @@ impl<'s> Parser<'s> {
                     span: value
                         .as_ref()
                         .map_or(tok.span, |val| val.span.merge(tok.span)),
-                    label: None, // TODO: block label used in pass
                     value,
                 }))))
             }

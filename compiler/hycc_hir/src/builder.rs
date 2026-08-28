@@ -343,10 +343,6 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     fn lower_pass_stmt(&mut self, pass: &PassStmt) -> HirPassStmt<'h> {
         HirPassStmt {
             value: pass.value.as_ref().map(|value| self.lower_expr(&value)),
-            label: pass
-                .label
-                .as_ref()
-                .map(|label| self.lower_raw_ident(&label)),
             span: pass.span,
         }
     }

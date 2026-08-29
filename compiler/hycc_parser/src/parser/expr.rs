@@ -602,6 +602,8 @@ impl<'s> Parser<'s> {
             self.expect_preserved_exact_nonlf(TokenKind::LeftBrace).0,
             self.parse_block(),
             {
+                self.require_exact_nonlf(TokenKind::Colon)?;
+
                 let expr = self.parse_expr(0)?;
                 let span = expr.span;
 
@@ -619,10 +621,7 @@ impl<'s> Parser<'s> {
     // PATH { (FIELD (, FIELD)?)* }
     // PATH { (IDENT : EXPR (, IDENT : EXPR)?)* }
     pub fn parse_struct_expr(&mut self, path: Path) -> ParseResult<StructExpr> {
-        let Some(tokg) = self.next_nonlf() else {
-            unreachable!()
-        };
-
+        let tokg = self.next_nonlf().unwrap();
         let span = path.span.merge(tokg.span());
         let TokenGraph::Collection { data, .. } = tokg else {
             unreachable!()

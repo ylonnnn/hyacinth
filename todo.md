@@ -31,7 +31,7 @@
 - [ ] fix an issue where recursion causes type computation cycle errors
 - [x] fix an issue where arguments of method calls are not checked
 - [x] fix an issue where the types of anonymous functions are not properly initially unified
-- [ ] add a flag/`ParserCtx::IfBranch` or `ParserCtx::Branch` (separate from just `IfCond`) to disambiguate between function calls and tuple expressions
+- [x] fix an issue with the expression branches of `if` expressions by adding some sort of disambiguator
 
 ### Update/Refactor
 
@@ -45,6 +45,7 @@
 - [x] allow expressions to be the branches of `if` expressions for flexibility and convenience
 - [x] improve the return type of `TyInferer::check()`
 - [x] allow expressions to be the body of an anonymous function and be used as the implicit return value for flexibility and convenience
+- [x] allow terminator requirements to accept `}` as a valid alternative for terminators indicating that the block is enclosed meaning that the statement will not further proceed
 
 ### Test
 

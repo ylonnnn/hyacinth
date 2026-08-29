@@ -6,6 +6,7 @@ use hycc_ast::{
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics};
 use hycc_source::Source;
 use hycc_span::Span;
+use hycc_util::ternary;
 
 use crate::parser::diag::{ParserDiag, ParserDiagCtx};
 
@@ -240,40 +241,51 @@ impl<'p> Parser<'p> {
         &mut self,
         kind: ParserTerminatorKind,
     ) -> Result<TokenGraph, Option<ParserDiag>> {
-        match &kind {
-            ParserTerminatorKind::LnFeed => self.require(
+        let expected = match &kind {
+            ParserTerminatorKind::LnFeed => TokenKind::LnFeed.to_string(),
+            ParserTerminatorKind::SemiColon => TokenKind::SemiColon.to_string(),
+            ParserTerminatorKind::Both => "terminator".into(),
+        };
+
+        let res = match &kind {
+            ParserTerminatorKind::LnFeed => self.stream.expect(
                 TokenKind::LnFeed,
                 TokenConsumptionKind::UponSuccess,
                 &[],
                 TokenMatchExpectation::Exact,
             ),
 
-            ParserTerminatorKind::SemiColon => self.require_exact_nonlf(TokenKind::SemiColon),
+            ParserTerminatorKind::SemiColon => self.expect_exact_nonlf(TokenKind::SemiColon),
 
             ParserTerminatorKind::Both => {
-                if let (true, Some(tokg)) = self.stream.expect(
+                let lf_term = self.stream.expect(
                     TokenKind::LnFeed,
                     TokenConsumptionKind::UponSuccess,
                     &[],
                     TokenMatchExpectation::Exact,
-                ) {
-                    return Ok(tokg);
-                }
+                );
 
-                if let (true, Some(tokg)) = self.expect_exact_nonlf(TokenKind::SemiColon) {
-                    return Ok(tokg);
-                }
-
-                let Some(token) = self.peek_nonlf_token().cloned() else {
-                    return Err(None);
-                };
-
-                Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
-                    token,
-                    "terminator",
-                )))
+                ternary!(
+                    lf_term.0,
+                    lf_term,
+                    self.expect_exact_nonlf(TokenKind::SemiColon)
+                )
             }
-        }
+        };
+
+        ternary!(
+            res.0,
+            Ok(res.1.unwrap()),
+            self.expect_preserved_exact_nonlf(TokenKind::RightBrace)
+                .1
+                .ok_or_else(|| {
+                    let token = self.peek_nonlf_token()?;
+                    Some(ParserDiag::unexpected_token_expected_arbitrary(
+                        token.clone(),
+                        "terminator",
+                    ))
+                })
+        )
     }
 
     pub fn use_stream<F, T>(&mut self, mut stream: TokenStream, mut f: F) -> T

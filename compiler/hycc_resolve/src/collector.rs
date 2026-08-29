@@ -338,36 +338,40 @@ impl<'c> Collector<'c> {
         let scope_id = self.scope_ctx.attach(item.id, Scope::new());
 
         self.enter_scope(scope_id, CollectorLevel::Top, |s| {
-            if let Some(generic_params) = &extend.generic_params {
+            extend.generic_params.as_ref().map(|generic_params| {
                 s.scope_ctx.generic_depth += 1;
 
-                for (i, generic_param) in generic_params.list.iter().enumerate() {
-                    let res = s.define(Definition::new(
-                        generic_param.ident.ident,
-                        DefKind::GenericParam(Box::new(GenericParamDef::new(
-                            s.scope_ctx.generic_depth,
+                generic_params
+                    .list
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, generic_param)| {
+                        let res = s.define(Definition::new(
+                            generic_param.ident.ident,
+                            DefKind::GenericParam(Box::new(GenericParamDef::new(
+                                s.scope_ctx.generic_depth,
+                                i as u32,
+                                generic_param.kind,
+                            ))),
+                            s.petal_ctx.top_id(),
+                            generic_param.id,
+                            generic_param.span,
+                            DefAccessibility::Priv,
+                        ));
+
+                        let Some(binding) = res.emit(dctx) else {
+                            return;
+                        };
+
+                        let ty_id = s.tctx.make_param_ty(
+                            binding.def_id,
+                            s.scope_ctx.generic_depth as u32,
                             i as u32,
-                            generic_param.kind,
-                        ))),
-                        s.petal_ctx.top_id(),
-                        generic_param.id,
-                        generic_param.span,
-                        DefAccessibility::Priv,
-                    ));
-
-                    let Some(binding) = res.emit(dctx) else {
-                        continue;
-                    };
-
-                    let ty_id = s.tctx.make_param_ty(
-                        binding.def_id,
-                        s.scope_ctx.generic_depth as u32,
-                        i as u32,
-                    );
-                    s.tctx
-                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
-                }
-            }
+                        );
+                        s.tctx
+                            .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
+                    })
+            });
 
             // Define `Self`
             let self_sym = s.interner.intern("Self");
@@ -464,23 +468,24 @@ impl<'c> Collector<'c> {
             return Ok(());
         };
 
-        for petal_id in &petals {
+        petals.iter().for_each(|petal_id| {
             self.petal_ctx.push(*petal_id);
             self.scope_ctx
                 .push_id(self.petal_ctx.expect(*petal_id).scope_id(&self.scope_ctx));
-        }
+        });
 
         // Define built-ins
         self.init_builtin(dctx);
 
-        for item in &petal.items {
-            self.collect_item(&item, dctx).emit(dctx);
-        }
+        petal
+            .items
+            .iter()
+            .for_each(|item| self.collect_item(&item, dctx).emit_discard(dctx));
 
-        for _ in 0..petals.len() {
+        (0..petals.len()).for_each(|_| {
             self.scope_ctx.pop();
             self.petal_ctx.pop();
-        }
+        });
 
         Ok(())
     }
@@ -554,43 +559,47 @@ impl<'c> Collector<'c> {
         let mut adt_generic_args = Vec::new();
         let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
         self.enter_scope(scope_id, CollectorLevel::Top, |s| {
-            if let Some(generic_params) = &strct.generic_params {
+            strct.generic_params.as_ref().map(|generic_params| {
                 s.scope_ctx.generic_depth += 1;
 
-                for (i, generic_param) in generic_params.list.iter().enumerate() {
-                    let res = s.define(Definition::new(
-                        generic_param.ident.ident,
-                        DefKind::GenericParam(Box::new(GenericParamDef::new(
-                            s.scope_ctx.generic_depth,
+                generic_params
+                    .list
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, generic_param)| {
+                        let res = s.define(Definition::new(
+                            generic_param.ident.ident,
+                            DefKind::GenericParam(Box::new(GenericParamDef::new(
+                                s.scope_ctx.generic_depth,
+                                i as u32,
+                                generic_param.kind,
+                            ))),
+                            s.petal_ctx.top_id(),
+                            generic_param.id,
+                            generic_param.span,
+                            DefAccessibility::Priv,
+                        ));
+
+                        let Some(binding) = res.emit(dctx) else {
+                            return;
+                        };
+
+                        let adt_def = s.definitions.get_mut(def_id).kind.expect_mut_adt();
+                        adt_def.generic_params.push(binding.def_id);
+
+                        // TODO: determine the param to be created and attached based on the
+                        // generic parameter kind
+                        let ty_id = s.tctx.make_param_ty(
+                            binding.def_id,
+                            s.scope_ctx.generic_depth as u32,
                             i as u32,
-                            generic_param.kind,
-                        ))),
-                        s.petal_ctx.top_id(),
-                        generic_param.id,
-                        generic_param.span,
-                        DefAccessibility::Priv,
-                    ));
+                        );
 
-                    let Some(binding) = res.emit(dctx) else {
-                        continue;
-                    };
-
-                    let adt_def = s.definitions.get_mut(def_id).kind.expect_mut_adt();
-                    adt_def.generic_params.push(binding.def_id);
-
-                    // TODO: determine the param to be created and attached based on the
-                    // generic parameter kind
-                    let ty_id = s.tctx.make_param_ty(
-                        binding.def_id,
-                        s.scope_ctx.generic_depth as u32,
-                        i as u32,
-                    );
-
-                    adt_generic_args.push(GenericArg::Ty(ty_id));
-                    s.tctx
-                        .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
-                }
-            }
+                        adt_generic_args.push(GenericArg::Ty(ty_id));
+                        s.tctx
+                            .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
+                    });
+            });
 
             s.scope_ctx.generic_depth -= strct.generic_params.is_some() as u32;
         });
@@ -609,7 +618,7 @@ impl<'c> Collector<'c> {
             .expect_mut_adt()
             .expect_mut_struct();
 
-        for field in &strct.fields.list {
+        strct.fields.list.iter().for_each(|field| {
             let name = field.ident.ident;
             if let Some(idx) = def.field_map.get(&name) {
                 todo!("throw error: duplication: {idx:?}")
@@ -622,7 +631,7 @@ impl<'c> Collector<'c> {
                 span: field.span,
                 ty: field.ty.id,
             });
-        }
+        });
 
         Ok(())
     }
@@ -762,6 +771,8 @@ impl<'c> Collector<'c> {
             Ty::new(infer_ty_id, var.ty.map_or_else(|| item.span, |ty| ty.span)),
         );
 
+        var.val.map(|val| self.collect_expr(&val, dctx));
+
         Ok(())
     }
 
@@ -776,9 +787,10 @@ impl<'c> Collector<'c> {
         let scope_id = self.scope_ctx.try_attach(block.id, Scope::new());
 
         self.enter_scope(scope_id, CollectorLevel::Local, |s| {
-            for stmt in &block.stmts {
-                s.collect_stmt(&stmt, dctx).emit(dctx);
-            }
+            block
+                .stmts
+                .iter()
+                .for_each(|stmt| s.collect_stmt(&stmt, dctx).emit_discard(dctx));
         });
 
         Ok(())
@@ -815,7 +827,6 @@ impl<'c> Collector<'c> {
 
             HirExprKind::Binary(_, left, right) => {
                 self.collect_expr(&left, dctx).emit(dctx);
-
                 self.collect_expr(&right, dctx)
             }
 
@@ -824,32 +835,33 @@ impl<'c> Collector<'c> {
             HirExprKind::Cast(cast) => self.collect_expr(&cast.expr, dctx),
             HirExprKind::Assign(assignee, expr) => {
                 self.collect_expr(&assignee, dctx).emit(dctx);
-
                 self.collect_expr(&expr, dctx)
             }
 
             HirExprKind::Block(block) => self.collect_block(&block, dctx),
 
             HirExprKind::Array(array) => {
-                for element in &array.elements {
-                    self.collect_expr(&element, dctx).emit(dctx);
-                }
+                array
+                    .elements
+                    .iter()
+                    .for_each(|el| self.collect_expr(&el, dctx).emit_discard(dctx));
 
                 Ok(())
             }
 
             HirExprKind::Tuple(tup) => {
-                for element in &tup.elements {
-                    self.collect_expr(&element, dctx).emit(dctx);
-                }
+                tup.elements
+                    .iter()
+                    .for_each(|el| self.collect_expr(&el, dctx).emit_discard(dctx));
 
                 Ok(())
             }
 
             HirExprKind::Struct(strct) => {
-                for field in &strct.fields {
-                    self.collect_expr(&field.val, dctx).emit(dctx);
-                }
+                strct
+                    .fields
+                    .iter()
+                    .for_each(|field| self.collect_expr(&field.val, dctx).emit_discard(dctx));
 
                 Ok(())
             }
@@ -857,7 +869,7 @@ impl<'c> Collector<'c> {
             HirExprKind::AnonFn(anfn) => {
                 let scope_id = self.scope_ctx.attach(expr.id, Scope::new());
                 self.enter_scope(scope_id, CollectorLevel::Local, |s| {
-                    for param in &anfn.params.list {
+                    anfn.params.list.iter().for_each(|param| {
                         s.define(Definition::new(
                             param.ident.ident,
                             DefKind::FnParam,
@@ -866,12 +878,8 @@ impl<'c> Collector<'c> {
                             param.span,
                             DefAccessibility::Priv,
                         ))
-                        .emit(dctx);
-
-                        let Some(p_ty) = param.ty else {
-                            continue;
-                        };
-                    }
+                        .emit_discard(dctx)
+                    });
 
                     s.scope_ctx.attach_id(anfn.body.id, scope_id);
                     s.collect_block(&anfn.body, dctx)
@@ -879,12 +887,13 @@ impl<'c> Collector<'c> {
             }
 
             HirExprKind::FnCall(call) => {
-                let dctx = dctx;
                 self.collect_expr(&call.callee, dctx).emit(dctx);
 
-                for argument in &call.arguments.data {
-                    self.collect_expr(&argument, dctx).emit(dctx);
-                }
+                &call
+                    .arguments
+                    .data
+                    .iter()
+                    .for_each(|argument| self.collect_expr(&argument, dctx).emit_discard(dctx));
 
                 Ok(())
             }
@@ -894,21 +903,21 @@ impl<'c> Collector<'c> {
             HirExprKind::MethodCall(call) => {
                 self.collect_expr(&call.receiver, dctx).emit(dctx);
 
-                for argument in &call.arguments.data {
-                    self.collect_expr(&argument, dctx).emit(dctx);
-                }
+                &call
+                    .arguments
+                    .data
+                    .iter()
+                    .for_each(|argument| self.collect_expr(&argument, dctx).emit_discard(dctx));
 
                 Ok(())
             }
 
             HirExprKind::If(ite) => {
                 self.collect_expr(&ite.cond, dctx).emit(dctx);
-
                 self.collect_block(&ite.consequent, dctx).emit(dctx);
-
-                ite.alternate.as_ref().map(|alternate| {
-                    self.collect_block(&alternate, dctx).emit(dctx);
-                });
+                ite.alternate
+                    .as_ref()
+                    .map(|alternate| self.collect_block(&alternate, dctx).emit(dctx));
 
                 Ok(())
             }

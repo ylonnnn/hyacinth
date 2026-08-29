@@ -525,97 +525,71 @@ impl<'r> Resolver<'r> {
         assignee: &HirExpr,
         expr: &HirExpr,
     ) -> ResolveResult {
-        if let Err(diag) = self.resolve_expr(&assignee) {
-            self.dctx.add(diag);
-        }
-
+        self.resolve_expr(&assignee).emit(&mut self.dctx);
         self.resolve_expr(&expr)
     }
 
     pub(crate) fn resolve_array_expr(&mut self, array: &HirArrayExpr) -> ResolveResult {
-        for expr in &array.elements {
-            if let Err(diag) = self.resolve_expr(&expr) {
-                self.dctx.add(diag);
-            }
-        }
+        array
+            .elements
+            .iter()
+            .for_each(|el| self.resolve_expr(&el).emit_discard(&mut self.dctx));
 
         Ok(())
     }
 
     pub(crate) fn resolve_tuple_expr(&mut self, tup: &HirTupleExpr) -> ResolveResult {
-        for el in &tup.elements {
-            if let Err(diag) = self.resolve_expr(&el) {
-                self.dctx.add(diag);
-            }
-        }
+        tup.elements
+            .iter()
+            .for_each(|el| self.resolve_expr(&el).emit_discard(&mut self.dctx));
 
         Ok(())
     }
 
     pub(crate) fn resolve_struct_expr(&mut self, strct: &HirStructExpr) -> ResolveResult {
         self.expect_space(DefSpace::Type, |s| {
-            if let Err(diag) = s.resolve_path(&strct.path) {
-                s.dctx.add(diag);
-            }
+            s.resolve_path(&strct.path).emit(&mut s.dctx)
         });
 
-        Ok(for field in &strct.fields {
-            if let Err(diag) = self.resolve_expr(&field.val) {
-                self.dctx.add(diag);
-            }
-        })
-    }
-
-    pub(crate) fn resolve_anon_fn_expr(&mut self, anfn_expr: &HirExpr) -> ResolveResult {
-        let HirExprKind::AnonFn(anfn) = &anfn_expr.kind else {
-            unreachable!()
-        };
-
-        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(anfn_expr.id);
-        self.enter_scope(scope_id, |s| {
-            for param in &anfn.params.list {
-                let Some(p_ty) = param.ty else {
-                    continue;
-                };
-
-                if let Err(diag) = s.resolve_ty(&p_ty) {
-                    s.dctx.add(diag);
-                }
-            }
-
-            if let Some(ret_ty) = &anfn.ret_ty {
-                if let Err(diag) = s.resolve_ty(&ret_ty) {
-                    s.dctx.add(diag);
-                }
-            }
-
-            s.resolve_block(&anfn.body)
+        strct.fields.iter().for_each(|field| {
+            self.resolve_expr(&field.val).emit(&mut self.dctx);
         });
 
         Ok(())
     }
 
-    pub(crate) fn resolve_fn_call_expr(&mut self, call: &HirFnCall) -> ResolveResult {
-        if let Err(diag) = self.resolve_expr(&call.callee) {
-            self.dctx.add(diag);
-        }
+    pub(crate) fn resolve_anon_fn_expr(&mut self, expr: &HirExpr) -> ResolveResult {
+        let HirExprKind::AnonFn(anfn) = &expr.kind else {
+            unreachable!()
+        };
 
-        for argument in &call.arguments.data {
-            if let Err(diag) = self.resolve_expr(&argument) {
-                self.dctx.add(diag);
-            }
-        }
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(expr.id);
+        self.enter_scope(scope_id, |s| {
+            anfn.params.list.iter().for_each(|param| {
+                param.ty.map(|ty| s.resolve_ty(&ty).emit(&mut s.dctx));
+            });
+
+            anfn.ret_ty
+                .map(|ret_ty| s.resolve_ty(&ret_ty).emit(&mut s.dctx));
+
+            s.resolve_block(&anfn.body)
+        })
+    }
+
+    pub(crate) fn resolve_fn_call_expr(&mut self, call: &HirFnCall) -> ResolveResult {
+        self.resolve_expr(&call.callee).emit(&mut self.dctx);
+        call.arguments
+            .data
+            .iter()
+            .for_each(|argument| self.resolve_expr(&argument).emit_discard(&mut self.dctx));
 
         Ok(())
     }
 
     pub(crate) fn resolve_method_call_expr(&mut self, call: &HirMethodCall) -> ResolveResult {
-        if let Err(diag) = self.resolve_expr(&call.receiver) {
-            self.dctx.add(diag);
-        }
-
-        if let Some(arguments) = &call.callee.arguments {
-            for argument in &arguments.data {
+        self.resolve_expr(&call.receiver).emit(&mut self.dctx);
+        call.callee.arguments.as_ref().map(|arguments| {
+            arguments.data.iter().for_each(|argument| {
                 let res = match &argument {
                     HirIdentArgument::Expr(expr) => {
                         self.expect_space(DefSpace::Value, |s| s.resolve_expr(&expr))
@@ -626,35 +600,24 @@ impl<'r> Resolver<'r> {
                     }
                 };
 
-                if let Err(diag) = res {
-                    self.dctx.add(diag);
-                }
-            }
-        }
+                res.emit(&mut self.dctx);
+            })
+        });
 
-        for argument in &call.arguments.data {
-            if let Err(diag) = self.resolve_expr(&argument) {
-                self.dctx.add(diag);
-            }
-        }
+        call.arguments
+            .data
+            .iter()
+            .for_each(|argument| self.resolve_expr(&argument).emit_discard(&mut self.dctx));
 
         Ok(())
     }
 
     pub(crate) fn resolve_if_expr(&mut self, ite: &HirIfExpr) -> ResolveResult {
-        if let Err(diag) = self.resolve_expr(&ite.cond) {
-            self.dctx.add(diag);
-        }
-
-        if let Err(diag) = self.resolve_block(&ite.consequent) {
-            self.dctx.add(diag);
-        }
-
-        ite.alternate.as_ref().map(|alt| {
-            if let Err(diag) = self.resolve_block(&alt) {
-                self.dctx.add(diag);
-            }
-        });
+        self.resolve_expr(&ite.cond).emit(&mut self.dctx);
+        self.resolve_block(&ite.consequent).emit(&mut self.dctx);
+        ite.alternate
+            .as_ref()
+            .map(|alt| self.resolve_block(&alt).emit(&mut self.dctx));
 
         Ok(())
     }

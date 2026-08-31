@@ -124,7 +124,6 @@ pub enum TokenIdentKind {
     // Keywords
     Pub,
 
-    // This,
     Super,
     Spathe,
 
@@ -141,6 +140,7 @@ pub enum TokenIdentKind {
     Fn,
     Let,
 
+    Comp,
     Mut,
 
     // Conrol Flow
@@ -252,6 +252,7 @@ impl Display for TokenIdentKind {
                 TokenIdentKind::Fn => "fn",
                 TokenIdentKind::Let => "let",
 
+                TokenIdentKind::Comp => "comp",
                 TokenIdentKind::Mut => "mut",
 
                 TokenIdentKind::If => "if",

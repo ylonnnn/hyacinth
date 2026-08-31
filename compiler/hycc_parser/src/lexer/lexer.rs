@@ -46,6 +46,7 @@ impl<'l> Lexer<'l> {
                     TokenIdentKind::Fn,
                     TokenIdentKind::Let,
                     TokenIdentKind::Struct,
+                    TokenIdentKind::Comp,
                     TokenIdentKind::Mut,
                     TokenIdentKind::If,
                     TokenIdentKind::Else,

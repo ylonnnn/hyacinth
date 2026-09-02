@@ -21,8 +21,10 @@ pub enum ItemKind {
     Intf(Box<Intf>),
     Extend(Box<Extend>),
     Struct(Box<Struct>),
+    FnDecl(Box<FnSig>),
     Fn(Box<Fn>),
-    VarDecl(Box<VarDecl>),
+    VarDecl(Box<VarSig>),
+    VarDef(Box<VarDef>),
 }
 
 impl ItemKind {
@@ -33,8 +35,10 @@ impl ItemKind {
             Self::Intf(intf) => intf.span,
             Self::Extend(extend) => extend.span(),
             Self::Struct(strct) => strct.ident.span,
-            Self::VarDecl(var) => var.span(),
+            Self::FnDecl(func) => func.span(),
             Self::Fn(func) => func.span(),
+            Self::VarDecl(var) => var.span(),
+            Self::VarDef(var) => var.span(),
         }
     }
 
@@ -45,8 +49,10 @@ impl ItemKind {
             Self::Intf(_) => "intf",
             Self::Extend(_) => "extend",
             Self::Struct(_) => "struct",
-            Self::VarDecl(_) => "variable declaration",
+            Self::FnDecl(_) => "function declaration",
             Self::Fn(_) => "function",
+            Self::VarDecl(_) => "variable declaration",
+            Self::VarDef(_) => "variable definition",
         }
     }
 }
@@ -130,39 +136,35 @@ impl Petal {
 }
 
 #[derive(Debug, Clone)]
-pub enum IntfItemAssocFnKind {
-    Sig(Box<FnSig>),
-    Impl(Box<Item>),
-}
-
-#[derive(Debug, Clone)]
 pub enum IntfItem {
-    // AssocTy(Box<Ty>),
-    AssocConst(Box<Item>), // VarDecl Item
-    AssocFn(IntfItemAssocFnKind),
+    Fn(Box<Item>),
+    Var(Box<Item>),
 }
 
 /// interface Node
 #[derive(Debug, Clone)]
 pub struct Intf {
     pub ident: Token,
-    // TODO: generic_params
+    pub generic_params: Option<GenericParamList>,
     pub items: Vec<IntfItem>,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct Extend {
-    pub target: Ty,
     pub generic_params: Option<GenericParamList>,
-    // TODO: with: Option<[intf]> // optional interface implementation
+    pub intf: Option<Path>,
+    pub target: Ty,
     // TODO: if: Option<...> // conditional extension clause
     pub items: Vec<Item>,
 }
 
 impl Extend {
     pub fn span(&self) -> Span {
-        self.target.span
+        self.intf.as_ref().map_or_else(
+            || self.target.span,
+            |intf| self.target.span.merge(intf.span),
+        )
     }
 }
 
@@ -239,18 +241,32 @@ impl FnParam {
 }
 
 #[derive(Debug, Clone)]
-pub struct VarDecl {
+pub struct VarSig {
     pub ident: Token,
-    pub mutability: Mutability,
     pub ty: Option<Box<Ty>>,
+    pub mutability: Mutability,
+    pub is_comp: bool,
+}
+
+impl VarSig {
+    pub fn span(&self) -> Span {
+        self.ty
+            .as_ref()
+            .map_or_else(|| self.ident.span, |ty| self.ident.span.merge(ty.span))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VarDef {
+    pub sig: VarSig,
     pub val: Option<Box<Expr>>,
 }
 
-impl VarDecl {
+impl VarDef {
     pub fn span(&self) -> Span {
-        self.ident.span.merge(self.val.as_ref().map_or_else(
-            || self.ty.as_ref().map_or_else(|| self.ident.span, |t| t.span),
-            |v| v.span,
-        ))
+        let sig_span = self.sig.span();
+        self.val
+            .as_ref()
+            .map_or_else(|| sig_span, |val| sig_span.merge(val.span))
     }
 }

@@ -11,7 +11,7 @@ use hycc_symbol::Symbol;
 
 use crate::{ctx::TyId, ty::TyKind};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ExtensionTable {
     data: Vec<Extension>,
     native: HashMap<ExtTargetKind, Vec<ExtensionId>>,
@@ -204,18 +204,18 @@ pub enum ExtNominalTargetKind {
     Blanket,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Extension {
     pub items: HashMap<(DefSpace, Symbol), Binding>,
     pub(crate) target: Option<TyId>,
     pub hir_id: HirId,
-    pub generic_param_count: u8,
+    pub generic_param_count: usize,
 }
 
 impl Extension {
     pub fn new(
         hir_id: HirId,
-        generic_param_count: u8,
+        generic_param_count: usize,
         target: Option<TyId>,
         items: HashMap<(DefSpace, Symbol), Binding>,
     ) -> Self {

@@ -143,9 +143,7 @@ pub enum DefKind {
     Builtin(BuiltinKind),
 
     Petal,
-    intf,
-
-    Alias(Box<DefKind>),
+    Intf,
 
     Adt(Box<AdtDef>),
 
@@ -162,8 +160,7 @@ impl DefKind {
         match self {
             Self::Builtin(_)
             | Self::Petal
-            | Self::intf
-            | Self::Alias(_)
+            | Self::Intf
             | Self::GenericParam(_)
             | Self::Fn(_)
             | Self::FnParam
@@ -178,9 +175,7 @@ impl DefKind {
             Self::Builtin(_) => String::from("built-in"),
 
             Self::Petal => String::from("petal"),
-            Self::intf => String::from("interface"),
-
-            Self::Alias(_) => String::from("alias"),
+            Self::Intf => String::from("interface"),
 
             Self::Adt(kind) => kind.kind().into(),
 
@@ -208,9 +203,8 @@ impl DefKind {
 
         match self {
             Self::Builtin(_) => unreachable!(),
-            Self::Alias(data) => data.space(),
 
-            Self::Petal | Self::intf | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
+            Self::Petal | Self::Intf | Self::Adt(_) | Self::GenericParam(_) => DefSpace::Type,
 
             Self::Fn(_) | Self::FnParam | Self::Var(_) => DefSpace::Value,
         }
@@ -220,12 +214,10 @@ impl DefKind {
         match &self {
             DefKind::Petal => DefResKind::Petal,
 
-            DefKind::intf
+            DefKind::Intf
             | DefKind::Builtin(BuiltinKind::SelfTy)
             | DefKind::Builtin(BuiltinKind::Ty(_))
             | DefKind::Adt(_) => DefResKind::Ty,
-
-            DefKind::Alias(def_kind) => def_kind.res_kind(),
 
             DefKind::GenericParam(gp_def) => match &gp_def.kind {
                 HirGenericParamKind::Ty => DefResKind::Ty,
@@ -348,10 +340,12 @@ pub enum BuiltinIntTy {
 }
 
 #[derive(Debug, Clone)]
-pub struct intfDef {}
+pub struct IntfDef {
+    pub generic_params: Vec<DefId>,
+}
 
 #[derive(Debug, Clone)]
-pub enum intfDefItem {}
+pub enum IntfDefItem {}
 
 #[derive(Debug, Clone)]
 pub enum AdtKind {

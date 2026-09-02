@@ -116,7 +116,7 @@ pub enum ParserDiagErrorKind {
     UnexpectedToken {
         token: Token,
         expected: Option<UnexpectedTokenExpectation>,
-    } = 0,
+    },
 
     InvalidVarDecl {
         ident: Token,

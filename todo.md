@@ -13,6 +13,7 @@
 - [ ] implement an automated instantiator which automatically creates generic arguments (inferred) other than the instantiator for identifier nodes
 - [x] implement primitive type casting
 - [ ] implement pointers and corresponding casts and type checking/inference
+- [x] implement interface type extensions
 
 ### Fix
 
@@ -46,6 +47,9 @@
 - [x] improve the return type of `TyInferer::check()`
 - [x] allow expressions to be the body of an anonymous function and be used as the implicit return value for flexibility and convenience
 - [x] allow terminator requirements to accept `}` as a valid alternative for terminators indicating that the block is enclosed meaning that the statement will not further proceed
+- [ ] update the accessibility modifiers to allow for either current petal relativity or target petal relativity as the source
+- [ ] path expressions should provide a helpful diagnostic when the last segment is a petal
+- [x] rewrite the inferface items
 
 ### Test
 

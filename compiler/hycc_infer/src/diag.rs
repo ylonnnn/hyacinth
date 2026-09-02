@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use hycc_diagnostic::diagnostic::{
     Diag, DiagCtx, DiagEmitter, DiagKind, DiagLike, Diagnostics, FromResultEmitter,
 };
 use hycc_hir::{
-    def::{AdtKind, Binding, DefId, DefKind, DefinitionTable},
+    def::{AdtKind, Binding, DefId, DefKind, DefSpace, DefinitionTable},
     expr::HirFieldAccessFieldKind,
 };
 use hycc_resolve::diag::{ResolverDiagDataCtx, SymbolKind};
@@ -12,6 +14,7 @@ use hycc_ty::{
     ctx::{TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
+    intf::IntfId,
     ty::{AccessKind, RefMutability, Ty},
 };
 use hycc_util::{bug, ternary};

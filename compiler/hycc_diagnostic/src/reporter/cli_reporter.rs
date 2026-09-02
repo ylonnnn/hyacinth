@@ -200,8 +200,7 @@ impl<'r> CLIReporter<'r> {
                 .map(|detail| {
                     let ptr = match &detail.kind {
                         DiagDetailKind::Primary(_) => '^',
-                        DiagDetailKind::Note => '-',
-                        DiagDetailKind::Help => '~',
+                        DiagDetailKind::Note | DiagDetailKind::Help => '-',
                     };
 
                     EmphasisTarget::new(

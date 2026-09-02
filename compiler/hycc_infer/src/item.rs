@@ -1,11 +1,17 @@
 use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
-use hycc_hir::item::{HirExtend, HirItem, HirItemKind, HirPetal, HirStruct};
+use hycc_hir::{
+    HirId,
+    item::{
+        HirExtend, HirFnSig, HirIntf, HirIntfItem, HirItem, HirItemKind, HirPetal, HirStruct,
+        HirVarSig,
+    },
+};
 use hycc_span::Span;
 use hycc_ty::{
     ctx::{TyId, TyResState},
     ty::{InferKind, Ty, TyKind},
 };
-use hycc_util::bug;
+use hycc_util::{bug, ternary};
 
 use crate::{
     diag::{InferDiagErrorKind, InferResult},
@@ -18,11 +24,13 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.check_petal(&petal),
-            HirItemKind::Intf(intf) => todo!("infer intf"),
+            HirItemKind::Intf(intf) => self.check_intf(&intf),
             HirItemKind::Extend(extend) => self.check_extend(&extend),
             HirItemKind::Struct(strct) => Ok(()),
+            HirItemKind::FnDecl(sig) => self.check_fn_sig(item.id, &sig),
             HirItemKind::Fn(_) => self.check_fn(&item),
-            HirItemKind::VarDecl(_) => self.check_var_decl(&item),
+            HirItemKind::VarDecl(sig) => self.check_var_sig(item.id, &sig),
+            HirItemKind::VarDef(_) => self.check_var_def(&item),
         }
     }
 
@@ -30,11 +38,13 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.infer_petal(&petal),
-            HirItemKind::Intf(intf) => todo!("infer intf"),
+            HirItemKind::Intf(intf) => self.infer_intf(&intf),
             HirItemKind::Extend(extend) => self.infer_extend(&extend),
             HirItemKind::Struct(strct) => Ok(()),
+            HirItemKind::FnDecl(_) => Ok(()),
             HirItemKind::Fn(_) => self.infer_fn(&item),
-            HirItemKind::VarDecl(_) => self.infer_var_decl(&item),
+            HirItemKind::VarDecl(_) => Ok(()),
+            HirItemKind::VarDef(_) => self.infer_var_def(&item),
         }
     }
 
@@ -76,6 +86,34 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(())
     }
 
+    pub(crate) fn check_intf(&mut self, intf: &HirIntf) -> InferResult {
+        intf.items
+            .iter()
+            .for_each(|item| self.check_intf_item(&item).emit_discard(&mut self.dctx));
+
+        Ok(())
+    }
+
+    pub(crate) fn check_intf_item(&mut self, item: &HirIntfItem) -> InferResult {
+        match &item {
+            HirIntfItem::Fn(item) | HirIntfItem::Var(item) => self.check_item(&item),
+        }
+    }
+
+    pub(crate) fn infer_intf(&mut self, intf: &HirIntf) -> InferResult {
+        intf.items
+            .iter()
+            .for_each(|item| self.infer_intf_item(&item).emit_discard(&mut self.dctx));
+
+        Ok(())
+    }
+
+    pub(crate) fn infer_intf_item(&mut self, item: &HirIntfItem) -> InferResult {
+        match &item {
+            HirIntfItem::Fn(item) | HirIntfItem::Var(item) => self.infer_item(&item),
+        }
+    }
+
     // TODO: potentially merge check and inference logic
     pub(crate) fn check_extend(&mut self, extend: &HirExtend) -> InferResult {
         // Check items of the extension
@@ -97,41 +135,40 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         Ok(())
     }
 
-    pub(crate) fn check_fn(&mut self, item: &HirItem) -> InferResult {
+    pub(crate) fn check_fn_sig(&mut self, hir_id: HirId, sig: &HirFnSig) -> InferResult {
         if matches!(
-            self.tctx.expect_hir_res_state(item.id),
-            TyResState::Inferred(_)
+            self.tctx.expect_hir_res_state(hir_id),
+            TyResState::Inferred(_) | TyResState::Resolved(_)
         ) {
             return Ok(());
         }
 
+        let fn_ty = self.tctx.expect_hir_ty(hir_id).clone();
+        let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ty.id) else {
+            unreachable!()
+        };
+
+        self.dctx.error(
+            sig.ret_ty.map_or_else(|| sig.span, |ret_ty| ret_ty.span),
+            InferDiagErrorKind::InvalidInference(fn_ty.ret_ty),
+        );
+
+        Ok(())
+    }
+
+    pub(crate) fn check_fn(&mut self, item: &HirItem) -> InferResult {
         let func = &item.expect_fn();
+        self.check_fn_sig(item.id, &func.sig).emit(&mut self.dctx);
+
         let fn_ty = self.tctx.expect_hir_ty(item.id).clone();
-
-        match self.tctx.expect_hir_res_state(item.id) {
-            TyResState::Resolved(_) => {
-                // Recursively check each item of the body without
-                // performing unnecessary expression type inference
-                self.check_block(&func.body)
-            }
-
-            _ => {
-                self.infer_fn(&item).emit(&mut self.dctx);
-
-                let TyKind::Fn(fn_ty, _) = self.tctx.get(fn_ty.id) else {
-                    unreachable!()
-                };
-
-                self.dctx.error(
-                    func.sig
-                        .ret_ty
-                        .map_or_else(|| item.span, |ret_ty| ret_ty.span),
-                    InferDiagErrorKind::InvalidInference(fn_ty.ret_ty),
-                );
-
-                Ok(())
-            }
-        }
+        ternary!(
+            matches!(
+                self.tctx.expect_hir_res_state(item.id),
+                TyResState::Resolved(_)
+            ),
+            self.check_block(&func.body),
+            self.infer_fn(&item)
+        )
     }
 
     pub(crate) fn infer_fn(&mut self, item: &HirItem) -> InferResult {
@@ -175,40 +212,24 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         })
     }
 
-    pub(crate) fn check_var_decl(&mut self, item: &HirItem) -> InferResult {
+    pub(crate) fn check_var_sig(&mut self, hir_id: HirId, sig: &HirVarSig) -> InferResult {
         if matches!(
-            self.tctx.expect_hir_res_state(item.id),
-            TyResState::Inferred(_)
+            self.tctx.expect_hir_res_state(hir_id),
+            TyResState::Inferred(_) | TyResState::Resolved(_)
         ) {
             return Ok(());
         }
 
-        let decl = item.expect_var();
+        let ty_id = self.tctx.expect_hir_ty_id(hir_id);
+        self.dctx.error(
+            sig.ty.map_or_else(|| sig.span, |ty| ty.span),
+            InferDiagErrorKind::InvalidInference(ty_id),
+        );
 
-        match self.tctx.expect_hir_res_state(item.id) {
-            TyResState::Resolved(_) => {
-                // Recursively check each item of the body without
-                // performing unnecessary expression type inference
-                decl.val
-                    .as_ref()
-                    .map(|val| self.check_expr(&val).emit_discard(&mut self.dctx));
-                Ok(())
-            }
-
-            _ => {
-                self.infer_var_decl(&item).emit(&mut self.dctx);
-
-                self.dctx.error(
-                    decl.ty.as_ref().map_or(decl.span, |ty| ty.span),
-                    InferDiagErrorKind::InvalidInference(self.tctx.expect_hir_ty_id(item.id)),
-                );
-
-                Ok(())
-            }
-        }
+        Ok(())
     }
 
-    pub(crate) fn infer_var_decl(&mut self, item: &HirItem) -> InferResult {
+    pub(crate) fn check_var_def(&mut self, item: &HirItem) -> InferResult {
         if matches!(
             self.tctx.expect_hir_res_state(item.id),
             TyResState::Inferred(_)
@@ -216,19 +237,44 @@ impl<'i, 'h> TyInferer<'i, 'h> {
             return Ok(());
         }
 
-        let decl = item.expect_var();
-        let ty = decl
-            .ty
-            .and_then(|ty| self.tctx.get_hir_ty(ty.id).cloned())
-            .unwrap_or_else(|| {
-                let default_ty_id = self
-                    .tctx
-                    .get_hir_ty_id(item.id)
-                    .unwrap_or_else(|| self.tctx.make_inferred_ty(decl.span, InferKind::Any));
-                Ty::new(default_ty_id, decl.span)
-            });
+        let def = item.expect_var_def();
+        self.check_var_sig(item.id, &def.sig).emit(&mut self.dctx);
 
-        if let Some(expr) = decl.val {
+        ternary!(
+            !matches!(
+                self.tctx.expect_hir_res_state(item.id),
+                TyResState::Resolved(_)
+            ),
+            self.infer_var_def(&item),
+            // Recursively check each item of the body without
+            // performing unnecessary expression type inference
+            def.val
+                .as_ref()
+                .map_or_else(|| Ok(()), |val| self.check_expr(&val))
+        )
+    }
+
+    pub(crate) fn infer_var_def(&mut self, item: &HirItem) -> InferResult {
+        if matches!(
+            self.tctx.expect_hir_res_state(item.id),
+            TyResState::Inferred(_)
+        ) {
+            return Ok(());
+        }
+
+        let def = item.expect_var_def();
+        let ty =
+            def.sig
+                .ty
+                .and_then(|ty| self.tctx.get_hir_ty(ty.id).cloned())
+                .unwrap_or_else(|| {
+                    let default_ty_id = self.tctx.get_hir_ty_id(item.id).unwrap_or_else(|| {
+                        self.tctx.make_inferred_ty(def.sig.span, InferKind::Any)
+                    });
+                    Ty::new(default_ty_id, def.sig.span)
+                });
+
+        if let Some(expr) = def.val {
             self.tctx
                 .update_hir_res_state(item.id, TyResState::Resolving);
             self.infer_expr(&expr, Some(ty)).emit(&mut self.dctx);

@@ -1,5 +1,11 @@
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
 use hycc_hir::{
+    HirId,
     block::HirBlock,
     def::{
         Binding, DefAccessibility, DefId, DefKind, DefNodeResolution, DefResKind, DefResolution,
@@ -9,7 +15,10 @@ use hycc_hir::{
         HirArrayExpr, HirCastExpr, HirExpr, HirExprKind, HirFnCall, HirIfExpr, HirMethodCall,
         HirStructExpr, HirTupleExpr,
     },
-    item::{HirItem, HirItemKind, HirPetal, HirPetalKind, HirReferTarget, HirReferTargetKind},
+    item::{
+        HirFnSig, HirIntfItem, HirItem, HirItemKind, HirPetal, HirPetalKind, HirReferTarget,
+        HirReferTargetKind, HirVarSig,
+    },
     path::{HirIdent, HirIdentArgument, HirPath},
     scope::{Scope, ScopeId},
     stmt::{HirStmt, HirStmtKind},
@@ -25,15 +34,15 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Resolver<'r> {
+pub struct Resolver<'r, 'h> {
     pub dctx: ResolverDiagCtx<'r>,
-    pub collector: Collector<'r>,
+    pub collector: Collector<'r, 'h>,
 
     pub(crate) expected_space: Option<DefSpace>,
 }
 
-impl<'r> Resolver<'r> {
-    pub fn new(dctx: &'r mut DiagCtx, collector: Collector<'r>) -> Self {
+impl<'r, 'h> Resolver<'r, 'h> {
+    pub fn new(dctx: &'r mut DiagCtx, collector: Collector<'r, 'h>) -> Self {
         Self {
             dctx: ResolverDiagCtx::new(dctx),
             collector,
@@ -105,11 +114,13 @@ impl<'r> Resolver<'r> {
         match &item.kind {
             HirItemKind::Refer(_) => self.resolve_refer(&item),
             HirItemKind::Petal(_) => self.resolve_petal(&item),
-            HirItemKind::Intf(_) => todo!("resolve intf"),
+            HirItemKind::Intf(_) => self.resolve_intf(&item),
             HirItemKind::Extend(_) => self.resolve_extend(&item),
             HirItemKind::Struct(_) => self.resolve_struct(&item),
+            HirItemKind::FnDecl(sig) => self.resolve_fn_sig(item.id, &sig),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
-            HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
+            HirItemKind::VarDecl(sig) => self.resolve_var_sig(item.id, &sig),
+            HirItemKind::VarDef(_) => self.resolve_var_def(&item),
         }
     }
 
@@ -178,7 +189,7 @@ impl<'r> Resolver<'r> {
             },
         );
 
-        for petal_id in &petals {
+        petals.iter().for_each(|petal_id| {
             self.collector.petal_ctx.push(*petal_id);
             self.collector.scope_ctx.push_id(
                 self.collector
@@ -186,18 +197,38 @@ impl<'r> Resolver<'r> {
                     .expect(*petal_id)
                     .scope_id(&self.collector.scope_ctx),
             );
-        }
+        });
 
-        for item in &petal.items {
-            self.resolve_item(&item).emit(&mut self.dctx);
-        }
+        petal
+            .items
+            .iter()
+            .for_each(|item| self.resolve_item(&item).emit_discard(&mut self.dctx));
 
-        for _ in 0..petals.len() {
+        (0..petals.len()).for_each(|_| {
             self.collector.petal_ctx.pop();
             self.collector.scope_ctx.pop();
-        }
+        });
 
         Ok(())
+    }
+
+    pub(crate) fn resolve_intf(&mut self, item: &HirItem) -> ResolveResult {
+        let intf = item.expect_intf();
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
+
+        self.enter_scope(scope_id, |s| {
+            intf.items
+                .iter()
+                .for_each(|item| s.resolve_intf_item(&item).emit_discard(&mut s.dctx))
+        });
+
+        Ok(())
+    }
+
+    pub(crate) fn resolve_intf_item(&mut self, item: &HirIntfItem) -> ResolveResult {
+        match &item {
+            HirIntfItem::Fn(item) | HirIntfItem::Var(item) => self.resolve_item(&item),
+        }
     }
 
     pub(crate) fn resolve_extend(&mut self, item: &HirItem) -> ResolveResult {
@@ -205,22 +236,89 @@ impl<'r> Resolver<'r> {
 
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
         self.enter_scope(scope_id, |s| {
-            if let Some(generic_params) = &extend.generic_params {
-                for generic_param in &generic_params.list {
-                    for intf_req in &generic_param.intf_reqs {
+            extend.generic_params.as_ref().map(|generic_params| {
+                generic_params.list.iter().for_each(|generic_param| {
+                    generic_param.intf_reqs.iter().for_each(|intf_req| {
                         s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
-                            .emit(&mut s.dctx);
-                    }
-                }
-            }
+                            .emit_discard(&mut s.dctx)
+                    })
+                })
+            });
 
             // Resolve extension target
             s.resolve_ty(&extend.target).emit(&mut s.dctx);
 
+            // Resolve extension interface
+            let intf_id = s.expect_space(DefSpace::Type, |s| {
+                extend.intf.as_ref().and_then(|intf| {
+                    s.resolve_path(intf).emit(&mut s.dctx)?;
+                    s.collector
+                        .tctx
+                        .intf_table
+                        .get_hir_intf_id(s.collector.definitions.expect_def(intf.id).hir_id)
+                })
+            });
+
+            let mut unimplemented = intf_id.map(|intf_id| {
+                s.collector
+                    .tctx
+                    .intf_table
+                    .get(intf_id)
+                    .items
+                    .iter()
+                    .map(|(key, item)| (key.clone(), item.kind))
+                    .collect::<HashMap<_, _>>()
+            });
+
             // Resolve extension items
-            for item in &extend.items {
+            extend.items.iter().for_each(|item| {
                 s.resolve_item(&item).emit(&mut s.dctx);
-            }
+
+                // No `unimplemented` map implies that there is no
+                // interface provided
+                let Some(unimp) = unimplemented.as_mut() else {
+                    return;
+                };
+
+                let def_id = s.collector.definitions.expect_def_id(item.id);
+                let def = s.collector.definitions.get(def_id);
+                let def_key = (def.kind.space(), def.name);
+
+                if !unimp.contains_key(&def_key) {
+                    return s.dctx.error(
+                        item.span,
+                        ResolverDiagErrorKind::NonIntfAssocItemDefinition {
+                            def_id,
+                            intf_id: intf_id.unwrap(),
+                        },
+                    );
+                }
+
+                // TODO: check implemented associated item compatibility with their corresponding interface item
+
+                unimp.remove(&def_key);
+            });
+
+            intf_id.map(|intf_id| {
+                let Some(unimp) = unimplemented else {
+                    return;
+                };
+
+                let intf = s.collector.tctx.intf_table.get(intf_id);
+                let missing_req = unimp
+                    .into_iter()
+                    .filter_map(|u| ternary!(u.1.is_req(), Some(u.0), None))
+                    .collect::<Arc<_>>();
+                if !missing_req.is_empty() {
+                    s.dctx.error(
+                        item.span,
+                        ResolverDiagErrorKind::UnimplAssocItem {
+                            intf_id,
+                            items: missing_req,
+                        },
+                    );
+                }
+            })
         });
 
         Ok(())
@@ -232,18 +330,46 @@ impl<'r> Resolver<'r> {
         let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
 
         self.enter_scope(scope_id, |s| {
-            if let Some(generic_params) = &strct.generic_params {
-                for generic_param in &generic_params.list {
-                    for intf_req in &generic_param.intf_reqs {
+            strct.generic_params.as_ref().map(|generic_params| {
+                generic_params.list.iter().for_each(|generic_param| {
+                    generic_param.intf_reqs.iter().for_each(|intf_req| {
                         s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
-                            .emit(&mut s.dctx);
-                    }
-                }
-            }
+                            .emit_discard(&mut s.dctx)
+                    })
+                })
+            });
 
-            for field in &strct.fields.list {
-                s.resolve_ty(&field.ty).emit(&mut s.dctx);
-            }
+            strct
+                .fields
+                .list
+                .iter()
+                .for_each(|field| s.resolve_ty(&field.ty).emit_discard(&mut s.dctx))
+        });
+
+        Ok(())
+    }
+
+    pub(crate) fn resolve_fn_sig(&mut self, hir_id: HirId, sig: &HirFnSig) -> ResolveResult {
+        let scope_id = self.collector.scope_ctx.expect_hir_scope_id(hir_id);
+
+        self.enter_scope(scope_id, |s| {
+            sig.generic_params.as_ref().map(|generic_params| {
+                generic_params.list.iter().for_each(|generic_param| {
+                    generic_param.intf_reqs.iter().for_each(|intf_req| {
+                        s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
+                            .emit_discard(&mut s.dctx)
+                    })
+                })
+            });
+
+            sig.params
+                .list
+                .iter()
+                .for_each(|param| s.resolve_ty(&param.ty).emit_discard(&mut s.dctx));
+
+            sig.ret_ty
+                .as_ref()
+                .map(|ret_ty| s.resolve_ty(&ret_ty).emit_discard(&mut s.dctx));
         });
 
         Ok(())
@@ -251,52 +377,35 @@ impl<'r> Resolver<'r> {
 
     pub(crate) fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
         let func = item.expect_fn();
-
-        // let def_id = self.collector.definitions.expect_def_id(item.id);
-        // let scope_id = self.collector.scope_ctx.expect_def_scope_id(def_id);
+        self.resolve_fn_sig(item.id, &func.sig).emit(&mut self.dctx);
 
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(item.id);
-
-        self.enter_scope(scope_id, |s| {
-            if let Some(generic_params) = &func.sig.generic_params {
-                for generic_param in &generic_params.list {
-                    for intf_req in &generic_param.intf_reqs {
-                        s.expect_space(DefSpace::Type, |s| s.resolve_path(intf_req))
-                            .emit(&mut s.dctx);
-                    }
-                }
-            }
-
-            for param in &func.sig.params.list {
-                s.resolve_ty(&param.ty).emit(&mut s.dctx);
-            }
-
-            if let Some(ret_ty) = &func.sig.ret_ty {
-                s.resolve_ty(&ret_ty).emit(&mut s.dctx);
-            }
-
-            s.resolve_block(&func.body).emit(&mut s.dctx);
-        });
+        self.enter_scope(scope_id, |s| s.resolve_block(&func.body).emit(&mut s.dctx));
 
         Ok(())
     }
 
-    pub(crate) fn resolve_var_decl(&mut self, item: &HirItem) -> ResolveResult {
-        let decl = item.expect_var();
+    pub(crate) fn resolve_var_sig(&mut self, hir_id: HirId, sig: &HirVarSig) -> ResolveResult {
+        // For local level variables that are not normally collected
+        // during collection
+        self.collector
+            .collect_var_sig(hir_id, sig, &mut self.dctx)
+            .emit(&mut self.dctx);
 
-        if !item.is_top_level() {
-            self.collector
-                .collect_var_decl(item, &mut self.dctx)
-                .emit(&mut self.dctx);
-        }
+        sig.ty
+            .as_ref()
+            .map(|ty| self.resolve_ty(&ty).emit_discard(&mut self.dctx));
 
-        if let Some(ty) = decl.ty {
-            self.resolve_ty(&ty).emit(&mut self.dctx);
-        }
+        Ok(())
+    }
 
-        if let Some(expr) = decl.val {
-            self.resolve_expr(&expr).emit(&mut self.dctx);
-        }
+    pub(crate) fn resolve_var_def(&mut self, item: &HirItem) -> ResolveResult {
+        let def = item.expect_var_def();
+        self.resolve_var_sig(item.id, &def.sig).emit(&mut self.dctx);
+
+        def.val
+            .as_ref()
+            .map(|expr| self.resolve_expr(&expr).emit_discard(&mut self.dctx));
 
         Ok(())
     }
@@ -304,9 +413,10 @@ impl<'r> Resolver<'r> {
     pub(crate) fn resolve_block(&mut self, block: &HirBlock) -> ResolveResult {
         let scope_id = self.collector.scope_ctx.expect_hir_scope_id(block.id);
         self.enter_scope(scope_id, |s| {
-            for stmt in &block.stmts {
-                s.resolve_stmt(&stmt).emit(&mut s.dctx);
-            }
+            block
+                .stmts
+                .iter()
+                .for_each(|stmt| s.resolve_stmt(&stmt).emit_discard(&mut s.dctx));
         });
 
         Ok(())
@@ -350,10 +460,10 @@ impl<'r> Resolver<'r> {
                 },
             ))?;
 
-            if let Some(res) = res {
+            res.map(|res| {
                 resolution.replace(res);
                 resolved += 1;
-            }
+            });
 
             if is_last {
                 self.collector
@@ -374,7 +484,7 @@ impl<'r> Resolver<'r> {
         Ok(())
     }
 
-    // std::vec::Vec<i32>::ElementType
+    // std::vec::Vec<i32>::ElemeneType
     // std - (Default) petal (Resolution::Petal(DefId))
     // vec - (Petal-based (Scope)) petal (Resolution::Petal(DefId))
     // Vec<i32> - (Petal-based (Scope)) type (Resolution::Ty(HirId))
@@ -386,16 +496,16 @@ impl<'r> Resolver<'r> {
         resolution: Option<DefResolution>,
     ) -> ResolveResult<Option<DefResolution>> {
         let name = ident.ident.ident;
-        if let Some(arguments) = &ident.arguments {
-            for argument in &arguments.data {
+        ident.arguments.as_ref().map(|arguments| {
+            arguments.data.iter().for_each(|argument| {
                 let res = match &argument {
                     HirIdentArgument::Expr(expr) => self.resolve_expr(&expr),
                     HirIdentArgument::Ty(ty) => self.resolve_ty(&ty),
                 };
 
                 res.emit(&mut self.dctx);
-            }
-        }
+            })
+        });
 
         if !matches!(&resolution, Some(DefResolution::Petal(_)) | None) {
             return Ok(None);
@@ -461,21 +571,21 @@ impl<'r> Resolver<'r> {
             HirTyKind::Slice(slice) => s.resolve_ty(&slice.ty),
 
             HirTyKind::Tuple(tup) => {
-                for element in &tup.data {
-                    s.resolve_ty(&element).emit(&mut s.dctx);
-                }
+                tup.data
+                    .iter()
+                    .for_each(|el| s.resolve_ty(&el).emit_discard(&mut s.dctx));
 
                 Ok(())
             }
 
             HirTyKind::Fn(func) => {
-                for param in &func.params {
-                    s.resolve_ty(&param).emit(&mut s.dctx);
-                }
+                func.params
+                    .iter()
+                    .for_each(|param| s.resolve_ty(&param).emit_discard(&mut s.dctx));
 
-                if let Some(ret_ty) = func.ret_ty {
-                    s.resolve_ty(&ret_ty).emit(&mut s.dctx);
-                }
+                func.ret_ty
+                    .as_ref()
+                    .map(|ret_ty| s.resolve_ty(&ret_ty).emit_discard(&mut s.dctx));
 
                 Ok(())
             }

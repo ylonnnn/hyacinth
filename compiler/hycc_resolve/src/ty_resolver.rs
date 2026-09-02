@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
 use hycc_hir::{
-    HirMutability, HirNode, HirTable,
+    HirId, HirMutability, HirNode, HirTable,
     block::HirBlock,
     def::{
         Binding, BuiltinKind, BuiltinTyKind, DefAccessibility, DefKind, DefResolution, DefSpace,
@@ -13,7 +13,8 @@ use hycc_hir::{
         HirStructExpr, HirTupleExpr,
     },
     item::{
-        HirExtend, HirFn, HirItem, HirItemKind, HirPetal, HirReferTarget, HirStruct, HirVarDecl,
+        HirExtend, HirFn, HirFnSig, HirIntf, HirIntfItem, HirItem, HirItemKind, HirPetal,
+        HirReferTarget, HirStruct, HirVarDef, HirVarSig,
     },
     path::{HirIdent, HirIdentArgument, HirPath},
     petal::PetalCtx,
@@ -82,11 +83,13 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(petal) => self.resolve_petal(&petal),
-            HirItemKind::Intf(_) => todo!("resolve intf"),
+            HirItemKind::Intf(intf) => self.resolve_intf(&intf),
             HirItemKind::Extend(_) => Ok(()),
             HirItemKind::Struct(strct) => self.resolve_struct(&strct),
+            HirItemKind::FnDecl(sig) => self.resolve_fn_sig(item.id, &sig),
             HirItemKind::Fn(_) => self.resolve_fn(&item),
-            HirItemKind::VarDecl(_) => self.resolve_var_decl(&item),
+            HirItemKind::VarDecl(sig) => self.resolve_var_sig(item.id, &sig),
+            HirItemKind::VarDef(_) => self.resolve_var_def(&item),
         }
     }
 
@@ -222,6 +225,21 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         Ok(())
     }
 
+    fn resolve_intf(&mut self, intf: &HirIntf) -> ResolveResult {
+        // TODO: resolve intf
+        intf.items
+            .iter()
+            .for_each(|item| self.resolve_intf_item(&item).emit_discard(&mut self.dctx));
+
+        Ok(())
+    }
+
+    fn resolve_intf_item(&mut self, item: &HirIntfItem) -> ResolveResult {
+        match &item {
+            HirIntfItem::Fn(item) | HirIntfItem::Var(item) => self.resolve_item(&item),
+        }
+    }
+
     fn resolve_struct(&mut self, strct: &HirStruct) -> ResolveResult {
         strct
             .fields
@@ -232,11 +250,10 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         Ok(())
     }
 
-    fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
-        let func = item.expect_fn();
-        // let def_id = self.definitions.expect_def_id(item.id);
+    fn resolve_fn_sig(&mut self, hir_id: HirId, sig: &HirFnSig) -> ResolveResult {
+        let item = self.hir_table.get(hir_id).expect_item();
 
-        let generic_args = func.sig.generic_params.as_ref().map_or_else(
+        let generic_args = sig.generic_params.as_ref().map_or_else(
             || Vec::new(),
             |generic_params| {
                 generic_params
@@ -249,8 +266,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             },
         );
 
-        let params = func
-            .sig
+        let params = sig
             .params
             .list
             .iter()
@@ -263,7 +279,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             .collect::<Arc<_>>();
 
         let unit_ty = self.tctx.make_unit_ty();
-        let ret_ty = func.sig.ret_ty.as_ref().map_or(unit_ty, |ret_ty| {
+        let ret_ty = sig.ret_ty.as_ref().map_or(unit_ty, |ret_ty| {
             let ty_id = self.resolve_ty(&ret_ty).emit(&mut self.dctx).unwrap();
 
             self.tctx
@@ -273,7 +289,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
 
         let n_fn_ty_id = self.tctx.make_fn_ty(
             generic_args.into(),
-            self.definitions.get_def_id(item.id),
+            self.definitions.get_def_id(hir_id),
             params.into(),
             ret_ty,
         );
@@ -290,16 +306,22 @@ impl<'t, 'h> TyResolver<'t, 'h> {
                 .update_hir_res_state(item.id, TyResState::Unresolved);
         }
 
-        self.resolve_block(&func.body).emit(&mut self.dctx);
-
         Ok(())
     }
 
-    fn resolve_var_decl(&mut self, item: &HirItem) -> ResolveResult {
-        let decl = item.expect_var();
+    fn resolve_fn(&mut self, item: &HirItem) -> ResolveResult {
+        let func = item.expect_fn();
+        self.resolve_fn_sig(item.id, &func.sig).emit(&mut self.dctx);
+
+        self.resolve_block(&func.body).emit(&mut self.dctx);
+        Ok(())
+    }
+
+    fn resolve_var_sig(&mut self, hir_id: HirId, sig: &HirVarSig) -> ResolveResult {
+        let item = self.hir_table.get(hir_id).expect_item();
 
         let var_ty_id = self.tctx.expect_hir_ty_id(item.id);
-        let (ty_id, span) = decl.ty.as_ref().map_or_else(
+        let (ty_id, span) = sig.ty.as_ref().map_or_else(
             || Ok((var_ty_id.clone(), item.span)),
             |ty| self.resolve_ty(ty).map(|ty_id| (ty_id, ty.span)),
         )?;
@@ -313,7 +335,14 @@ impl<'t, 'h> TyResolver<'t, 'h> {
             }
         }
 
-        decl.val
+        Ok(())
+    }
+
+    fn resolve_var_def(&mut self, item: &HirItem) -> ResolveResult {
+        let def = item.expect_var_def();
+        self.resolve_var_sig(item.id, &def.sig);
+
+        def.val
             .as_ref()
             .map(|expr| self.resolve_expr(&expr).emit(&mut self.dctx));
 

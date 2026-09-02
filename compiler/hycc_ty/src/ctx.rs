@@ -6,14 +6,16 @@ use std::{
 
 use hycc_hir::{
     HirId,
-    def::{BuiltinIntTy, BuiltinTyKind, DefId},
+    def::{Binding, BuiltinIntTy, BuiltinTyKind, DefId, DefSpace},
     path::HirIdentArguments,
 };
 use hycc_span::Span;
+use hycc_symbol::Symbol;
 use hycc_util::{bug, ternary};
 
 use crate::{
-    extension::{ExtNominalTargetKind, ExtTargetKind, ExtensionTable},
+    extension::{ExtNominalTargetKind, ExtTargetKind, ExtensionId, ExtensionTable},
+    intf::IntfTable,
     ty::{
         FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar, TyVarKind,
     },
@@ -30,6 +32,7 @@ pub enum TyResState {
 #[derive(Debug)]
 pub struct TyCtx {
     pub ext_table: ExtensionTable,
+    pub intf_table: IntfTable,
 
     res_state: HashMap<HirId, TyResState>,
     hir_ty_map: HashMap<HirId, Ty>,
@@ -46,6 +49,7 @@ impl TyCtx {
     pub fn new() -> Self {
         Self {
             ext_table: ExtensionTable::new(),
+            intf_table: IntfTable::new(),
 
             res_state: HashMap::new(),
             hir_ty_map: HashMap::new(),
@@ -764,6 +768,22 @@ impl TyCtx {
 
             _ => ty_id,
         }
+    }
+
+    pub fn get_assoc_items(
+        &self,
+        target: TyId,
+        space: DefSpace,
+        name: Symbol,
+    ) -> Vec<(ExtensionId, Binding)> {
+        let target_kind = self.ext_target_kind_of(target);
+        let assoc_items = self.ext_table.get_assoc_items(target_kind, space, name);
+
+        if !assoc_items.is_empty() {
+            return assoc_items;
+        }
+
+        todo!("retrieve interface implemented associated items")
     }
 }
 

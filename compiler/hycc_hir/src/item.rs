@@ -20,8 +20,10 @@ pub enum HirItemKind<'h> {
     Intf(Box<HirIntf<'h>>),
     Extend(Box<HirExtend<'h>>),
     Struct(Box<HirStruct<'h>>),
+    FnDecl(Box<HirFnSig<'h>>),
     Fn(Box<HirFn<'h>>),
-    VarDecl(Box<HirVarDecl<'h>>),
+    VarDecl(Box<HirVarSig<'h>>),
+    VarDef(Box<HirVarDef<'h>>),
 }
 
 pub type HirPubAccessibilityKind = PubAccessibilityKind;
@@ -30,11 +32,11 @@ pub type HirItemLevel = ItemLevel;
 
 #[derive(Debug, Clone)]
 pub struct HirItem<'h> {
-    pub id: HirId,
     pub kind: HirItemKind<'h>,
+    pub level: HirItemLevel,
+    pub id: HirId,
     pub span: Span,
     pub accessibility: HirItemAccessibility,
-    pub level: HirItemLevel,
 }
 
 impl<'h> HirItem<'h> {
@@ -50,6 +52,10 @@ impl<'h> HirItem<'h> {
 
     pub fn is_top_level(&self) -> bool {
         self.level == HirItemLevel::Top
+    }
+
+    pub fn is_decl(&self) -> bool {
+        matches!(&self.kind, HirItemKind::FnDecl(_) | HirItemKind::VarDecl(_))
     }
 
     pub fn get_refer(&self) -> Option<&HirRefer> {
@@ -107,6 +113,17 @@ impl<'h> HirItem<'h> {
         self.get_struct().expect("expected to be Struct")
     }
 
+    pub fn get_fn_decl(&self) -> Option<&HirFnSig> {
+        match &self.kind {
+            HirItemKind::FnDecl(sig) => Some(&sig),
+            _ => None,
+        }
+    }
+
+    pub fn expect_fn_decl(&self) -> &HirFnSig {
+        self.get_fn_decl().expect("expected to be FnDecl")
+    }
+
     pub fn get_fn(&self) -> Option<&HirFn> {
         match &self.kind {
             HirItemKind::Fn(func) => Some(&func),
@@ -118,15 +135,26 @@ impl<'h> HirItem<'h> {
         self.get_fn().expect("expected to be Fn")
     }
 
-    pub fn get_var(&self) -> Option<&HirVarDecl> {
+    pub fn get_var_decl(&self) -> Option<&HirVarSig> {
         match &self.kind {
             HirItemKind::VarDecl(decl) => Some(&decl),
             _ => None,
         }
     }
 
-    pub fn expect_var(&self) -> &HirVarDecl {
-        self.get_var().expect("expected to be Var")
+    pub fn expect_var_decl(&self) -> &HirVarSig {
+        self.get_var_decl().expect("expected to be VarDecl")
+    }
+
+    pub fn get_var_def(&self) -> Option<&HirVarDef> {
+        match &self.kind {
+            HirItemKind::VarDef(def) => Some(&def),
+            _ => None,
+        }
+    }
+
+    pub fn expect_var_def(&self) -> &HirVarDef {
+        self.get_var_def().expect("expected to be VarDef")
     }
 }
 
@@ -177,22 +205,23 @@ impl<'h> HirPetal<'h> {
 }
 
 #[derive(Debug, Clone)]
-pub enum HirIntfItemAssocFnKind<'h> {
-    Sig(HirFnSig<'h>),
-    Impl(&'h HirItem<'h>),
+pub enum HirIntfItem<'h> {
+    Fn(&'h HirItem<'h>),
+    Var(&'h HirItem<'h>),
 }
 
-#[derive(Debug, Clone)]
-pub enum HirIntfItem<'h> {
-    // AssocTy(&'h HirTy<'h>),
-    AssocConst(&'h HirItem<'h>),
-    AssocFn(HirIntfItemAssocFnKind<'h>),
+impl<'h> HirIntfItem<'h> {
+    pub fn item(&self) -> &'h HirItem<'h> {
+        match &self {
+            Self::Fn(item) | Self::Var(item) => &item,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct HirIntf<'h> {
     pub ident: &'h HirRawIdent,
-    // TODO: generic_params
+    pub generic_params: Option<HirGenericParamList<'h>>,
     pub items: Vec<HirIntfItem<'h>>,
     pub span: Span,
 }
@@ -201,7 +230,7 @@ pub struct HirIntf<'h> {
 pub struct HirExtend<'h> {
     pub target: &'h HirTy<'h>,
     pub generic_params: Option<HirGenericParamList<'h>>,
-    // TODO: with: Option<[intf]>
+    pub intf: Option<&'h HirPath<'h>>,
     pub items: Vec<&'h HirItem<'h>>,
     pub span: Span,
 }
@@ -253,7 +282,27 @@ pub struct HirFnSig<'h> {
     pub generic_params: Option<HirGenericParamList<'h>>,
     pub params: HirFnParamList<'h>,
     pub ret_ty: Option<&'h HirTy<'h>>,
+    pub span: Span,
 }
+
+// impl<'h> HirFnSig<'h> {
+//     pub fn new(
+//         ident: &'h HirRawIdent,
+//         generic_params: Option<HirGenericParamList<'h>>,
+//         params: HirFnParamList<'h>,
+//         ret_ty: Option<&'h HirTy<'h>>,
+//         span: Span,
+//     ) -> Self {
+//         Self {
+//             id: HirId::Invalid,
+//             ident,
+//             generic_params,
+//             params,
+//             ret_ty,
+//             span,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct HirFn<'h> {
@@ -288,10 +337,32 @@ impl<'h> HirFnParam<'h> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HirVarDecl<'h> {
+pub struct HirVarSig<'h> {
     pub ident: &'h HirRawIdent,
-    pub mutability: HirMutability,
     pub ty: Option<&'h HirTy<'h>>,
-    pub val: Option<&'h HirExpr<'h>>,
     pub span: Span,
+    pub mutability: HirMutability,
+}
+
+// impl<'h> HirVarSig<'h> {
+//     pub fn new(
+//         ident: &'h HirRawIdent,
+//         ty: Option<&'h HirTy<'h>>,
+//         mutability: HirMutability,
+//         span: Span,
+//     ) -> Self {
+//         Self {
+//             id: HirId::Invalid,
+//             ident,
+//             ty,
+//             span,
+//             mutability,
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct HirVarDef<'h> {
+    pub sig: HirVarSig<'h>,
+    pub val: Option<&'h HirExpr<'h>>,
 }

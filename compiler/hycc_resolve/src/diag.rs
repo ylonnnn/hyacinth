@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     path::{self, PathBuf},
+    sync::Arc,
 };
 
 use hycc_diagnostic::diagnostic::{
@@ -19,6 +20,7 @@ use hycc_ty::{
     ctx::{TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
+    intf::IntfId,
 };
 use hycc_util::ternary;
 
@@ -112,14 +114,31 @@ pub enum ResolverDiagWarningKind {}
 #[repr(u16)]
 #[derive(Debug, Clone)]
 pub enum ResolverDiagErrorKind {
-    Duplication { ident: Symbol, earlier_def: DefId },
+    Duplication {
+        ident: Symbol,
+        earlier_def: DefId,
+    },
 
     UnrecognizedSymbol(Symbol, Option<DefSpace>),
-    UnrecognizedMember { name: Symbol, ty_id: TyId },
+    UnrecognizedMember {
+        name: Symbol,
+        ty_id: TyId,
+    },
 
     IllegalPetalTyUsage(DefId),
     InvalidInference,
     Inaccessible(Symbol, Option<SymbolKind>),
+
+    NonIntfAssocItemDefinition {
+        def_id: DefId,
+        intf_id: IntfId,
+    },
+
+    UnimplAssocItem {
+        // ty_id: TyId, // TODO
+        intf_id: IntfId,
+        items: Arc<[(DefSpace, Symbol)]>,
+    },
 
     GenericArgumentArityMismatch(u16),
 
@@ -243,6 +262,46 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         Some("cannot be accessed from this petal".into()),
                     ),
 
+                    NonIntfAssocItemDefinition { def_id, intf_id } => {
+                        let def = ctx.fmt.definitions.get(*def_id);
+                        let intf = ctx.fmt.tctx.intf_table.get(*intf_id);
+
+                        let s_intf_name = ctx.fmt.interner.get(intf.name);
+
+                        (
+                            format!(
+                                "`{}` is not an associated item of interface `{}`",
+                                ctx.fmt.interner.get(def.name),
+                                s_intf_name
+                            ),
+                            Some(format!(
+                                "only associated items of interface `{}` are allowed",
+                                s_intf_name
+                            )),
+                        )
+                    }
+
+                    UnimplAssocItem { intf_id, items } => {
+                        let intf = ctx.fmt.tctx.intf_table.get(*intf_id);
+                        //
+                        (
+                            format!(
+                                "unimplemented items in type extension with `{}`",
+                                ctx.fmt.interner.get(intf.name)
+                            ),
+                            Some(format!(
+                                "missing required implementation{} of: {}",
+                                ternary!(items.len() > 1, "s", ""),
+                                hycc_util::text::list_enumeration(
+                                    &items
+                                        .iter()
+                                        .map(|(_, name)| String::from(ctx.fmt.interner.get(*name)))
+                                        .collect::<Arc<_>>()
+                                )
+                            )),
+                        )
+                    }
+
                     GenericArgumentArityMismatch(data) => {
                         let (expected, received) =
                             ((*data >> u8::BITS) as u8, (*data & u8::MAX as u16) as u8);
@@ -300,6 +359,23 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     matches.iter().for_each(|m| {
                         // TODO: add diagnostic note per match
                     });
+                }
+
+                UnimplAssocItem { intf_id, items } => {
+                    let intf = ctx.fmt.tctx.intf_table.get(*intf_id);
+                    items.iter().for_each(|key| {
+                        let item = intf.items.get(&key).unwrap();
+                        let def = ctx.fmt.definitions.get(item.binding.def_id);
+
+                        diag.note(
+                            def.span,
+                            format!(
+                                "`{}` from interface `{}`",
+                                ctx.fmt.interner.get(def.name),
+                                ctx.fmt.interner.get(intf.name)
+                            ),
+                        )
+                    })
                 }
 
                 _ => {}

@@ -5,7 +5,7 @@ use crate::{
     block::HirBlock,
     expr::{HirAnonFnParam, HirExpr, HirStructExprField},
     generic::HirGenericParam,
-    item::{HirFnParam, HirItem, HirStructField},
+    item::{HirFnParam, HirFnSig, HirItem, HirStructField, HirVarSig},
     path::{HirIdent, HirPath, HirRawIdent},
     stmt::HirStmt,
     ty::HirTy,
@@ -38,6 +38,10 @@ pub enum HirNode<'h> {
 
     Path(HirPath<'h>),
 
+    // // Sub-Item Nodes
+    // FnSig(HirFnSig<'h>),
+    // VarSig(HirVarSig<'h>),
+
     // Non-general nodes
     Ident(HirIdent<'h>),
     RawIdent(HirRawIdent),
@@ -48,6 +52,19 @@ pub enum HirNode<'h> {
     AnonFnParam(HirAnonFnParam<'h>),
 
     StructExprField(HirStructExprField<'h>),
+}
+
+impl<'h> HirNode<'h> {
+    pub fn get_item(&self) -> Option<&HirItem<'h>> {
+        match &self {
+            Self::Item(item) => Some(&item),
+            _ => None,
+        }
+    }
+
+    pub fn expect_item(&self) -> &HirItem<'h> {
+        self.get_item().expect("expected an Item")
+    }
 }
 
 #[derive(Debug)]

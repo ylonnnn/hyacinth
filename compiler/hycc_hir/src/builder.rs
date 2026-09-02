@@ -8,8 +8,8 @@ use hycc_ast::{
     },
     generic::{GenericParam, GenericParamList},
     item::{
-        Extend, Fn, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Item, ItemKind, Petal,
-        PetalKind, Refer, ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDecl,
+        Extend, Fn, FnParamList, FnSig, Intf, IntfItem, Item, ItemKind, Petal, PetalKind, Refer,
+        ReferTarget, ReferTargetKind, Struct, StructFieldList, VarDef, VarSig,
     },
     path::{Identifier, IdentifierArgument, IdentifierArguments, Path},
     stmt::{PassStmt, RetStmt, Stmt, StmtKind},
@@ -32,10 +32,9 @@ use crate::{
     },
     generic::{HirGenericParam, HirGenericParamList},
     item::{
-        HirExtend, HirFn, HirFnParam, HirFnParamList, HirFnSig, HirIntf, HirIntfItem,
-        HirIntfItemAssocFnKind, HirItem, HirItemKind, HirItemLevel, HirPetal, HirPetalKind,
-        HirRefer, HirReferTarget, HirReferTargetKind, HirStruct, HirStructField,
-        HirStructFieldList, HirVarDecl,
+        HirExtend, HirFn, HirFnParam, HirFnParamList, HirFnSig, HirIntf, HirIntfItem, HirItem,
+        HirItemKind, HirItemLevel, HirPetal, HirPetalKind, HirRefer, HirReferTarget,
+        HirReferTargetKind, HirStruct, HirStructField, HirStructFieldList, HirVarDef, HirVarSig,
     },
     path::{HirIdent, HirIdentArgument, HirIdentArguments, HirPath, HirRawIdent},
     stmt::{HirPassStmt, HirRetStmt, HirStmt, HirStmtKind},
@@ -108,8 +107,11 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
             ItemKind::Intf(intf) => HirItemKind::Intf(Box::new(self.lower_intf(&intf))),
             ItemKind::Extend(extend) => HirItemKind::Extend(Box::new(self.lower_extend(&extend))),
             ItemKind::Struct(strct) => HirItemKind::Struct(Box::new(self.lower_struct(&strct))),
+            ItemKind::FnDecl(sig) => HirItemKind::FnDecl(Box::new(self.lower_fn_sig(&sig))),
             ItemKind::Fn(func) => HirItemKind::Fn(Box::new(self.lower_fn(&func))),
-            ItemKind::VarDecl(decl) => HirItemKind::VarDecl(Box::new(self.lower_var_decl(&decl))),
+
+            ItemKind::VarDecl(sig) => HirItemKind::VarDecl(Box::new(self.lower_var_sig(&sig))),
+            ItemKind::VarDef(def) => HirItemKind::VarDef(Box::new(self.lower_var_def(&def))),
         };
 
         let mut hir_item = HirItem::new(kind, item.level, item.span);
@@ -170,6 +172,10 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
     fn lower_intf(&mut self, intf: &Intf) -> HirIntf<'h> {
         HirIntf {
             ident: self.lower_raw_ident(&intf.ident),
+            generic_params: intf
+                .generic_params
+                .as_ref()
+                .map(|generic_params| self.lower_generic_params(&generic_params)),
             items: intf
                 .items
                 .iter()
@@ -181,27 +187,19 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
 
     fn lower_intf_item(&mut self, item: &IntfItem) -> HirIntfItem<'h> {
         match &item {
-            // intfItem::AssocTy(ty) => HirintfItem::AssocTy(self.lower_ty(&ty)),
-            IntfItem::AssocConst(decl) => HirIntfItem::AssocConst(self.lower_item(&decl)),
-            IntfItem::AssocFn(kind) => HirIntfItem::AssocFn(match &kind {
-                IntfItemAssocFnKind::Sig(sig) => {
-                    HirIntfItemAssocFnKind::Sig(self.lower_fn_sig(&sig))
-                }
-
-                IntfItemAssocFnKind::Impl(func) => {
-                    HirIntfItemAssocFnKind::Impl(self.lower_item(&func))
-                }
-            }),
+            IntfItem::Fn(item) => HirIntfItem::Fn(self.lower_item(&item)),
+            IntfItem::Var(item) => HirIntfItem::Var(self.lower_item(&item)),
         }
     }
 
     fn lower_extend(&mut self, extend: &Extend) -> HirExtend<'h> {
         HirExtend {
-            target: self.lower_ty(&extend.target),
             generic_params: extend
                 .generic_params
                 .as_ref()
                 .map(|generic_params| self.lower_generic_params(generic_params)),
+            intf: extend.intf.as_ref().map(|intf| self.lower_path(intf)),
+            target: self.lower_ty(&extend.target),
             items: extend
                 .items
                 .iter()
@@ -256,6 +254,7 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
                 .map(|generic_params| self.lower_generic_params(&generic_params)),
             params: self.lower_fn_params(&sig.params),
             ret_ty: sig.ret_ty.as_ref().map(|ret_ty| self.lower_ty(ret_ty)),
+            span: sig.span(),
         }
     }
 
@@ -290,13 +289,19 @@ impl<'i, 's, 't, 'h, 'c> HirBuilder<'i, 's, 't, 'h, 'c> {
         }
     }
 
-    pub fn lower_var_decl(&mut self, decl: &VarDecl) -> HirVarDecl<'h> {
-        HirVarDecl {
-            ident: self.lower_raw_ident(&decl.ident),
-            mutability: decl.mutability,
-            ty: decl.ty.as_ref().map(|ty| self.lower_ty(ty)),
-            val: decl.val.as_ref().map(|val| self.lower_expr(val)),
-            span: decl.span(),
+    pub fn lower_var_sig(&mut self, sig: &VarSig) -> HirVarSig<'h> {
+        HirVarSig {
+            ident: self.lower_raw_ident(&sig.ident),
+            ty: sig.ty.as_ref().map(|ty| self.lower_ty(ty)),
+            mutability: sig.mutability,
+            span: sig.span(),
+        }
+    }
+
+    pub fn lower_var_def(&mut self, def: &VarDef) -> HirVarDef<'h> {
+        HirVarDef {
+            sig: self.lower_var_sig(&def.sig),
+            val: def.val.as_ref().map(|val| self.lower_expr(val)),
         }
     }
 

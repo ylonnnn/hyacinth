@@ -118,6 +118,7 @@ impl Driver {
             &mut session.interner,
             &mut session.tctx,
             &mut session.definitions,
+            &session.hir_table,
         );
 
         let mut resolver = Resolver::new(&mut session.dctx, collector);

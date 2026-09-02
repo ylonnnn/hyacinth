@@ -1,5 +1,5 @@
 use hycc_ast::{
-    item::{Petal, PetalKind},
+    item::{ItemLevel, Petal, PetalKind},
     token::{Token, TokenGraph, TokenKind},
     token_stream::{TokenConsumptionKind, TokenMatchExpectation, TokenStream},
 };
@@ -58,6 +58,14 @@ impl<'p> Parser<'p> {
         self.ctx = prev_ctx;
 
         data
+    }
+
+    pub fn current_item_level(&self) -> ItemLevel {
+        ternary!(
+            self.depth == 0,
+            ItemLevel::Top,
+            ItemLevel::Local(self.depth.saturating_sub(1))
+        )
     }
 
     pub fn eos(&self) -> bool {

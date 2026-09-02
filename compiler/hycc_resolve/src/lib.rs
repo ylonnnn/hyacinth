@@ -148,7 +148,7 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
 
         let mut generic_args = Vec::new();
 
-        let resolved_count = (n - res.unresolved);
+        let resolved_count = n - res.unresolved;
         let mut prev_ty_id = self.instantiate(
             &mut generic_args,
             &path.segments[resolved_count.saturating_sub(1)],
@@ -158,10 +158,9 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
             let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
             if self.definitions().get_def_id(ident.id).is_none() {
                 let target = self.tctx().ext_target_kind_of(prev_ty_id);
-                let assoc_items =
-                    self.tctx()
-                        .ext_table
-                        .get_assoc_items(target, space, ident.ident.ident);
+                let assoc_items = self
+                    .tctx()
+                    .get_assoc_items(prev_ty_id, space, ident.ident.ident);
 
                 if assoc_items.is_empty() {
                     return Err(self.unrecognized_member_error(

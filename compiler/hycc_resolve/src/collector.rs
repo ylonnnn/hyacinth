@@ -6,7 +6,7 @@ use std::{
 
 use hycc_diagnostic::diagnostic::{Diagnostics, FromResultEmitter};
 use hycc_hir::{
-    HirId,
+    HirId, HirTable,
     block::HirBlock,
     def::{
         AdtDef, AdtKind, Binding, BuiltinIntTy, BuiltinKind, BuiltinTyKind, DefAccessibility,
@@ -14,7 +14,8 @@ use hycc_hir::{
         GenericParamDef, StructDef, StructFieldDef, VarDef,
     },
     expr::{HirExpr, HirExprKind},
-    item::{HirItem, HirItemKind, HirPetal, HirPetalKind},
+    generic::{HirGenericParam, HirGenericParamKind},
+    item::{HirFnSig, HirIntfItem, HirItem, HirItemKind, HirPetal, HirPetalKind, HirVarSig},
     petal::PetalCtx,
     scope::{Scope, ScopeCtx, ScopeId},
     stmt::{HirStmt, HirStmtKind},
@@ -24,6 +25,7 @@ use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
     ctx::TyCtx,
     extension::Extension,
+    intf::{Intf, IntfItem, IntfItemKind},
     ty::{GenericArg, InferKind, Ty},
 };
 use hycc_util::{bug, ternary};
@@ -37,27 +39,30 @@ pub enum CollectorLevel {
 }
 
 #[derive(Debug)]
-pub struct Collector<'c> {
+pub struct Collector<'c, 'h> {
     pub scope_ctx: ScopeCtx,
     pub petal_ctx: &'c mut PetalCtx,
     pub tctx: &'c mut TyCtx,
     pub definitions: &'c mut DefinitionTable,
+    pub hir_table: &'c HirTable<'h>,
     pub interner: &'c mut SymbolInterner,
     pub(crate) level: CollectorLevel,
 }
 
-impl<'c> Collector<'c> {
+impl<'c, 'h> Collector<'c, 'h> {
     pub fn new(
         petal_ctx: &'c mut PetalCtx,
         interner: &'c mut SymbolInterner,
         tctx: &'c mut TyCtx,
         definitions: &'c mut DefinitionTable,
+        hir_table: &'c HirTable<'h>,
     ) -> Self {
         Self {
             scope_ctx: ScopeCtx::new(),
             petal_ctx,
             tctx,
             definitions,
+            hir_table,
             interner,
             level: CollectorLevel::Top,
         }
@@ -247,14 +252,17 @@ impl<'c> Collector<'c> {
         let scope = self.scope_ctx.get_mut(scope_id);
 
         let (name, space) = (def.name, def.kind.space());
-        if scope.get(Some(space), name).is_some() {
-            (scope.get(Some(space), name).unwrap().clone(), false)
-        } else {
-            let accessibility = def.accessibility;
-            let binding = Binding::new(self.definitions.define_hir(def.hir_id, def), accessibility);
+        ternary!(
+            scope.get(Some(space), name).is_some(),
+            (scope.get(Some(space), name).unwrap().clone(), false),
+            {
+                let accessibility = def.accessibility;
+                let binding =
+                    Binding::new(self.definitions.define_hir(def.hir_id, def), accessibility);
 
-            (scope.define(space, name, binding).clone(), true)
-        }
+                (scope.define(space, name, binding).clone(), true)
+            }
+        )
     }
 
     pub fn define(&mut self, def: Definition) -> ResolveResult<Binding> {
@@ -262,9 +270,9 @@ impl<'c> Collector<'c> {
         let (binding, defined) = self.try_define(def);
 
         ternary!(defined, Ok(binding), {
-            if hir_id == self.definitions.get(binding.def_id).hir_id {
-                Ok(binding)
-            } else {
+            ternary!(
+                hir_id == self.definitions.get(binding.def_id).hir_id,
+                Ok(binding),
                 Err(ResolverDiag::error(
                     span,
                     ResolverDiagErrorKind::Duplication {
@@ -272,7 +280,7 @@ impl<'c> Collector<'c> {
                         earlier_def: binding.def_id,
                     },
                 ))
-            }
+            )
         })
     }
 
@@ -312,106 +320,22 @@ impl<'c> Collector<'c> {
         match &item.kind {
             HirItemKind::Refer(_) => Ok(()),
             HirItemKind::Petal(_) => self.collect_petal(&item, dctx),
-            HirItemKind::Intf(_) => {
-                // self.collect_intf(&item)
-                todo!()
-            }
+            HirItemKind::Intf(_) => self.collect_intf(&item, dctx),
             HirItemKind::Extend(_) => self.collect_extend(&item, dctx),
             HirItemKind::Struct(_) => self.collect_struct(&item, dctx),
+            HirItemKind::FnDecl(sig) => self.collect_fn_sig(item.id, &sig, dctx),
             HirItemKind::Fn(_) => self.collect_fn(&item, dctx),
-            HirItemKind::VarDecl(decl) => ternary!(
-                self.level == CollectorLevel::Top,
-                self.collect_var_decl(&item, dctx),
-                decl.val
-                    .as_ref()
-                    .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx))
-            ),
-        }
-    }
-
-    pub(crate) fn collect_extend(
-        &mut self,
-        item: &HirItem,
-        dctx: &mut ResolverDiagCtx,
-    ) -> ResolveResult {
-        let extend = item.expect_extend();
-        let scope_id = self.scope_ctx.attach(item.id, Scope::new());
-
-        self.enter_scope(scope_id, CollectorLevel::Top, |s| {
-            extend.generic_params.as_ref().map(|generic_params| {
-                s.scope_ctx.generic_depth += 1;
-
-                generic_params
-                    .list
-                    .iter()
-                    .enumerate()
-                    .for_each(|(i, generic_param)| {
-                        let res = s.define(Definition::new(
-                            generic_param.ident.ident,
-                            DefKind::GenericParam(Box::new(GenericParamDef::new(
-                                s.scope_ctx.generic_depth,
-                                i as u32,
-                                generic_param.kind,
-                            ))),
-                            s.petal_ctx.top_id(),
-                            generic_param.id,
-                            generic_param.span,
-                            DefAccessibility::Priv,
-                        ));
-
-                        let Some(binding) = res.emit(dctx) else {
-                            return;
-                        };
-
-                        let ty_id = s.tctx.make_param_ty(
-                            binding.def_id,
-                            s.scope_ctx.generic_depth as u32,
-                            i as u32,
-                        );
-                        s.tctx
-                            .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
-                    })
-            });
-
-            // Define `Self`
-            let self_sym = s.interner.intern("Self");
-            s.define(Definition::new(
-                self_sym,
-                DefKind::Builtin(BuiltinKind::SelfTy),
-                s.petal_ctx.top_id(),
-                extend.target.id,
-                Span::default(),
-                DefAccessibility::Priv,
-            ));
-
-            let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
-            s.enter_scope(scope_id, CollectorLevel::Top, |s| {
-                extend
-                    .items
-                    .iter()
-                    .for_each(|item| s.collect_item(&item, dctx).emit_discard(dctx))
-            });
-
-            s.tctx.ext_table.attach_hir_ext(
-                item.id,
-                Extension::new(
-                    item.id,
-                    extend
-                        .generic_params
+            HirItemKind::VarDecl(sig) => self.collect_var_sig(item.id, &sig, dctx),
+            HirItemKind::VarDef(def) => {
+                ternary!(
+                    self.level == CollectorLevel::Top,
+                    self.collect_var_def(&item, dctx),
+                    def.val
                         .as_ref()
-                        .map_or(0, |params| params.list.len() as u8),
-                    None,
-                    std::mem::take(s.scope_ctx.get_mut(scope_id))
-                        .all()
-                        .into_iter()
-                        .collect(),
-                ),
-            );
-
-            s.scope_ctx.generic_depth -= extend.generic_params.is_some() as u32;
-        });
-
-        Ok(())
+                        .map_or_else(|| Ok(()), |val| self.collect_expr(&val, dctx))
+                )
+            }
+        }
     }
 
     pub(crate) fn collect_petal(
@@ -490,50 +414,224 @@ impl<'c> Collector<'c> {
         Ok(())
     }
 
-    // pub fn collect_intf(&mut self, intf_item: &HirItem) -> CollectResult {
-    //     if self.definitions.get_def_id(intf_item.id).is_some() {
-    //         return Ok(());
-    //     }
+    pub(crate) fn collect_extend(
+        &mut self,
+        item: &HirItem,
+        dctx: &mut ResolverDiagCtx,
+    ) -> ResolveResult {
+        let extend = item.expect_extend();
+        let scope_id = self.scope_ctx.attach(item.id, Scope::new());
 
-    //     let HirItemKind::intf(intf) = &intf_item.kind else {
-    //         unreachable!()
-    //     };
+        self.enter_scope(scope_id, CollectorLevel::Top, |s| {
+            extend.generic_params.as_ref().map(|generic_params| {
+                s.scope_ctx.generic_depth += 1;
 
-    //     let def_id = self
-    //         .define(Definition::new(
-    //             intf.ident.ident,
-    //             DefKind::intf,
-    //             Some(self.petal_ctx.top_id()),
-    //             intf_item.id,
-    //             intf_item.span,
-    //             intf_item.accessibility,
-    //         ))?
-    //         .def_id;
+                generic_params
+                    .list
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, generic_param)| {
+                        let res = s.define(Definition::new(
+                            generic_param.ident.ident,
+                            DefKind::GenericParam(Box::new(GenericParamDef::new(
+                                s.scope_ctx.generic_depth,
+                                i as u32,
+                                generic_param.kind,
+                            ))),
+                            s.petal_ctx.top_id(),
+                            generic_param.id,
+                            generic_param.span,
+                            DefAccessibility::Priv,
+                        ));
 
-    //     let scope_id = self.scope_ctx.try_attach_to_def(def_id, Scope::new());
-    //     self.scope_ctx.push_id(scope_id);
+                        let Some(binding) = res.emit(dctx) else {
+                            return;
+                        };
 
-    //     for item in &intf.items {
-    //         }
-    //     }
+                        let ty_id = s.tctx.make_param_ty(
+                            binding.def_id,
+                            s.scope_ctx.generic_depth as u32,
+                            i as u32,
+                        );
+                        s.tctx
+                            .attach_to_hir(generic_param.id, Ty::new(ty_id, generic_param.span));
+                    })
+            });
 
-    //     self.scope_ctx.pop();
-    //     Ok(())
-    // }
+            // Define `Self`
+            let self_sym = s.interner.intern("Self");
+            s.define(Definition::new(
+                self_sym,
+                DefKind::Builtin(BuiltinKind::SelfTy),
+                s.petal_ctx.top_id(),
+                extend.target.id,
+                Span::default(),
+                DefAccessibility::Priv,
+            ));
 
-    // fn collect_intf_item(&mut self, item: &HirintfItem) -> CollectResult {
-    //     match &item {
-    //         HirintfItem::AssocConst(decl) => self.collect_var(&decl),
+            let scope_id = s.scope_ctx.attach(extend.target.id, Scope::new());
+            s.enter_scope(scope_id, CollectorLevel::Top, |s| {
+                extend
+                    .items
+                    .iter()
+                    .for_each(|item| s.collect_item(&item, dctx).emit_discard(dctx))
+            });
 
-    //         HirintfItem::AssocFn(kind) => match &kind {
-    //             HirintfItemAssocFnKind::Sig(sig) => todo!(),
-    //             HirintfItemAssocFnKind::Impl(func) => self.collect_fn(&func),
-    //         },
+            s.tctx.ext_table.attach_hir_ext(
+                item.id,
+                Extension::new(
+                    item.id,
+                    extend
+                        .generic_params
+                        .as_ref()
+                        .map_or(0, |params| params.list.len()),
+                    None,
+                    std::mem::take(s.scope_ctx.get_mut(scope_id))
+                        .all()
+                        .into_iter()
+                        .collect(),
+                ),
+            );
 
-    //         #[allow(unreachable_patterns)]
-    //         _ => todo!("collect intf item"),
-    //     }
-    // }
+            s.scope_ctx.generic_depth -= extend.generic_params.is_some() as u32;
+        });
+
+        Ok(())
+    }
+
+    pub fn collect_intf(&mut self, item: &HirItem, dctx: &mut ResolverDiagCtx) -> ResolveResult {
+        let intf = item.expect_intf();
+        let def_id = self
+            .define(Definition::new(
+                intf.ident.ident,
+                DefKind::Intf,
+                self.petal_ctx.top_id(),
+                item.id,
+                item.span,
+                item.accessibility,
+            ))?
+            .def_id;
+
+        let scope_id = self.scope_ctx.attach(item.id, Scope::new());
+        self.scope_ctx.attach_id_to_def(def_id, scope_id);
+
+        // TODO: potentially create some sort of interface table
+        self.enter_scope(scope_id, CollectorLevel::Top, |s| {
+            s.scope_ctx.generic_depth += 1;
+
+            // Define `Self`
+            std::iter::once((
+                item.id,
+                s.interner.intern("Self"),
+                intf.ident.span,
+                HirGenericParamKind::Ty,
+            ))
+            .chain(
+                intf.generic_params
+                    .as_ref()
+                    .map_or_else(|| [].iter(), |g_params| g_params.list.iter())
+                    .map(|g_param| (g_param.id, g_param.ident.ident, g_param.span, g_param.kind)),
+            )
+            .enumerate()
+            .for_each(|(i, (hir_id, name, span, kind))| {
+                let res = s.define(Definition::new(
+                    name,
+                    DefKind::GenericParam(Box::new(GenericParamDef::new(
+                        s.scope_ctx.generic_depth,
+                        i as u32,
+                        kind,
+                    ))),
+                    s.petal_ctx.top_id(),
+                    hir_id,
+                    span,
+                    DefAccessibility::Priv,
+                ));
+
+                let Some(binding) = res.emit(dctx) else {
+                    return;
+                };
+
+                let ty_id = s.tctx.make_param_ty(
+                    binding.def_id,
+                    s.scope_ctx.generic_depth as u32,
+                    i as u32,
+                );
+                s.tctx.attach_to_hir(hir_id, Ty::new(ty_id, span));
+            });
+
+            let scope_id = s.scope_ctx.attach(intf.ident.id, Scope::new());
+            let items = s.enter_scope(scope_id, CollectorLevel::Top, |s| {
+                intf.items
+                    .iter()
+                    .map(|item| {
+                        s.collect_intf_item(&item, dctx).emit(dctx);
+
+                        let item = item.item();
+                        let (kind, def_id) = (
+                            (!item.is_decl()).into(),
+                            s.definitions.expect_def_id(item.id),
+                        );
+                        let def = s.definitions.get(def_id);
+
+                        IntfItem {
+                            kind,
+                            binding: Binding {
+                                def_id,
+                                accessibility: def.accessibility,
+                            },
+                        }
+                    })
+                    .collect::<Arc<_>>()
+            });
+
+            s.tctx.intf_table.attach_hir_intf(
+                item.id,
+                Intf::new(
+                    item.id,
+                    intf.ident.ident,
+                    intf.generic_params
+                        .as_ref()
+                        .map_or(0, |params| params.list.len()),
+                    std::mem::take(s.scope_ctx.get_mut(scope_id))
+                        .all()
+                        .into_iter()
+                        .map(|(key, binding)| {
+                            let kind = s
+                                .hir_table
+                                .get(s.definitions.get(binding.def_id).hir_id)
+                                .expect_item()
+                                .is_decl()
+                                .into();
+
+                            (key, IntfItem { kind, binding })
+                        })
+                        .collect(),
+                ),
+            );
+
+            s.scope_ctx.generic_depth -= 1;
+        });
+
+        Ok(())
+    }
+
+    fn collect_intf_item(
+        &mut self,
+        item: &HirIntfItem,
+        dctx: &mut ResolverDiagCtx,
+    ) -> ResolveResult {
+        match &item {
+            HirIntfItem::Fn(item) => match &item.kind {
+                HirItemKind::FnDecl(sig) => self.collect_fn_sig(item.id, &sig, dctx),
+                _ => self.collect_fn(&item, dctx),
+            },
+
+            HirIntfItem::Var(item) => match &item.kind {
+                HirItemKind::VarDecl(sig) => self.collect_var_sig(item.id, &sig, dctx),
+                _ => self.collect_var_def(&item, dctx),
+            },
+        }
+    }
 
     pub(crate) fn collect_struct(
         &mut self,
@@ -636,31 +734,30 @@ impl<'c> Collector<'c> {
         Ok(())
     }
 
-    pub(crate) fn collect_fn(
+    pub(crate) fn collect_fn_sig(
         &mut self,
-        item: &HirItem,
+        hir_id: HirId,
+        sig: &HirFnSig,
         dctx: &mut ResolverDiagCtx,
     ) -> ResolveResult {
-        let func = item.expect_fn();
         let def_id = self
             .define(Definition::new(
-                func.sig.ident.ident,
-                DefKind::Fn(Box::new(FnDef::new(func.sig.ret_ty.map(|ty| ty.id)))),
+                sig.ident.ident,
+                DefKind::Fn(Box::new(FnDef::new(sig.ret_ty.map(|ty| ty.id)))),
                 self.petal_ctx.top_id(),
-                item.id,
-                item.span,
-                item.accessibility,
+                hir_id,
+                sig.span,
+                DefAccessibility::Priv,
             ))
             .map(|binding| binding.def_id)
             .emit(dctx);
 
-        let scope_id = self.scope_ctx.try_attach(item.id, Scope::new());
+        let scope_id = self.scope_ctx.try_attach(hir_id, Scope::new());
         def_id.map(|def_id| self.scope_ctx.try_attach_id_to_def(def_id, scope_id));
 
         self.enter_scope(scope_id, CollectorLevel::Local, |s| {
             // Define function generic parameters
-            let generic_param_tys = func
-                .sig
+            let generic_param_tys = sig
                 .generic_params
                 .as_ref()
                 .map(|generic_params| {
@@ -710,7 +807,7 @@ impl<'c> Collector<'c> {
                 .unwrap_or_else(|| Vec::new().into());
 
             // Define the function parameters
-            func.sig.params.list.iter().for_each(|param| {
+            sig.params.list.iter().for_each(|param| {
                 let res = s.define(Definition::new(
                     param.ident.ident,
                     DefKind::FnParam,
@@ -734,33 +831,48 @@ impl<'c> Collector<'c> {
                 });
             });
 
-            let fn_ty_id = s.tctx.make_inferred_ty(item.span, InferKind::Any);
-            s.tctx.attach_to_hir(item.id, Ty::new(fn_ty_id, item.span));
+            let fn_ty_id = s.tctx.make_inferred_ty(sig.span, InferKind::Any);
+            s.tctx.attach_to_hir(hir_id, Ty::new(fn_ty_id, sig.span));
 
-            s.scope_ctx.attach_id(func.body.id, scope_id);
-            s.collect_block(&func.body, dctx).emit(dctx);
-
-            s.scope_ctx.generic_depth -= func.sig.generic_params.is_some() as u32;
+            s.scope_ctx.generic_depth -= sig.generic_params.is_some() as u32;
         });
 
         Ok(())
     }
 
-    pub(crate) fn collect_var_decl(
+    pub(crate) fn collect_fn(
         &mut self,
         item: &HirItem,
         dctx: &mut ResolverDiagCtx,
     ) -> ResolveResult {
-        let var = item.expect_var();
+        let func = item.expect_fn();
+        self.collect_fn_sig(item.id, &func.sig, dctx).emit(dctx);
 
-        if var.ident.ident != self.interner.intern("_") {
+        let scope_id = self.scope_ctx.expect_hir_scope_id(item.id);
+
+        self.scope_ctx.attach_id(func.body.id, scope_id);
+        self.collect_block(&func.body, dctx).emit(dctx);
+
+        Ok(())
+    }
+
+    pub(crate) fn collect_var_sig(
+        &mut self,
+        hir_id: HirId,
+        sig: &HirVarSig,
+        dctx: &mut ResolverDiagCtx,
+    ) -> ResolveResult {
+        let item = self.hir_table.get(hir_id).expect_item();
+        let name = sig.ident.ident;
+
+        if name != self.interner.intern("_") {
             self.define(Definition::new(
-                var.ident.ident,
-                DefKind::Var(Box::new(VarDef::new(item.level, var.mutability))),
+                name,
+                DefKind::Var(Box::new(VarDef::new(item.level, sig.mutability))),
                 self.petal_ctx.top_id(),
-                item.id,
-                item.span,
-                item.accessibility,
+                hir_id,
+                sig.span,
+                DefAccessibility::Priv,
             ))
             .emit(dctx);
         }
@@ -768,11 +880,21 @@ impl<'c> Collector<'c> {
         let infer_ty_id = self.tctx.make_inferred_ty(item.span, InferKind::Any);
         self.tctx.attach_to_hir(
             item.id,
-            Ty::new(infer_ty_id, var.ty.map_or_else(|| item.span, |ty| ty.span)),
+            Ty::new(infer_ty_id, sig.ty.map_or_else(|| item.span, |ty| ty.span)),
         );
 
-        var.val.map(|val| self.collect_expr(&val, dctx));
+        Ok(())
+    }
 
+    pub(crate) fn collect_var_def(
+        &mut self,
+        item: &HirItem,
+        dctx: &mut ResolverDiagCtx,
+    ) -> ResolveResult {
+        let var = item.expect_var_def();
+        self.collect_var_sig(item.id, &var.sig, dctx).emit(dctx);
+
+        var.val.map(|val| self.collect_expr(&val, dctx));
         Ok(())
     }
 

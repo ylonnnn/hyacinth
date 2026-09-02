@@ -2,10 +2,9 @@ use hycc_ast::{
     Mutability,
     expr::Expr,
     item::{
-        Extend, Fn, FnParam, FnParamList, FnSig, Intf, IntfItem, IntfItemAssocFnKind, Item,
-        ItemAccessibility, ItemKind, ItemLevel, Petal, PetalKind, PubAccessibilityKind, Refer,
-        ReferTarget, ReferTargetKind, Struct, StructField, StructFieldAccessibility,
-        StructFieldList, VarDecl,
+        Extend, Fn, FnParam, FnParamList, FnSig, Intf, IntfItem, Item, ItemAccessibility, ItemKind,
+        ItemLevel, Petal, PetalKind, PubAccessibilityKind, Refer, ReferTarget, ReferTargetKind,
+        Struct, StructField, StructFieldAccessibility, StructFieldList, VarDef, VarSig,
     },
     token::{TokenGraph, TokenIdentKind, TokenKind},
     token_stream::TokenStream,
@@ -69,6 +68,10 @@ impl<'s> Parser<'s> {
                 return self.parse_item_with_accessibility();
             }
 
+            TokenKind::Ident(TokenIdentKind::Comp) => {
+                return self.parse_comp_item();
+            }
+
             TokenKind::Ident(TokenIdentKind::Refer) => {
                 ItemKind::Refer(Box::new(self.parse_refer_with_recovery()?))
             }
@@ -94,7 +97,7 @@ impl<'s> Parser<'s> {
             }
 
             TokenKind::Ident(TokenIdentKind::Let) => {
-                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?))
+                ItemKind::VarDef(Box::new(self.parse_var_decl_with_recovery()?))
             }
 
             _ => Err(None)?,
@@ -145,6 +148,21 @@ impl<'s> Parser<'s> {
 
         let mut item = self.parse_item_with_recovery()?;
         item.accessibility = ItemAccessibility::Pub(pub_kind);
+
+        Ok(item)
+    }
+
+    pub fn parse_comp_item(&mut self) -> ParseResult<Item> {
+        let mut item = self.parse_item_with_recovery()?;
+        match &mut item.kind {
+            ItemKind::VarDef(def) => def.sig.is_comp = true,
+
+            // _ => Err(ParserDiag::error(item.span, ParserDiagErrorKind::))
+            _ => todo!(
+                "throw error: {}s cannot have a `comp` modifier",
+                item.kind.kind()
+            ),
+        };
 
         Ok(item)
     }
@@ -366,13 +384,18 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // intf IDENT (GENERIC_PARAMS)? { intf_ITEM* }
-    // intf IDENT (< GENERIC_PARAM (, GENERIC_PARAM)* >)? { intf_ITEM* }
+    // intf IDENT (GENERIC_PARAMS)? { INTF_ITEM* }
+    // intf IDENT (< GENERIC_PARAM (, GENERIC_PARAM)* >)? { INTF_ITEM* }
     pub fn parse_intf(&mut self) -> ParseResult<Intf> {
         // IDENT
         let ident = self.parse_raw_ident()?;
 
-        // TODO: generic params
+        // GENERIC_PARAMS
+        let generic_params = ternary!(
+            self.expect_preserved_exact_nonlf(TokenKind::Less).0,
+            Some(self.parse_generic_params()?),
+            None
+        );
 
         // { intf_ITEM* }
         let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
@@ -405,6 +428,7 @@ impl<'s> Parser<'s> {
         // todo!("parse intf")
         Ok(Intf {
             span: ident.span,
+            generic_params,
             ident,
             items,
         })
@@ -418,34 +442,44 @@ impl<'s> Parser<'s> {
         Ok(match tok.kind {
             TokenKind::Ident(TokenIdentKind::Fn) => {
                 let sig = self.parse_fn_sig(false)?;
-                let kind = if self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0 {
-                    IntfItemAssocFnKind::Impl(Box::new(Item::new(
-                        ItemKind::Fn(Box::new(Fn {
-                            sig,
-                            body: self.parse_block()?,
-                        })),
-                        ternary!(
-                            self.depth == 0,
-                            ItemLevel::Top,
-                            ItemLevel::Local(self.depth.saturating_sub(1))
-                        ),
-                    )))
-                } else {
-                    self.require_terminator(ParserTerminatorKind::Both)?;
-                    IntfItemAssocFnKind::Sig(Box::new(sig))
-                };
+                let body = ternary!(
+                    self.expect_preserved_similar_nonlf(TokenKind::LeftBrace).0,
+                    Some(self.parse_block()?),
+                    None
+                );
 
-                IntfItem::AssocFn(kind)
+                self.require_terminator(ParserTerminatorKind::Both)?;
+
+                IntfItem::Fn(Box::new(Item::new(
+                    match body {
+                        Some(body) => ItemKind::Fn(Box::new(Fn { sig, body })),
+                        _ => ItemKind::FnDecl(Box::new(sig)),
+                    },
+                    self.current_item_level(),
+                )))
             }
 
-            TokenKind::Ident(TokenIdentKind::Let) => IntfItem::AssocConst(Box::new(Item::new(
-                ItemKind::VarDecl(Box::new(self.parse_var_decl_with_recovery()?)),
-                ternary!(
-                    self.depth == 0,
-                    ItemLevel::Top,
-                    ItemLevel::Local(self.depth.saturating_sub(1))
-                ),
-            ))),
+            TokenKind::Ident(TokenIdentKind::Let) => {
+                let sig = self.parse_var_sig(true)?;
+                let expr = ternary!(
+                    self.expect_exact_nonlf(TokenKind::Eq).0,
+                    Some(self.parse_expr(0)?),
+                    None
+                );
+
+                self.require_terminator(ParserTerminatorKind::Both)?;
+
+                IntfItem::Var(Box::new(Item::new(
+                    match expr {
+                        Some(expr) => ItemKind::VarDef(Box::new(VarDef {
+                            sig,
+                            val: Some(Box::new(expr)),
+                        })),
+                        _ => ItemKind::VarDecl(Box::new(sig)),
+                    },
+                    self.current_item_level(),
+                )))
+            }
 
             // TODO: associated types
             _ => Err(None)?,
@@ -459,8 +493,8 @@ impl<'s> Parser<'s> {
         data
     }
 
-    // extend < GENERIC_PARAMS > TY { ITEM* }
-    // extend < GENERIC_PARAM (, GENERIC_PARAM)* > TY { ITEM* }
+    // extend < GENERIC_PARAMS > TY with PATH { ITEM* }
+    // extend < GENERIC_PARAM (, GENERIC_PARAM)* > TY with PATH { ITEM* }
     pub fn parse_extend(&mut self) -> ParseResult<Extend> {
         let generic_params = ternary!(
             self.expect_preserved_exact_nonlf(TokenKind::Less).0,
@@ -471,14 +505,23 @@ impl<'s> Parser<'s> {
         // TY
         let target = self.parse_ty()?;
 
+        // PATH
+        let intf = ternary!(
+            self.expect_exact_nonlf(TokenKind::Ident(TokenIdentKind::With))
+                .0,
+            Some(self.parse_path(PathKind::Ty)?),
+            None
+        );
+
         let data = match self.require_exact_nonlf(TokenKind::LeftBrace)? {
             TokenGraph::Collection { data, .. } => data,
             _ => Err(None)?,
         };
 
         let mut extend = Extend {
-            target,
             generic_params,
+            intf,
+            target,
             items: Vec::new(),
         };
         let n = data.len();
@@ -742,7 +785,7 @@ impl<'s> Parser<'s> {
         })
     }
 
-    pub fn parse_var_decl_with_recovery(&mut self) -> ParseResult<VarDecl> {
+    pub fn parse_var_decl_with_recovery(&mut self) -> ParseResult<VarDef> {
         let decl = self.parse_var_decl();
         self.try_sync(&[TokenKind::LnFeed]);
 
@@ -750,8 +793,8 @@ impl<'s> Parser<'s> {
     }
 
     // TODO: allow patterns rather than just raw identifiers
-    // let mut? IDENT (: TY)? (= EXPR)? (TERM ::= '\n')
-    pub fn parse_var_decl(&mut self) -> ParseResult<VarDecl> {
+    // let mut? IDENT (: TY)?
+    pub fn parse_var_sig(&mut self, req_ty: bool) -> ParseResult<VarSig> {
         // mut?
         let mut mutability = Mutability::Immutable;
         if self
@@ -764,12 +807,36 @@ impl<'s> Parser<'s> {
         // IDENT
         let ident = self.parse_raw_ident()?;
 
-        // :
-        let mut ty = Option::<Ty>::None;
-        if self.expect_exact_nonlf(TokenKind::Colon).0 {
-            // TY
-            ty = Some(self.parse_ty()?)
+        // : TY
+        if let Some(tok) = self.peek_nonlf_token() {}
+
+        let mut ty = ternary!(
+            self.expect_exact_nonlf(TokenKind::Colon).0,
+            Some(self.parse_ty()?),
+            None
+        );
+
+        if req_ty && ty.is_none() {
+            let tok = self.peek_nonlf_token().ok_or_else(|| None)?;
+            return Err(Some(ParserDiag::unexpected_token_expected_arbitrary(
+                tok.clone(),
+                "type",
+            )));
         }
+
+        Ok(VarSig {
+            ident,
+            mutability,
+            ty: ty.map(Box::new),
+            is_comp: false,
+        })
+    }
+
+    // VAR_SIG (= EXPR)? TERM
+    // let mut? IDENT (: TY)? (= EXPR)? ('\n' | ';' | ~'}')
+    pub fn parse_var_decl(&mut self) -> ParseResult<VarDef> {
+        // VAR_SIG
+        let sig = self.parse_var_sig(self.depth == 0)?;
 
         // =
         let mut val = Option::<Expr>::None;
@@ -781,20 +848,18 @@ impl<'s> Parser<'s> {
         self.require_terminator(ParserTerminatorKind::Both)?;
 
         // Validate variable declaration
-        if (ty.is_none() && val.is_none()) || (self.depth == 0 && (ty.is_none() || val.is_none())) {
+        if (sig.ty.is_none() && val.is_none()) || (self.depth == 0 && val.is_none()) {
             return Err(Some(ParserDiag::error(
-                ident.span,
+                sig.ident.span,
                 ParserDiagErrorKind::InvalidVarDecl {
-                    ident,
+                    ident: sig.ident,
                     depth: self.depth,
                 },
             )));
         }
 
-        Ok(VarDecl {
-            ident,
-            mutability,
-            ty: ty.map(Box::new),
+        Ok(VarDef {
+            sig,
             val: val.map(Box::new),
         })
     }

@@ -486,6 +486,7 @@ impl<'c, 'h> Collector<'c, 'h> {
                         .as_ref()
                         .map_or(0, |params| params.list.len()),
                     None,
+                    extend.intf.map(|path| path.id),
                     std::mem::take(s.scope_ctx.get_mut(scope_id))
                         .all()
                         .into_iter()

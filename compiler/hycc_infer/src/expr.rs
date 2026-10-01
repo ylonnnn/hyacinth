@@ -551,68 +551,25 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
         // Find the candidate binding
         loop {
-            let target = self.tctx.ext_target_kind_of(rec_ty_id);
-            let err = || {
-                Err(InferDiag::error(
-                    call.callee.span,
-                    InferDiagErrorKind::UnrecognizedMethod {
-                        method: call.callee.ident.ident,
-                        ty_id: rec_ty_id,
-                    },
-                ))
-            };
+            let (mut generic_args, assoc_items) =
+                self.tctx
+                    .get_assoc_items(rec_ty_id, DefSpace::Value, call.callee.ident.ident);
 
-            let assoc_items = self
-                .tctx
-                .ext_table
-                .get_assoc_items(target, DefSpace::Value, call.callee.ident.ident)
-                .into_iter()
-                .filter(|(ext_id, assoc_item)| {
-                    let ext = self.tctx.ext_table.get(*ext_id);
-                    let (ext_target_ty_id, ext_hir_id) = (ext.expect_target(), ext.hir_id);
+            if !assoc_items.is_empty() {
+                if assoc_items.len() > 1 {
+                    return Err(InferDiag::error(
+                        call.callee.span,
+                        InferDiagErrorKind::MultipleAssocItemsMatched {
+                            target: rec_ty_id,
+                            name: call.callee.ident.ident,
+                            matches: assoc_items.into(),
+                        },
+                    ));
+                }
 
-                    let HirNode::Item(item) = &self.hir_table.get(ext_hir_id) else {
-                        unreachable!()
-                    };
-
-                    let extend = item.expect_extend();
-                    let n = extend
-                        .generic_params
-                        .as_ref()
-                        .map_or(0, |generic_params| generic_params.list.len());
-
-                    rec_g_args.replace(
-                        (0..n)
-                            .map(|_| {
-                                GenericArg::Ty(
-                                    self.tctx.make_inferred_ty(Span::default(), InferKind::Any),
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    );
-
-                    let ext_target_ty_id = self
-                        .tctx
-                        .instantiate(ext_target_ty_id, &[rec_g_args.as_ref().unwrap()]);
-                    self.compatible(ext_target_ty_id, rec_ty_id)
-                })
-                .collect::<Vec<_>>();
-
-            if assoc_items.is_empty() {
-                return err();
+                candidate.replace(assoc_items[0].1.clone());
+                rec_g_args.replace(std::mem::take(&mut generic_args[0]));
             }
-
-            if assoc_items.len() > 1 {
-                return Err(InferDiag::error(
-                    call.callee.span,
-                    InferDiagErrorKind::MultipleAssocItemsMatched {
-                        name: call.callee.ident.ident,
-                        matches: assoc_items,
-                    },
-                ));
-            }
-
-            candidate.replace(assoc_items[0].1.clone());
 
             if rec_ty_id == deref_rec_ty_id {
                 break;

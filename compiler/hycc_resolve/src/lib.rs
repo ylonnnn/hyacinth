@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hycc_hir::{
     def::{Binding, DefId, DefSpace, DefinitionTable},
     expr::HirExpr,
@@ -9,7 +11,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 use hycc_ty::{
-    ctx::{TyCtx, TyId},
+    ctx::{AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
@@ -132,8 +134,9 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
     fn multiple_assoc_item_matched_error(
         &self,
         span: Span,
+        target: TyId,
         name: Symbol,
-        matches: Vec<(ExtensionId, Binding)>,
+        matches: Arc<[(AssocItemSource, Binding)]>,
     ) -> E;
 
     fn resolve_path(&mut self, path: &HirPath) -> Result<TyId, E> {
@@ -158,9 +161,9 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
             let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
             if self.definitions().get_def_id(ident.id).is_none() {
                 let target = self.tctx().ext_target_kind_of(prev_ty_id);
-                let assoc_items = self
-                    .tctx()
-                    .get_assoc_items(prev_ty_id, space, ident.ident.ident);
+                let (_, assoc_items) =
+                    self.tctx()
+                        .get_assoc_items(prev_ty_id, space, ident.ident.ident);
 
                 if assoc_items.is_empty() {
                     return Err(self.unrecognized_member_error(
@@ -177,8 +180,9 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                 if assoc_items.len() > 1 {
                     return Err(self.multiple_assoc_item_matched_error(
                         ident.span,
+                        prev_ty_id,
                         ident.ident.ident,
-                        assoc_items,
+                        assoc_items.into(),
                     ));
                 }
 

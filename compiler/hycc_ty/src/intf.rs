@@ -1,27 +1,38 @@
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use hycc_hir::{
     HirId,
-    def::{Binding, DefSpace},
+    def::{Binding, DefId, DefSpace},
 };
 use hycc_symbol::Symbol;
 use hycc_util::ternary;
 
-use crate::ctx::TyId;
+use crate::{ctx::TyId, extension::ExtensionId, ty::GenericArg};
 
 #[derive(Debug)]
 pub struct IntfTable {
-    data: Vec<Intf>,
     hir_map: HashMap<HirId, IntfId>,
-    ty_map: HashMap<TyId, IntfId>,
+    ext_map: HashMap<ExtensionId, IntfInstId>,
+
+    inst_map: HashMap<IntfInst, IntfInstId>,
+
+    data: Vec<Intf>,
+    inst: Vec<IntfInst>,
 }
 
 impl IntfTable {
     pub fn new() -> Self {
         Self {
-            data: Vec::new(),
             hir_map: HashMap::new(),
-            ty_map: HashMap::new(),
+            ext_map: HashMap::new(),
+
+            inst_map: HashMap::new(),
+
+            data: Vec::new(),
+            inst: Vec::new(),
         }
     }
 
@@ -38,6 +49,18 @@ impl IntfTable {
         &mut self.data[intf_id.unwrap()]
     }
 
+    pub fn get_inst(&self, inst_id: IntfInstId) -> &IntfInst {
+        &self.inst[inst_id.unwrap()]
+    }
+
+    pub fn get_mut_inst(&mut self, inst_id: IntfInstId) -> &mut IntfInst {
+        &mut self.inst[inst_id.unwrap()]
+    }
+
+    pub fn attach_hir_intf_id(&mut self, hir_id: HirId, intf_id: IntfId) {
+        self.hir_map.insert(hir_id, intf_id);
+    }
+
     pub fn attach_hir_intf(&mut self, hir_id: HirId, intf: Intf) -> IntfId {
         let intf_id = self.insert(intf);
         self.attach_hir_intf_id(hir_id, intf_id);
@@ -45,19 +68,15 @@ impl IntfTable {
         intf_id
     }
 
-    pub fn attach_hir_intf_id(&mut self, hir_id: HirId, intf_id: IntfId) {
-        self.hir_map.insert(hir_id, intf_id);
+    pub fn attach_ext_inst_id(&mut self, ext_id: ExtensionId, inst_id: IntfInstId) {
+        self.ext_map.insert(ext_id, inst_id);
     }
 
-    pub fn attach_ty_intf(&mut self, ty_id: TyId, intf: Intf) -> IntfId {
-        let intf_id = self.insert(intf);
-        self.attach_ty_intf_id(ty_id, intf_id);
+    pub fn attach_ext_inst(&mut self, ext_id: ExtensionId, inst: IntfInst) -> IntfInstId {
+        let inst_id = self.intern_inst(inst);
+        self.ext_map.insert(ext_id, inst_id);
 
-        intf_id
-    }
-
-    pub fn attach_ty_intf_id(&mut self, ty_id: TyId, intf_id: IntfId) {
-        self.ty_map.insert(ty_id, intf_id);
+        inst_id
     }
 
     pub fn get_hir_intf_id(&self, hir_id: HirId) -> Option<IntfId> {
@@ -78,16 +97,34 @@ impl IntfTable {
         self.get(self.expect_hir_intf_id(hir_id))
     }
 
-    pub fn get_ty_intf_id(&self, ty_id: TyId) -> Option<IntfId> {
-        self.ty_map.get(&ty_id).cloned()
+    pub fn get_ext_inst_id(&self, ext_id: ExtensionId) -> Option<IntfInstId> {
+        self.ext_map.get(&ext_id).cloned()
     }
 
-    pub fn expect_ty_intf_id(&self, ty_id: TyId) -> IntfId {
-        self.get_ty_intf_id(ty_id)
-            .unwrap_or_else(|| panic!("expected an intf id attached to ty id {ty_id:?}"))
+    pub fn get_ext_inst(&self, ext_id: ExtensionId) -> Option<&IntfInst> {
+        self.get_ext_inst_id(ext_id)
+            .map(|inst_id| self.get_inst(inst_id))
     }
 
-    // pub fn get_assoc_items(&self, space: DefSpace, name: Symbol) -> Vec
+    pub fn expect_ext_inst_id(&self, ext_id: ExtensionId) -> IntfInstId {
+        self.get_ext_inst_id(ext_id)
+            .unwrap_or_else(|| panic!("expected an intf inst id attached to ext id {ext_id:?}"))
+    }
+
+    pub fn expect_ext_inst(&self, ext_id: ExtensionId) -> &IntfInst {
+        self.get_inst(self.expect_ext_inst_id(ext_id))
+    }
+
+    pub fn intern_inst(&mut self, inst: IntfInst) -> IntfInstId {
+        *self.inst_map.entry(inst.clone()).or_insert_with(|| {
+            self.inst.push(inst);
+            IntfInstId(self.inst.len() - 1)
+        })
+    }
+
+    pub fn instantiate(&mut self, intf_id: IntfId, args: Arc<[GenericArg]>) -> IntfInstId {
+        self.intern_inst(IntfInst::new(intf_id, args))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -183,6 +220,31 @@ impl IntfId {
 
     pub fn unwrap(&self) -> usize {
         assert_ne!(self.0, usize::MAX, "intf id is invalid!");
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IntfInst {
+    pub args: Arc<[GenericArg]>,
+    pub intf_id: IntfId,
+}
+
+impl IntfInst {
+    pub fn new(intf_id: IntfId, args: Arc<[GenericArg]>) -> Self {
+        Self { args, intf_id }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IntfInstId(usize);
+
+impl IntfInstId {
+    #[allow(non_upper_case_globals)]
+    pub const Invalid: Self = Self(usize::MAX);
+
+    pub fn unwrap(&self) -> usize {
+        assert_ne!(self.0, usize::MAX, "intf inst id is invalid!");
         self.0
     }
 }

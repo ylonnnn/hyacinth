@@ -15,7 +15,7 @@ use hycc_util::{bug, ternary};
 
 use crate::{
     extension::{ExtNominalTargetKind, ExtTargetKind, ExtensionId, ExtensionTable},
-    intf::IntfTable,
+    intf::{IntfId, IntfInstId, IntfTable},
     ty::{
         FnTy, GenericArg, InferKind, IntTy, ParamTy, RefMutability, Ty, TyKind, TyVar, TyVarKind,
     },
@@ -27,6 +27,36 @@ pub enum TyResState {
     Resolved(TyId),
     Unresolved,
     Resolving,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AssocItemSource {
+    Ext(ExtensionId),
+    Intf(IntfInstId),
+}
+
+impl AssocItemSource {
+    pub fn get_ext(&self) -> Option<ExtensionId> {
+        match &self {
+            Self::Ext(ext_id) => Some(*ext_id),
+            _ => None,
+        }
+    }
+
+    pub fn expect_ext(&self) -> ExtensionId {
+        self.get_ext().expect("expected to be Ext")
+    }
+
+    pub fn get_intf(&self) -> Option<IntfInstId> {
+        match &self {
+            Self::Intf(inst_id) => Some(*inst_id),
+            _ => None,
+        }
+    }
+
+    pub fn expect_intf(&self) -> IntfInstId {
+        self.get_intf().expect("expected to be Intf")
+    }
 }
 
 #[derive(Debug)]
@@ -771,19 +801,94 @@ impl TyCtx {
     }
 
     pub fn get_assoc_items(
-        &self,
+        &mut self,
         target: TyId,
         space: DefSpace,
         name: Symbol,
-    ) -> Vec<(ExtensionId, Binding)> {
+    ) -> (Vec<Vec<GenericArg>>, Vec<(AssocItemSource, Binding)>) {
         let target_kind = self.ext_target_kind_of(target);
-        let assoc_items = self.ext_table.get_assoc_items(target_kind, space, name);
+        let mut generic_args = Vec::new();
+
+        let assoc_items = self
+            .ext_table
+            .get_native_assoc_items(target_kind, space, name)
+            .into_iter()
+            .filter_map(|(ext_id, binding)| {
+                let ext = self.ext_table.get(ext_id);
+                let (gp_count, raw_target_ty_id) = (ext.generic_param_count, ext.expect_target());
+                let g_args = (0..gp_count)
+                    .map(|_| GenericArg::Ty(self.make_inferred_ty(Span::default(), InferKind::Any)))
+                    .collect::<Vec<_>>();
+                let target_ty_id = self.instantiate(raw_target_ty_id, &[&g_args]);
+                self.unify_ty(target_ty_id, target).then(|| {
+                    generic_args.push(g_args);
+                    (AssocItemSource::Ext(ext_id), binding)
+                })
+            })
+            .collect::<Vec<_>>();
 
         if !assoc_items.is_empty() {
-            return assoc_items;
+            return (generic_args, assoc_items);
         }
 
-        todo!("retrieve interface implemented associated items")
+        let intf_assoc_items = self
+            .ext_table
+            .get_intf_exts(target_kind)
+            .map_or_else(Vec::new, |exts| exts.to_vec())
+            .into_iter()
+            .filter_map(|ext_id| {
+                let ext = self.ext_table.get(ext_id);
+                let (gp_count, raw_target_ty_id) = (ext.generic_param_count, ext.expect_target());
+                let g_args = (0..gp_count)
+                    .map(|_| GenericArg::Ty(self.make_inferred_ty(Span::default(), InferKind::Any)))
+                    .collect::<Vec<_>>();
+                let target_ty_id = self.instantiate(raw_target_ty_id, &[&g_args]);
+                self.unify_ty(target_ty_id, target).then(|| {
+                    let mut n_g_args = vec![GenericArg::Ty(target)];
+                    n_g_args.extend(g_args);
+                    generic_args.push(n_g_args)
+                })?;
+
+                let inst_id = self.intf_table.expect_ext_inst_id(ext_id);
+                let inst = self.intf_table.get_inst(inst_id);
+
+                // let binding = self
+                //     .ext_table
+                //     .get(ext_id)
+                //     .get(space, name)
+                //     .cloned()
+                //     .or_else(|| {
+                //         self.intf_table
+                //             .get(inst.intf_id)
+                //             .get(space, name)
+                //             .map(|item| item.binding.clone())
+                //     })?;
+
+                let binding = self
+                    .intf_table
+                    .get(inst.intf_id)
+                    .get(space, name)
+                    .map(|item| item.binding.clone())?;
+
+                Some((AssocItemSource::Intf(inst_id), binding))
+            })
+            .collect::<Vec<_>>();
+
+        (generic_args, intf_assoc_items)
+
+        // TODO: update interface look-up
+        // (
+        //     generic_args,
+        //     self.intf_table
+        //         .expect_ty_intf_inst_ids(target)
+        //         .into_iter()
+        //         .filter_map(|inst_id| {
+        //             let inst = self.intf_table.get_inst(*inst_id);
+        //             let item = self.intf_table.get(inst.intf_id).get(space, name)?;
+        //             Some((AssocItemSource::Intf(*inst_id), item.binding.clone()))
+        //         })
+        //         .collect(),
+        // )
     }
 }
 

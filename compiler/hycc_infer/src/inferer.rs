@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use hycc_const::table::ConstTable;
 use hycc_diagnostic::diagnostic::{DiagCtx, Diagnostics, FromResultEmitter};
@@ -11,7 +14,7 @@ use hycc_hir::{
 use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolvePath, ResolveTy};
 use hycc_span::Span;
 use hycc_ty::{
-    ctx::{TyCtx, TyId, TyResState, TyVarId},
+    ctx::{AssocItemSource, TyCtx, TyId, TyResState, TyVarId},
     extension::ExtensionId,
     ty::{InferKind, IntTy, Ty, TyKind, TyVarKind},
 };
@@ -350,12 +353,17 @@ impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
     fn multiple_assoc_item_matched_error(
         &self,
         span: Span,
+        target: TyId,
         name: hycc_symbol::Symbol,
-        matches: Vec<(ExtensionId, Binding)>,
+        matches: Arc<[(AssocItemSource, Binding)]>,
     ) -> InferDiag {
         InferDiag::error(
             span,
-            InferDiagErrorKind::MultipleAssocItemsMatched { name, matches },
+            InferDiagErrorKind::MultipleAssocItemsMatched {
+                target,
+                name,
+                matches,
+            },
         )
     }
 }

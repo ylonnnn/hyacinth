@@ -23,7 +23,7 @@ use hycc_hir::{
 };
 use hycc_span::Span;
 use hycc_ty::{
-    ctx::{TyCtx, TyId, TyResState},
+    ctx::{AssocItemSource, TyCtx, TyId, TyResState},
     extension::ExtensionId,
     ty::{GenericArg, InferKind, RefMutability, Ty},
 };
@@ -75,7 +75,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
     }
 
     pub fn resolve(&mut self, tree: &HirItem) {
-        self.resolve_native_exts();
+        self.resolve_exts();
         self.resolve_item(&tree);
     }
 
@@ -121,7 +121,7 @@ impl<'t, 'h> TyResolver<'t, 'h> {
         Ok(())
     }
 
-    fn resolve_native_exts(&mut self) {
+    fn resolve_exts(&mut self) {
         for hir_id in self.tctx.ext_table.hir_ids() {
             let HirNode::Item(item) = self.hir_table.get(hir_id) else {
                 unreachable!()
@@ -204,7 +204,30 @@ impl<'t, 'h> TyResolver<'t, 'h> {
                 .and_then(|def_id| self.definitions.get(def_id).petal);
 
             let target_kind = self.tctx.ext_target_kind_of(target_ty_id);
-            self.tctx.ext_table.attach_id(target_kind, ext_id);
+            extend
+                .intf
+                .map(|intf| {
+                    self.tctx.ext_table.intf_attach_id(target_kind, ext_id);
+                    let intf_id = self
+                        .tctx
+                        .intf_table
+                        .expect_hir_intf_id(self.definitions.expect_def(intf.id).hir_id);
+
+                    let args = intf
+                        .segments
+                        .last()
+                        .unwrap()
+                        .arguments
+                        .as_ref()
+                        .and_then(|arguments| {
+                            self.resolve_ident_args(&arguments).emit(&mut self.dctx)
+                        })
+                        .unwrap_or_else(|| Vec::new());
+
+                    let inst_id = self.tctx.intf_table.instantiate(intf_id, args.into());
+                    self.tctx.intf_table.attach_ext_inst_id(ext_id, inst_id);
+                })
+                .unwrap_or_else(|| self.tctx.ext_table.native_attach_id(target_kind, ext_id));
 
             self.tctx
                 .ext_table
@@ -624,10 +647,11 @@ impl<'t, 'h> InstantiateIdent<(), ResolverDiag> for TyResolver<'t, 'h> {
     ) -> ResolveResult<TyId> {
         let def = self.definitions.get(def_id);
         let ty_id = match &def.kind {
-            DefKind::Petal => Err(ResolverDiag::error(
-                span,
-                ResolverDiagErrorKind::IllegalPetalTyUsage(def_id),
-            ))?,
+            DefKind::Petal | DefKind::Intf => {
+                self.dctx
+                    .error(span, ResolverDiagErrorKind::UnexpectedNonTyDef(def_id));
+                self.tctx.make_error_ty()
+            }
 
             DefKind::Builtin(BuiltinKind::Ty(kind)) => match &kind {
                 BuiltinTyKind::Infer => self.tctx.make_inferred_ty(span, InferKind::Any),
@@ -688,12 +712,13 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
     fn multiple_assoc_item_matched_error(
         &self,
         span: Span,
+        target: TyId,
         name: hycc_symbol::Symbol,
-        matches: Vec<(ExtensionId, Binding)>,
+        matches: Arc<[(AssocItemSource, Binding)]>,
     ) -> ResolverDiag {
         ResolverDiag::error(
             span,
-            ResolverDiagErrorKind::MultipleAssocItemsMatched(name, matches),
+            ResolverDiagErrorKind::MultipleAssocItemsMatched(target, name, matches),
         )
     }
 }

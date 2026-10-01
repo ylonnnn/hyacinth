@@ -11,7 +11,7 @@ use hycc_resolve::diag::{ResolverDiagDataCtx, SymbolKind};
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    ctx::{TyCtx, TyId},
+    ctx::{AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
     intf::IntfId,
@@ -162,8 +162,9 @@ pub enum InferDiagErrorKind {
     },
 
     MultipleAssocItemsMatched {
+        target: TyId,
         name: Symbol,
-        matches: Vec<(ExtensionId, Binding)>,
+        matches: Arc<[(AssocItemSource, Binding)]>,
     },
 
     IllegalAssocFnInvocation {
@@ -411,7 +412,7 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                         Some("cannot be accessed from this petal".into()),
                     ),
 
-                    MultipleAssocItemsMatched { name, matches } => (
+                    MultipleAssocItemsMatched { name, matches, .. } => (
                         "multiple associated items matched".into(),
                         Some(format!(
                             "found `{}` matches for `{}`",
@@ -547,24 +548,33 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                     diag.note(self.span, "`if` may be missing its `else` branch");
                 }
 
-                MultipleAssocItemsMatched { name, matches } => {
-                    matches
-                        .iter()
-                        .enumerate()
-                        .for_each(|(i, (ext_id, binding))| {
-                            let ext = ctx.fmt.tctx.ext_table.get(*ext_id);
-                            let def = ctx.fmt.definitions.get(binding.def_id);
+                MultipleAssocItemsMatched {
+                    target,
+                    name,
+                    matches,
+                } => {
+                    matches.iter().enumerate().for_each(|(i, (src, binding))| {
+                        let intf_id = src.get_intf();
+                        let def = ctx.fmt.definitions.get(binding.def_id);
 
-                            diag.add_sub_diagnostic(Diag::new(
-                                DiagKind::Info,
-                                def.span,
-                                format!(
-                                    "match `#{}` is defined in an extension of `{}`",
-                                    i + 1,
-                                    ctx.fmt.fmt_id(ext.expect_target()),
+                        diag.add_sub_diagnostic(Diag::new(
+                            DiagKind::Info,
+                            def.span,
+                            format!(
+                                "match `#{}` is defined in an extension{} of `{}`",
+                                i + 1,
+                                intf_id.map_or_else(
+                                    || format!(""),
+                                    |inst_id| {
+                                        let inst = ctx.fmt.tctx.intf_table.get_inst(inst_id);
+                                        let intf = ctx.fmt.tctx.intf_table.get(inst.intf_id);
+                                        format!(" with {}", ctx.fmt.interner.get(intf.name))
+                                    }
                                 ),
-                            ));
-                        });
+                                ctx.fmt.fmt_id(*target),
+                            ),
+                        ));
+                    });
                 }
 
                 IllegalAssocFnInvocation {

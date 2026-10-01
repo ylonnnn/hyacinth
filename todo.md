@@ -50,6 +50,8 @@
 - [ ] update the accessibility modifiers to allow for either current petal relativity or target petal relativity as the source
 - [ ] path expressions should provide a helpful diagnostic when the last segment is a petal
 - [x] rewrite the inferface items
+- [x] update type-interface mapping to allow multiple of the same interface with different specialization to be implemented on a single type
+- [ ] update type interface look-up to be similar to extension look-up
 
 ### Test
 

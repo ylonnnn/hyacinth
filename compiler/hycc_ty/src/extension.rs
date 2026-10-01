@@ -15,7 +15,7 @@ use crate::{ctx::TyId, ty::TyKind};
 pub struct ExtensionTable {
     data: Vec<Extension>,
     native: HashMap<ExtTargetKind, Vec<ExtensionId>>,
-    // TODO: interface: HashMap<ExtTargetKind, Vec<ExtensionId>>
+    intf: HashMap<ExtTargetKind, Vec<ExtensionId>>,
     hir_map: HashMap<HirId, ExtensionId>,
 }
 
@@ -24,6 +24,7 @@ impl ExtensionTable {
         Self {
             data: Vec::new(),
             native: HashMap::new(),
+            intf: HashMap::new(),
             hir_map: HashMap::new(),
         }
     }
@@ -98,9 +99,12 @@ impl ExtensionTable {
     }
 
     pub fn attach(&mut self, target: ExtTargetKind, ext: Extension) -> ExtensionId {
-        // TODO: identify whether the extension is native or interface-based
+        let intf_hir_id = ext.intf_hir_id;
         let ext_id = self.insert(ext);
-        self.attach_id(target, ext_id);
+
+        intf_hir_id
+            .map(|intf_hir_id| self.intf_attach_id(target, ext_id))
+            .unwrap_or_else(|| self.native_attach_id(target, ext_id));
 
         ext_id
     }
@@ -112,17 +116,12 @@ impl ExtensionTable {
     //     ext_id
     // }
 
-    pub fn attach_id(&mut self, target: ExtTargetKind, ext_id: ExtensionId) {
-        match self.native.entry(target) {
-            Entry::Vacant(entry) => {
-                entry.insert(vec![ext_id]);
-            }
+    pub fn native_attach_id(&mut self, target: ExtTargetKind, ext_id: ExtensionId) {
+        self.native.entry(target).or_default().push(ext_id);
+    }
 
-            Entry::Occupied(mut entry) => {
-                let extensions: &mut Vec<ExtensionId> = entry.get_mut();
-                extensions.push(ext_id);
-            }
-        }
+    pub fn intf_attach_id(&mut self, target: ExtTargetKind, ext_id: ExtensionId) {
+        self.intf.entry(target).or_default().push(ext_id);
     }
 
     pub fn attach_hir_ext(&mut self, hir_id: HirId, ext: Extension) -> ExtensionId {
@@ -153,11 +152,19 @@ impl ExtensionTable {
         self.native.get(&target).map(|exts| exts.as_slice())
     }
 
+    pub fn get_intf_exts(&self, target: ExtTargetKind) -> Option<&[ExtensionId]> {
+        self.intf.get(&target).map(|exts| exts.as_slice())
+    }
+
     pub fn get_all_native_exts(&self) -> &HashMap<ExtTargetKind, Vec<ExtensionId>> {
         &self.native
     }
 
-    pub fn get_assoc_items(
+    pub fn get_all_intf_exts(&self) -> &HashMap<ExtTargetKind, Vec<ExtensionId>> {
+        &self.intf
+    }
+
+    pub fn get_native_assoc_items(
         &self,
         target: ExtTargetKind,
         space: DefSpace,
@@ -177,6 +184,36 @@ impl ExtensionTable {
                 |exts| exts.iter().cloned().filter_map(f).collect(),
             );
         self.get_native_exts(target)
+            .map(|exts| {
+                exts.iter()
+                    .cloned()
+                    .filter_map(f)
+                    .chain(blanket_exts)
+                    .collect()
+            })
+            .unwrap_or_else(|| Vec::new())
+    }
+
+    pub fn get_intf_assoc_items(
+        &self,
+        target: ExtTargetKind,
+        space: DefSpace,
+        name: Symbol,
+    ) -> Vec<(ExtensionId, Binding)> {
+        let f = move |ext_id| {
+            self.get(ext_id)
+                .items
+                .get(&(space, name))
+                .map(|binding| (ext_id, binding.clone()))
+        };
+
+        let blanket_exts = self
+            .get_intf_exts(ExtTargetKind::Nominal(ExtNominalTargetKind::Blanket))
+            .map_or_else(
+                || Vec::new(),
+                |exts| exts.iter().cloned().filter_map(f).collect(),
+            );
+        self.get_intf_exts(target)
             .map(|exts| {
                 exts.iter()
                     .cloned()
@@ -209,6 +246,7 @@ pub struct Extension {
     pub items: HashMap<(DefSpace, Symbol), Binding>,
     pub(crate) target: Option<TyId>,
     pub hir_id: HirId,
+    pub intf_hir_id: Option<HirId>,
     pub generic_param_count: usize,
 }
 
@@ -217,12 +255,14 @@ impl Extension {
         hir_id: HirId,
         generic_param_count: usize,
         target: Option<TyId>,
+        intf_hir_id: Option<HirId>,
         items: HashMap<(DefSpace, Symbol), Binding>,
     ) -> Self {
         Self {
             items,
             target,
             hir_id,
+            intf_hir_id,
             generic_param_count,
         }
     }

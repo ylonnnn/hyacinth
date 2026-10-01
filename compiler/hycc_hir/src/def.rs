@@ -160,11 +160,12 @@ impl DefKind {
         match self {
             Self::Builtin(_)
             | Self::Petal
-            | Self::Intf
             | Self::GenericParam(_)
             | Self::Fn(_)
             | Self::FnParam
             | Self::Var(_) => "a",
+
+            Self::Intf => "an",
 
             Self::Adt(kind) => kind.article(),
         }

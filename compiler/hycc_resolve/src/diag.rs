@@ -17,7 +17,7 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    ctx::{TyCtx, TyId},
+    ctx::{AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
     intf::IntfId,
@@ -125,7 +125,7 @@ pub enum ResolverDiagErrorKind {
         ty_id: TyId,
     },
 
-    IllegalPetalTyUsage(DefId),
+    UnexpectedNonTyDef(DefId),
     InvalidInference,
     Inaccessible(Symbol, Option<SymbolKind>),
 
@@ -142,7 +142,7 @@ pub enum ResolverDiagErrorKind {
 
     GenericArgumentArityMismatch(u16),
 
-    MultipleAssocItemsMatched(Symbol, Vec<(ExtensionId, Binding)>),
+    MultipleAssocItemsMatched(TyId, Symbol, Arc<[(AssocItemSource, Binding)]>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -237,14 +237,15 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         )
                     }
 
-                    IllegalPetalTyUsage(def_id) => {
+                    UnexpectedNonTyDef(def_id) => {
                         let def = ctx.fmt.definitions.get(*def_id);
                         (
                             format!(
-                                "cannot use petal `{}` as a type",
-                                ctx.fmt.interner.get(def.name)
+                                "expected a type, received {} `{}`",
+                                def.kind.article(),
+                                def.kind.kind()
                             ),
-                            None,
+                            Some("expected a type".into()),
                         )
                     }
 
@@ -314,7 +315,7 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                         )
                     }
 
-                    MultipleAssocItemsMatched(name, matches) => (
+                    MultipleAssocItemsMatched(_, name, matches) => (
                         "multiple associated items matched".into(),
                         Some(format!(
                             "found `{}` matches for `{}`",
@@ -350,13 +351,23 @@ impl<'c, 'h> DiagEmitter<ResolverDiagDataCtx<'c, 'h>> for ResolverDiag {
                     );
                 }
 
-                IllegalPetalTyUsage(def_id) => {
+                UnexpectedNonTyDef(def_id) => {
                     // TODO: add note and/or sub-diagnostic pointing to
                     // the definition of the petal
+                    let def = ctx.fmt.definitions.get(*def_id);
+                    diag.note(
+                        def.span,
+                        format!(
+                            "`{}` is defined as {} `{}`",
+                            ctx.fmt.interner.get(def.name),
+                            def.kind.article(),
+                            def.kind.kind()
+                        ),
+                    );
                 }
 
-                MultipleAssocItemsMatched(name, matches) => {
-                    matches.iter().for_each(|m| {
+                MultipleAssocItemsMatched(target, name, matches) => {
+                    matches.clone().iter().for_each(|m| {
                         // TODO: add diagnostic note per match
                     });
                 }

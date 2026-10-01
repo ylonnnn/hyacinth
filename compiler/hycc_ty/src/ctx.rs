@@ -59,6 +59,14 @@ impl AssocItemSource {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AssocItemCandidate {
+    pub arg_frame: Vec<GenericArg>,
+    pub source: AssocItemSource,
+    pub binding: Binding,
+    pub target: TyId,
+}
+
 #[derive(Debug)]
 pub struct TyCtx {
     pub ext_table: ExtensionTable,
@@ -405,6 +413,84 @@ impl TyCtx {
             (_, TyVarKind::Linked(..)) | (TyVarKind::Linked(..), _) => {
                 bug!("resolve_var must eliminate links");
             }
+        }
+    }
+
+    pub fn match_ty(&mut self, a: TyId, b: TyId) -> bool {
+        let (res_a, res_b) = (self.resolve_ty(a), self.resolve_ty(b));
+        if res_a == res_b {
+            return true;
+        }
+
+        let a_ty = &self.storage[res_a.unwrap()];
+        let b_ty = &self.storage[res_b.unwrap()];
+
+        match (&a_ty, &b_ty) {
+            (other, TyKind::Infer(v_id, kind)) | (TyKind::Infer(v_id, kind), other)
+                if kind.compatible(&other) =>
+            {
+                true
+            }
+
+            (TyKind::Array(a_inner), TyKind::Array(b_inner)) => self.match_ty(*a_inner, *b_inner),
+            (TyKind::Slice(a_inner), TyKind::Slice(b_inner)) => self.match_ty(*a_inner, *b_inner),
+
+            (TyKind::Tuple(a_tys), TyKind::Tuple(b_tys)) => a_tys
+                .clone()
+                .iter()
+                .zip(b_tys.clone().iter())
+                .all(|(a_ty, b_ty)| self.match_ty(*a_ty, *b_ty)),
+
+            (TyKind::Ref(a_inner, a_mut), TyKind::Ref(b_inner, b_mut)) => {
+                let mut_valid = *a_mut == RefMutability::Immutable || *a_mut == *b_mut;
+                mut_valid && self.match_ty(*a_inner, *b_inner)
+            }
+
+            (TyKind::Fn(a_func, a_args), TyKind::Fn(b_func, b_args)) => {
+                if a_func.params.len() != b_func.params.len() {
+                    return false;
+                }
+
+                let (a_params, b_params) = (a_func.params.clone(), b_func.params.clone());
+                let (a_ret, b_ret) = (a_func.ret_ty, b_func.ret_ty);
+
+                if !a_args
+                    .clone()
+                    .into_iter()
+                    .zip(b_args.clone().into_iter())
+                    .all(|(a_arg, b_arg)| match (a_arg, b_arg) {
+                        (GenericArg::Ty(a_ty_id), GenericArg::Ty(b_ty_id)) => {
+                            self.match_ty(*a_ty_id, *b_ty_id)
+                        }
+                    })
+                {
+                    return false;
+                }
+
+                a_params
+                    .iter()
+                    .zip(b_params.iter())
+                    .all(|(ap_ty, bp_ty)| self.match_ty(*ap_ty, *bp_ty))
+                    && self.match_ty(a_ret, b_ret)
+            }
+
+            (TyKind::Never, _) | (_, TyKind::Never) => true,
+            (TyKind::Error, _) | (_, TyKind::Error) => true,
+
+            (TyKind::Adt(a_def, a_args), TyKind::Adt(b_def, b_args)) => {
+                if a_def != b_def || a_args.len() != b_args.len() {
+                    return false;
+                }
+
+                let (a_args, b_args) = (a_args.clone(), b_args.clone());
+                a_args
+                    .iter()
+                    .zip(b_args.iter())
+                    .all(|(a, b)| match (&a, &b) {
+                        (GenericArg::Ty(a_ty), GenericArg::Ty(b_ty)) => self.match_ty(*a_ty, *b_ty),
+                    })
+            }
+            (_, _) => false,
         }
     }
 
@@ -805,11 +891,10 @@ impl TyCtx {
         target: TyId,
         space: DefSpace,
         name: Symbol,
-    ) -> (Vec<Vec<GenericArg>>, Vec<(AssocItemSource, Binding)>) {
+    ) -> Vec<AssocItemCandidate> {
         let target_kind = self.ext_target_kind_of(target);
-        let mut generic_args = Vec::new();
 
-        let assoc_items = self
+        let nat_cands = self
             .ext_table
             .get_native_assoc_items(target_kind, space, name)
             .into_iter()
@@ -820,49 +905,42 @@ impl TyCtx {
                     .map(|_| GenericArg::Ty(self.make_inferred_ty(Span::default(), InferKind::Any)))
                     .collect::<Vec<_>>();
                 let target_ty_id = self.instantiate(raw_target_ty_id, &[&g_args]);
-                self.unify_ty(target_ty_id, target).then(|| {
-                    generic_args.push(g_args);
-                    (AssocItemSource::Ext(ext_id), binding)
-                })
+                self.unify_ty(target_ty_id, target)
+                    .then(|| AssocItemCandidate {
+                        arg_frame: g_args,
+                        source: AssocItemSource::Ext(ext_id),
+                        binding,
+                        target: target_ty_id,
+                    })
             })
             .collect::<Vec<_>>();
 
-        if !assoc_items.is_empty() {
-            return (generic_args, assoc_items);
+        if !nat_cands.is_empty() {
+            return nat_cands;
         }
 
-        let intf_assoc_items = self
-            .ext_table
+        self.ext_table
             .get_intf_exts(target_kind)
             .map_or_else(Vec::new, |exts| exts.to_vec())
             .into_iter()
             .filter_map(|ext_id| {
                 let ext = self.ext_table.get(ext_id);
+                let inst_id = self.intf_table.expect_ext_inst_id(ext_id);
+
                 let (gp_count, raw_target_ty_id) = (ext.generic_param_count, ext.expect_target());
                 let g_args = (0..gp_count)
                     .map(|_| GenericArg::Ty(self.make_inferred_ty(Span::default(), InferKind::Any)))
                     .collect::<Vec<_>>();
                 let target_ty_id = self.instantiate(raw_target_ty_id, &[&g_args]);
-                self.unify_ty(target_ty_id, target).then(|| {
-                    let mut n_g_args = vec![GenericArg::Ty(target)];
-                    n_g_args.extend(g_args);
-                    generic_args.push(n_g_args)
-                })?;
+                self.match_ty(target_ty_id, target).then_some(())?;
 
-                let inst_id = self.intf_table.expect_ext_inst_id(ext_id);
+                let mut n_g_args = vec![GenericArg::Ty(target_ty_id)];
                 let inst = self.intf_table.get_inst(inst_id);
+                n_g_args.extend(inst.args.clone().into_iter().map(|arg| match arg {
+                    GenericArg::Ty(ty_id) => GenericArg::Ty(self.instantiate(*ty_id, &[&g_args])),
+                }));
 
-                // let binding = self
-                //     .ext_table
-                //     .get(ext_id)
-                //     .get(space, name)
-                //     .cloned()
-                //     .or_else(|| {
-                //         self.intf_table
-                //             .get(inst.intf_id)
-                //             .get(space, name)
-                //             .map(|item| item.binding.clone())
-                //     })?;
+                let inst = self.intf_table.get_inst(inst_id);
 
                 let binding = self
                     .intf_table
@@ -870,25 +948,14 @@ impl TyCtx {
                     .get(space, name)
                     .map(|item| item.binding.clone())?;
 
-                Some((AssocItemSource::Intf(inst_id), binding))
+                Some(AssocItemCandidate {
+                    arg_frame: n_g_args,
+                    source: AssocItemSource::Intf(inst_id),
+                    binding,
+                    target: target_ty_id,
+                })
             })
-            .collect::<Vec<_>>();
-
-        (generic_args, intf_assoc_items)
-
-        // TODO: update interface look-up
-        // (
-        //     generic_args,
-        //     self.intf_table
-        //         .expect_ty_intf_inst_ids(target)
-        //         .into_iter()
-        //         .filter_map(|inst_id| {
-        //             let inst = self.intf_table.get_inst(*inst_id);
-        //             let item = self.intf_table.get(inst.intf_id).get(space, name)?;
-        //             Some((AssocItemSource::Intf(*inst_id), item.binding.clone()))
-        //         })
-        //         .collect(),
-        // )
+            .collect::<Vec<_>>()
     }
 }
 

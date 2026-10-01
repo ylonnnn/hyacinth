@@ -14,6 +14,8 @@
 - [x] implement primitive type casting
 - [ ] implement pointers and corresponding casts and type checking/inference
 - [x] implement interface type extensions
+- [x] implement type matching for checking to avoid unpredictable mutation from type unification
+- [ ] implement the validator of shapes of implemented interface items in type extensions
 
 ### Fix
 
@@ -33,6 +35,10 @@
 - [x] fix an issue where arguments of method calls are not checked
 - [x] fix an issue where the types of anonymous functions are not properly initially unified
 - [x] fix an issue with the expression branches of `if` expressions by adding some sort of disambiguator
+- [x] fix an issue with explicit path instantiation when using extended interface items through type access
+- [ ] fix an issue with item access directly from the interface
+- [x] fix an issue within associated item retrieval where the target is mutated and updated due to unification
+- [ ] fix the issue where the associated item retrieved if from an interface returns the base implementation rather than the specialized/implemented one
 
 ### Update/Refactor
 

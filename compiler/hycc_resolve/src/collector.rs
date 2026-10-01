@@ -516,7 +516,6 @@ impl<'c, 'h> Collector<'c, 'h> {
         let scope_id = self.scope_ctx.attach(item.id, Scope::new());
         self.scope_ctx.attach_id_to_def(def_id, scope_id);
 
-        // TODO: potentially create some sort of interface table
         self.enter_scope(scope_id, CollectorLevel::Top, |s| {
             s.scope_ctx.generic_depth += 1;
 

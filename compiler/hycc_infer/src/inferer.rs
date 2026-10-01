@@ -14,7 +14,7 @@ use hycc_hir::{
 use hycc_resolve::{InstantiateIdent, ResolveExpr, ResolveIdentArgs, ResolvePath, ResolveTy};
 use hycc_span::Span;
 use hycc_ty::{
-    ctx::{AssocItemSource, TyCtx, TyId, TyResState, TyVarId},
+    ctx::{AssocItemCandidate, AssocItemSource, TyCtx, TyId, TyResState, TyVarId},
     extension::ExtensionId,
     ty::{InferKind, IntTy, Ty, TyKind, TyVarKind},
 };
@@ -133,13 +133,17 @@ impl<'i, 'h> TyInferer<'i, 'h> {
     }
 
     pub fn compatible(&mut self, expected: TyId, received: TyId) -> bool {
-        self.tctx.unify_ty(expected, received)
+        self.tctx.match_ty(expected, received)
     }
 
     pub fn check(&mut self, expected: &Ty, received: &Ty) -> InferResult {
         ternary!(
             self.compatible(expected.id, received.id),
-            Ok(()),
+            Ok(self
+                .tctx
+                .unify_ty(expected.id, received.id)
+                .then_some(())
+                .unwrap()),
             Err(InferDiag::error(
                 received.span,
                 InferDiagErrorKind::TypeMismatch {
@@ -158,14 +162,14 @@ impl<'i, 'h> TyInferer<'i, 'h> {
         }
 
         let src = self.tctx.make_inferred_ty(from.span, InferKind::Any);
-        self.tctx.unify_ty(src, res_from);
+        self.tctx.match_ty(src, res_from);
         self.cast_map
             .get(&res_to)
             .and_then(|cs| {
                 cs.iter()
                     .any(|cs| {
                         let cs_ty_id = cs.ty_id(&mut self.tctx);
-                        self.tctx.unify_ty(cs_ty_id, src)
+                        self.tctx.match_ty(cs_ty_id, src)
                     })
                     .then_some(())
             })
@@ -355,7 +359,7 @@ impl<'i, 'h> ResolvePath<TyId, InferDiag> for TyInferer<'i, 'h> {
         span: Span,
         target: TyId,
         name: hycc_symbol::Symbol,
-        matches: Arc<[(AssocItemSource, Binding)]>,
+        matches: Arc<[AssocItemCandidate]>,
     ) -> InferDiag {
         InferDiag::error(
             span,

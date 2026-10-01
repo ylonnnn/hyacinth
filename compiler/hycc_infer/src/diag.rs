@@ -11,7 +11,7 @@ use hycc_resolve::diag::{ResolverDiagDataCtx, SymbolKind};
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    ctx::{AssocItemSource, TyCtx, TyId},
+    ctx::{AssocItemCandidate, AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
     intf::IntfId,
@@ -164,7 +164,7 @@ pub enum InferDiagErrorKind {
     MultipleAssocItemsMatched {
         target: TyId,
         name: Symbol,
-        matches: Arc<[(AssocItemSource, Binding)]>,
+        matches: Arc<[AssocItemCandidate]>,
     },
 
     IllegalAssocFnInvocation {
@@ -553,8 +553,11 @@ impl<'c> DiagEmitter<InferDiagDataCtx<'c>> for InferDiag {
                     name,
                     matches,
                 } => {
-                    matches.iter().enumerate().for_each(|(i, (src, binding))| {
-                        let intf_id = src.get_intf();
+                    matches.iter().enumerate().for_each(|(i, cand)| {
+                        let &AssocItemCandidate {
+                            source, binding, ..
+                        } = &cand;
+                        let intf_id = source.get_intf();
                         let def = ctx.fmt.definitions.get(binding.def_id);
 
                         diag.add_sub_diagnostic(Diag::new(

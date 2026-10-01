@@ -11,7 +11,7 @@ use hycc_hir::{
 use hycc_span::Span;
 use hycc_symbol::Symbol;
 use hycc_ty::{
-    ctx::{AssocItemSource, TyCtx, TyId},
+    ctx::{AssocItemCandidate, AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     ty::{GenericArg, InferKind, Ty, TyKind},
 };
@@ -136,7 +136,7 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
         span: Span,
         target: TyId,
         name: Symbol,
-        matches: Arc<[(AssocItemSource, Binding)]>,
+        matches: Arc<[AssocItemCandidate]>,
     ) -> E;
 
     fn resolve_path(&mut self, path: &HirPath) -> Result<TyId, E> {
@@ -161,7 +161,7 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
             let space = ternary!(i == (n - resolved_count) - 1, space, DefSpace::Type);
             if self.definitions().get_def_id(ident.id).is_none() {
                 let target = self.tctx().ext_target_kind_of(prev_ty_id);
-                let (_, assoc_items) =
+                let mut assoc_items =
                     self.tctx()
                         .get_assoc_items(prev_ty_id, space, ident.ident.ident);
 
@@ -173,9 +173,8 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                     ));
                 };
 
-                let (_, assoc_item) = &assoc_items[0];
                 self.definitions_mut()
-                    .define_id_hir(ident.id, assoc_item.def_id);
+                    .define_id_hir(ident.id, assoc_items[0].binding.def_id);
 
                 if assoc_items.len() > 1 {
                     return Err(self.multiple_assoc_item_matched_error(
@@ -186,7 +185,10 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                     ));
                 }
 
-                let def = self.definitions().get(assoc_item.def_id);
+                let mut cand = &mut assoc_items[0];
+                *generic_args.last_mut().unwrap() = std::mem::take(&mut cand.arg_frame);
+
+                let def = self.definitions().get(cand.binding.def_id);
                 if !self.petal_ctx().accessible(&def) {
                     return Err(self.inaccessible_error(
                         ident.span,
@@ -194,7 +196,7 @@ pub trait ResolvePath<TEx, E>: InstantiateIdent<TEx, E> {
                         Some(SymbolKind::AssocItem),
                     ));
                 }
-            };
+            }
 
             prev_ty_id = self.instantiate(&mut generic_args, &ident)?;
         }

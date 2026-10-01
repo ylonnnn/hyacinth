@@ -17,7 +17,7 @@ use hycc_source::SourceRegistry;
 use hycc_span::Span;
 use hycc_symbol::{Symbol, SymbolInterner};
 use hycc_ty::{
-    ctx::{AssocItemSource, TyCtx, TyId},
+    ctx::{AssocItemCandidate, AssocItemSource, TyCtx, TyId},
     extension::ExtensionId,
     fmt::TyFormatter,
     intf::IntfId,
@@ -142,7 +142,7 @@ pub enum ResolverDiagErrorKind {
 
     GenericArgumentArityMismatch(u16),
 
-    MultipleAssocItemsMatched(TyId, Symbol, Arc<[(AssocItemSource, Binding)]>),
+    MultipleAssocItemsMatched(TyId, Symbol, Arc<[AssocItemCandidate]>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

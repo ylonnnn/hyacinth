@@ -23,7 +23,7 @@ use hycc_hir::{
 };
 use hycc_span::Span;
 use hycc_ty::{
-    ctx::{AssocItemSource, TyCtx, TyId, TyResState},
+    ctx::{AssocItemCandidate, AssocItemSource, TyCtx, TyId, TyResState},
     extension::ExtensionId,
     ty::{GenericArg, InferKind, RefMutability, Ty},
 };
@@ -714,7 +714,7 @@ impl<'t, 'h> ResolvePath<(), ResolverDiag> for TyResolver<'t, 'h> {
         span: Span,
         target: TyId,
         name: hycc_symbol::Symbol,
-        matches: Arc<[(AssocItemSource, Binding)]>,
+        matches: Arc<[AssocItemCandidate]>,
     ) -> ResolverDiag {
         ResolverDiag::error(
             span,

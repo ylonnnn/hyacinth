@@ -551,7 +551,7 @@ impl<'i, 'h> TyInferer<'i, 'h> {
 
         // Find the candidate binding
         loop {
-            let (mut generic_args, assoc_items) =
+            let mut assoc_items =
                 self.tctx
                     .get_assoc_items(rec_ty_id, DefSpace::Value, call.callee.ident.ident);
 
@@ -567,8 +567,11 @@ impl<'i, 'h> TyInferer<'i, 'h> {
                     ));
                 }
 
-                candidate.replace(assoc_items[0].1.clone());
-                rec_g_args.replace(std::mem::take(&mut generic_args[0]));
+                let mut cand = &mut assoc_items[0];
+                self.tctx.unify_ty(cand.target, rec_ty_id);
+
+                candidate.replace(cand.binding.clone());
+                rec_g_args.replace(std::mem::take(&mut cand.arg_frame));
             }
 
             if rec_ty_id == deref_rec_ty_id {
